@@ -14,7 +14,7 @@ Nguồn yêu cầu: tài liệu tổng hợp do chủ dự án cung cấp; spec 
 
 Workspace: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council`.
 Remote do user cung cấp: https://github.com/CThawngs/Zero-Council.
-Remote public, default branch `main`, chưa có commit theo API và `git ls-remote`. GitHub MCP xác thực `CThawngs`, quyền push/admin. Local đã init nhánh `docs/spec-foundation` và nối `origin`, chưa commit/push. Chủ dự án cho push nhánh task, self-review và merge khi checks đạt; chưa kiểm ruleset. Cần thống nhất base `main` đầu tiên vì remote trống; không tự push trực tiếp main.
+Remote public, default branch `main` với commit đầu 00a6102 đã được ủy quyền push (bootstrap, remote trước đó trống). Từ giờ mọi thay đổi qua nhánh task + PR; main không push trực tiếp. GitHub MCP xác thực `CThawngs`, quyền push/admin; ruleset chưa cấu hình.
 Chưa có code/test/build sản phẩm trong phần workspace đã kiểm. Không suy tiến độ cả nhóm từ workspace này.
 
 ## Nạp theo task
