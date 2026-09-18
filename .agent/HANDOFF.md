@@ -5,7 +5,7 @@ Cập nhật 2026-09-18. Task: scaffold Next.js, cài dependency, hướng dẫn
 ## Git và phạm vi
 
 Base `origin/main` 94e53b2 là merge PR #1; GitHub không tự đồng bộ hai nhánh như từng suy đoán. Nhánh task `feature/scaffold-webapp` từ base này. Khi tiếp phiên kiểm `git status` và trạng thái PR thực tế, không suy commit hash cuối từ tài liệu này.
-PR #2 (scaffold + docs, commit 509c3cf) tạo và merge theo ủy quyền S5; sau merge xác nhận bằng `git fetch`/`git log origin/main`.
+PR #2 (scaffold + docs, commit 509c3cf, head da47066) tạo theo ủy quyền S5. Merge API trả 403 “Resource not accessible by personal access token” — token GitHub MCP thiếu quyền merge; chưa lách qua tool khác (rule 13). Cần chủ dự án merge PR #2 qua GitHub hoặc cấp quyền token phù hợp. Sau merge xác nhận bằng `git fetch`/`git log origin/main`.
 Thêm app độc lập ở `web/` để giữ guard/test root. Root Directory dự kiến trên Vercel là `web`. Không đổi GUI DSH cổng 8787.
 
 ## Đã thực hiện và kiểm
