@@ -15,7 +15,7 @@ Nguồn yêu cầu: tài liệu tổng hợp do chủ dự án cung cấp; spec 
 Workspace: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council`.
 Remote do user cung cấp: https://github.com/CThawngs/Zero-Council.
 Remote public, default branch `main` với commit đầu 00a6102 đã được ủy quyền push (bootstrap, remote trước đó trống). Từ giờ mọi thay đổi qua nhánh task + PR; main không push trực tiếp. GitHub MCP xác thực `CThawngs`, quyền push/admin; ruleset chưa cấu hình.
-Chưa có code/test/build sản phẩm trong phần workspace đã kiểm. Không suy tiến độ cả nhóm từ workspace này.
+Có scaffold Next.js tại `web/`, trang mẫu không gọi AI; guard/test ngân sách tại `src/lib/budget.mjs`, `tests/budget.test.mjs` chưa nối runtime. `README.md` hướng dẫn chạy; `docs/SETUP.md` hướng dẫn chủ dự án tạo Supabase/Google OAuth. Chưa có auth, session, upload hay fan-out thật. Xem HANDOFF cho bằng chứng kiểm tra.
 
 ## Nạp theo task
 
