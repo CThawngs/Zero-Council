@@ -148,3 +148,12 @@ Ngày kiểm 2026-09-18, chưa kiểm quota của tài khoản thật:
 - OPEN-03: Người dùng mục tiêu, tuổi/quốc gia; file lưu cùng session hay chỉ tạm; nội dung được phép gửi free-tier AI và retention bên thứ ba.
 - OPEN-04: 0 USD là ngân sách nhóm hay cấm cả key trả phí user tự mang? Provider đầu tiên, key, search và quotas cụ thể chưa chọn.
 - OPEN-05: Chốt demo, fallback khi lỗi, Six Hats, P1 JSON; ngưỡng quota là đề xuất, chưa được coi duyệt.
+
+## Cập nhật S4/S5 — ưu tiên hơn OPEN lịch sử
+
+CONFIRMED từ câu trả lời chủ dự án: chọn Supabase Free, chưa có project/schema. Bỏ Neon khỏi lựa chọn DB hiện tại. Chỉ Google OAuth cho đăng nhập, không phải chỉ Google làm provider AI.
+Ngân sách nhóm 0 USD; user thực tế được BYOK chọn model trả phí và tự chịu phí. Guard zero-cost chỉ áp dụng chi phí nhóm/demo khi tích hợp, không áp dụng toàn bộ BYOK.
+File lưu theo session, xóa cùng session trong DB và private Storage; giới hạn dung lượng cụ thể còn OPEN.
+Đã cho phép bootstrap main, đã thực hiện; PR #1 được merge trên GitHub, base main 94e53b2 quan sát bằng git fetch/log. Không suy việc merge là GitHub tự đồng bộ nhánh.
+S5 ủy quyền scaffold/cài dependencies, docs, commit/push và merge khi checks đạt. Chủ dự án tự tạo Supabase theo docs/SETUP.md; chưa ủy quyền deploy/public runtime.
+Scope lần này: Next.js scaffold + trang mẫu viết sẵn, setup Supabase. Chưa xây fan-out, callback auth, migration hoặc session persistence; mock không được gọi là phản hồi model thật.

@@ -1,24 +1,32 @@
 # HANDOFF — Zero Council
 
-Cập nhật: 2026-09-18. Governance v7.0; SPEC 0.2. Status: chờ duyệt PR; chưa có sản phẩm chạy.
+Cập nhật 2026-09-18. Task: scaffold Next.js, cài dependency, hướng dẫn Supabase, commit/push/PR/merge được chủ dự án ủy quyền. Không deploy hoặc tạo dịch vụ.
 
-## Git đã kiểm bằng lệnh
+## Git và phạm vi
 
-- Remote origin https://github.com/CThawngs/Zero-Council.git, trước đó trống (`git ls-remote --symref`, `--heads`).
-- GitHub MCP: CThawngs, push/admin; repo public.
-- Push theo ủy quyền S4: `docs/spec-foundation:main` → main = 00a6102 (bootstrap, remote trống). Sau đó: task branch push riêng 7127bbd, tracking đã chuyển về `origin/docs/spec-foundation`.
-- Lịch sử: 77ea08e checkpoint (tài liệu + guard/test) → 00a6102 handoff → 7127bbd index. `node --test tests/budget.test.mjs`: 2 pass, 0 fail (Node v24.18.0). Working tree sạch.
-- Lỗi edit lần trước: old_string sai; quy tắc: đọc file trước khi sửa, sửa có kiểm chứng. Đã sửa 00_INDEX ngay sau push bằng commit mới; không force-push, không rewrite.
+Base `origin/main` 94e53b2 là merge PR #1; GitHub không tự đồng bộ hai nhánh như từng suy đoán. Nhánh task `feature/scaffold-webapp` từ base này. Khi tiếp phiên kiểm `git status` và trạng thái PR thực tế, không suy commit hash cuối từ tài liệu này.
+PR #2 (scaffold + docs, commit 509c3cf, head da47066) tạo theo ủy quyền S5. Merge API trả 403 “Resource not accessible by personal access token” — token GitHub MCP thiếu quyền merge; chưa lách qua tool khác (rule 13). Cần chủ dự án merge PR #2 qua GitHub hoặc cấp quyền token phù hợp. Sau merge xác nhận bằng `git fetch`/`git log origin/main`.
+Thêm app độc lập ở `web/` để giữ guard/test root. Root Directory dự kiến trên Vercel là `web`. Không đổi GUI DSH cổng 8787.
 
-## Quyết định S4 (2026-09-18)
+## Đã thực hiện và kiểm
 
-- Supabase: mới dự định chọn, chưa có project/schema; chưa tạo tài khoản/dịch vụ.
-- 0 USD chỉ chi phí nhóm; user BYOK tự chịu chi phí model trả phí.
-- File lưu theo session, xóa cùng session, giới hạn dung lượng (ngưỡng OPEN).
+- create-next-app sinh Next.js 16.3.5, React 19.2.8, TypeScript/Tailwind/ESLint; `pnpm install` thành công, lockfile lưu trong web. Node v24.18.0, pnpm 11.5.2.
+- `pnpm lint` và `pnpm build` tại web sau chỉnh UI/layout: exit 0. Dùng font hệ thống, không tải Google Fonts khi build.
+- `node --test tests/budget.test.mjs`: 2 pass, 0 fail. Guard chưa tích hợp runtime, chỉ dành chi phí nhóm khi nối sau này.
+- Browser production preview http://127.0.0.1:3100: title Zero Council, lang vi; nút mở mẫu có aria-expanded=true, 4 article hiện; bấm lại aria-expanded=false và hidden=true. Console không có error/warning trong phiên kiểm. Preview tạm đã yêu cầu dừng sau kiểm.
+- Read-only subagent review app/config/docs: không phát hiện blocking trong phạm vi fixture; nhắc handoff cũ, đã thay bản này. Không coi review là audit bảo mật toàn sản phẩm.
+- Installer báo ESLint 9.39.5 deprecated; giữ major tương thích scaffold. Cần đánh giá nâng cấp riêng, không bỏ warning hoặc tự tuyên bố hết rủi ro dependency.
 
-## Chưa làm / OPEN
+## Trạng thái đúng
 
-- PR `docs/spec-foundation` → `main` để tự review lần đầu (diff 1 file). Merge sau khi người duyệt độc lập đạt; self-review không thay phê duyệt bắt buộc.
-- Chưa: deploy, gọi model, tạo Supabase, cấu hình OAuth, CI ruleset. Governance bản lưu chưa đối chiếu nguyên văn.
-- OPEN: ngưỡng dung lượng file, provider đầu tiên (Google-only, chưa có key), demo/risk frames, Six Hats/P1 JSON.
-- Tiếp theo sau merge: dựng luồng nhỏ P0 đầu (auth Google + session), schema Supabase khi project có.
+Trang tiếng Việt với câu hỏi thực tập và 3 ý kiến + tổng hợp viết sẵn. Nút chỉ mở/ẩn; không input tự do, API council, fan-out, model hoặc dữ liệu AI sinh. Các phát ngôn trong phiên về thêm API mock là đề xuất chưa triển khai; không mở scope khi đang chốt scaffold.
+Chưa có Supabase SDK/project/schema/auth callback/session/upload/BYOK runtime/search/decision frameworks. Không có CI hoặc ruleset được thiết lập trong task này. Không gọi AI tính phí hoặc gửi dữ liệu user.
+Nguồn setup: docs/SETUP.md, đã đọc docs Google OAuth chính thức. README root và web ghi trạng thái không production-ready.
+
+## Quyết định còn hiệu lực và bước tiếp
+
+- Supabase Free đã chốt nhưng chủ dự án tự tạo; chỉ Google OAuth cho login, không phải chỉ Google cho AI.
+- 0 USD chỉ nhóm/demo/hạ tầng; user BYOK được dùng model trả phí bằng key của họ.
+- File private lưu theo session, xóa cùng session; ngưỡng mỗi file/session/user và retention bên thứ ba còn OPEN.
+- Chủ dự án làm bước 2–3 docs/SETUP.md, không gửi secret. Task tiếp: auth Google + RLS/session có migration, hoặc API council giả lập có test khi chưa có project; chốt task trước triển khai.
+- Review/checks thực của PR phải đạt trước merge, không bypass. License, quotas cụ thể, provider đầu tiên, Six Hats/P1 JSON vẫn cần chốt.
