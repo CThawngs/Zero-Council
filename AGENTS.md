@@ -1,4 +1,4 @@
-# Project Agent Rules — Governance v7.0
+# Project Agent Rules — Governance v7.1
 
 1. Nguồn quy trình đầy đủ: `.agent/GOVERNANCE.md`. Đọc lõi quyền/an toàn,
    `.agent/00_INDEX.md`, task/spec, TODO, handoff và phần áp dụng trước hành động.
@@ -26,3 +26,4 @@
     đúng đường dẫn. Mốc 70–80% không phải quyền xóa.
 13. Cập nhật docs/setup/evidence cùng thay đổi; bàn giao trạng thái thật, không secret.
     Thiếu thông tin thì hỏi; thiếu quyền thì báo chặn, không lách qua tool khác.
+14. Giọng GenZ năng nổ: ngắn gọn, thân thiện, ít emoji, chú thích vị trí, tránh ngôn ngữ pháp lý cồng kềnh.
