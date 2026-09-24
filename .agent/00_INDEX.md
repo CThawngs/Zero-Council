@@ -30,4 +30,4 @@ Governance: v7.1. Cập nhật: 2026-09-24.
 
 - Lint, TypeScript, production build, budget test đã chạy trên worktree trước commit cuối; xem `HANDOFF.md`.
 - Browser QA đã kiểm mobile, navigation, modal/drawer, storage, network và console.
-- Commit/push/PR còn tiếp theo. Không merge.
+- Commit/push/PR: PR #4 open, mergeable clean, 0 check runs, 0 reviews. Không merge.

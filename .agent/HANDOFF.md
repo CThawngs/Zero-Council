@@ -42,9 +42,14 @@ Implementation commit: `8df4160` (`feat: integrate prototype UI as local mock`).
 - Đã click: overview/sample session, round navigation, concluded synthesis, export toast, counter-draft, framework modal, settings language/theme, provider mock connection, pricing/checkout; `/fixture` cũng đã kiểm.
 - Accessibility snapshot xác nhận icon-only controls có accessible names; checkout có alert `SAMPLE ONLY — DO NOT TRANSFER MONEY`.
 
+## PR
+
+- PR #4: https://github.com/CThawngs/Zero-Council/pull/4
+- State: `open`, `draft=false`, `merged=false`, `mergeable_state=clean`.
+- Check runs: 0. Reviews: 0. Không merge.
+
 ## Bàn giao
 
-1. Commit source + docs, push branch.
-2. Mở PR vào `main`; kiểm tra trạng thái open và checks/review nếu có.
-3. Không merge.
-4. Giữ worktree/branch cho review. ZeroVault lesson ghi sau khi PR mở.
+1. Source/docs đã commit và push.
+2. PR #4 đã mở vào `main`; không merge.
+3. Giữ worktree/branch cho review. ZeroVault lesson đã ghi trong session này.
