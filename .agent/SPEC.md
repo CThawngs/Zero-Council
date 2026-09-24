@@ -1,11 +1,9 @@
-# Zero Council — Spec nháp 0.2
+# Zero Council — Prototype UI integration spec
 
-Ngày ghi nhận: 2026-09-18. Governance: v7.0.
-Trạng thái: DRAFT / WAITING_FOR_INPUT. Chưa phê duyệt toàn bộ tiêu chí kỹ thuật.
-Nguồn S1: tài liệu “Zero Council — Tài liệu tổng hợp dự án” do người dùng cung cấp trong chat ngày ghi nhận. Đây là bản tổng hợp có phân loại, không phải bản sao nguyên văn.
-Nguồn S2: GitHub API cho CThawngs/Zero-Council trả 409 “Git Repository is empty” ngày ghi nhận. Chưa xác minh visibility, quyền ghi, ruleset hoặc tài khoản đang xác thực.
-Nguồn S3: câu trả lời vòng 2 của chủ dự án trong chat ngày 2026-09-18; mục cập nhật S3 cuối file thay thế các trạng thái OPEN cũ tương ứng.
-Người chốt yêu cầu mở: chủ dự án. S3 giao agent tự review kỹ thuật và merge khi đạt checks; không coi self-review là phê duyệt độc lập hoặc được bỏ qua ruleset.
+Cập nhật: 2026-09-24. Governance: v7.1.
+Trạng thái: IMPLEMENTED / PR_PENDING. Tiêu chí runtime thật vẫn ngoài scope.
+Nguồn prototype: `CThawngs/Prototype-UI-Zero-Council` tại commit `fb0742e375ae82af9d494f757b82211b270ed857`.
+Worktree task: `.worktrees/feature-prototype-ui-integration`; branch `feature/prototype-ui-integration`; base `52764ea8f3d52e82662374af133158b58196fa72`.
 
 ## Mục tiêu và bối cảnh
 
@@ -157,3 +155,27 @@ File lưu theo session, xóa cùng session trong DB và private Storage; giới 
 Đã cho phép bootstrap main, đã thực hiện; PR #1 được merge trên GitHub, base main 94e53b2 quan sát bằng git fetch/log. Không suy việc merge là GitHub tự đồng bộ nhánh.
 S5 ủy quyền scaffold/cài dependencies, docs, commit/push và merge khi checks đạt. Chủ dự án tự tạo Supabase theo docs/SETUP.md; chưa ủy quyền deploy/public runtime.
 Scope lần này: Next.js scaffold + trang mẫu viết sẵn, setup Supabase. Chưa xây fan-out, callback auth, migration hoặc session persistence; mock không được gọi là phản hồi model thật.
+
+## Task addendum — prototype UI integration (2026-09-24)
+
+CONFIRMED scope:
+- Tích hợp giao diện prototype tại `/`; giữ fixture tiếng Việt cũ tại `/fixture`.
+- Giữ view, navigation, visual system, state tạm và mock interaction của prototype.
+- English là mặc định; toggle Vietnamese giữ nguyên.
+- Không thêm backend, AI inference, auth, payment, provider request, credential input/storage/transmission, BYOK runtime hoặc persistence.
+- Provider/model labels là fixture; checkout và provider slots chỉ mô phỏng UI, không hành động tài chính hoặc kết nối dịch vụ.
+- Không merge PR. Chỉ commit, push branch và mở PR vào `main`.
+
+AC / verify:
+- `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` từ `web/`: pass trên worktree trước commit cuối.
+- `node --test tests/budget.test.mjs` từ repo root: 2 pass, 0 fail.
+- Browser QA tại `http://127.0.0.1:3100/`: mobile 390×844 không overflow; reload không console error; không XHR/fetch/WebSocket; local/session storage rỗng; các flow overview, session, synthesis, counter-draft, settings, provider slots, pricing, language/theme và `/fixture` đã kiểm.
+- Evidence phải ghi rõ commit/hash và trạng thái PR sau khi commit; không dùng bằng chứng cũ cho source đã đổi.
+
+Risk / recovery:
+- Rủi ro chính là copy làm giả production hoặc accessibility regression; đã thêm nhãn sample/mock, bỏ QR copy/payment detail và thêm tên/pressed state cho controls.
+- Nếu cần rollback: revert commit trên branch/PR, không merge và không đụng main checkout.
+
+OPEN / delegated:
+- Chưa có CI/ruleset, deploy, Supabase, OAuth, provider, billing hoặc persistence trong task này.
+- ZeroVault lesson sẽ ghi sau khi PR mở; không ghi secret.

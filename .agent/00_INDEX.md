@@ -1,25 +1,33 @@
 # 00_INDEX — Zero Council
 
-Governance: v7.0. Cập nhật: 2026-09-18 (ngày máy đã kiểm).
-Nguồn yêu cầu: tài liệu tổng hợp do chủ dự án cung cấp; spec nháp 0.2 chưa duyệt toàn bộ.
+Governance: v7.1. Cập nhật: 2026-09-24.
 
-## File hiện có
+## Workspace hiện tại
 
-- `AGENTS.md`: luật vào cửa. DSH đã đưa nội dung cập nhật vào phiên này; chưa kiểm tự nạp trong phiên mới hoặc client khác.
-- `.agent/GOVERNANCE.md`: quy trình v7.0 đã lưu trước đó. Chưa xác minh nguyên văn; đã nhận thấy khác định dạng và thiếu câu giải thích khoảng trắng ở sơ đồ mục 10. Không gọi bản sao nguyên văn cho đến khi đối chiếu đầy đủ.
-- `.agent/SPEC.md`: mục tiêu, yêu cầu P0/P1/P2, nguồn, tiêu chí nháp, lịch học, phân công dự kiến và OPEN-01–05.
-- `.agent/HANDOFF.md`: bằng chứng môi trường, giới hạn và việc tiếp.
+- Main checkout: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council`
+- Task worktree: `.worktrees/feature-prototype-ui-integration`
+- Branch: `feature/prototype-ui-integration`
+- Remote: `https://github.com/CThawngs/Zero-Council.git`
+- Không merge PR và không sửa main checkout.
 
-## Hiện trạng
+## File agent
 
-Workspace: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council`.
-Remote do user cung cấp: https://github.com/CThawngs/Zero-Council.
-Remote public, default branch `main` với commit đầu 00a6102 đã được ủy quyền push (bootstrap, remote trước đó trống). Từ giờ mọi thay đổi qua nhánh task + PR; main không push trực tiếp. GitHub MCP xác thực `CThawngs`, quyền push/admin; ruleset chưa cấu hình.
-Có scaffold Next.js tại `web/`, trang mẫu không gọi AI; guard/test ngân sách tại `src/lib/budget.mjs`, `tests/budget.test.mjs` chưa nối runtime. `README.md` hướng dẫn chạy; `docs/SETUP.md` hướng dẫn chủ dự án tạo Supabase/Google OAuth. Chưa có auth, session, upload hay fan-out thật. Xem HANDOFF cho bằng chứng kiểm tra.
+- `AGENTS.md`: quy tắc dự án.
+- `.agent/GOVERNANCE.md`: governance v7.1.
+- `.agent/SPEC.md`: yêu cầu sản phẩm lịch sử và task addendum prototype UI.
+- `.agent/TODO.md`: checklist task hiện tại.
+- `.agent/HANDOFF.md`: scope, evidence, ranh giới runtime và bàn giao.
 
-## Nạp theo task
+## Hiện trạng prototype
 
-Luôn đọc AGENTS, governance mục 01–03, spec và handoff liên quan.
-Phỏng vấn: mục 05; Git/cộng tác: 12,15; xây dựng: 13–14; release:16; incident:19; xóa local:25.
-Các file kiến trúc, TODO, decisions, setup, legal, runbook chỉ tạo khi có nội dung cần thiết; chưa có không đồng nghĩa được bỏ cổng liên quan.
-Ngày 2026-02-15 ở bản index/handoff trước là lỗi ghi nhận của agent, không phải ngày dự án khởi tạo đã kiểm chứng.
+- `/` dùng `web/src/prototype/App.tsx`, UI-only local mock.
+- `/fixture` giữ fixture tiếng Việt cũ.
+- `/api/council` vẫn là fixed fixture route; prototype không gọi network.
+- Không có AI, auth, payment, provider, credential, persistence hoặc deploy trong task.
+- Chỉ thêm dependency `lucide-react@0.546.0`.
+
+## Verify hiện tại
+
+- Lint, TypeScript, production build, budget test đã chạy trên worktree trước commit cuối; xem `HANDOFF.md`.
+- Browser QA đã kiểm mobile, navigation, modal/drawer, storage, network và console.
+- Commit/push/PR: PR #4 open, mergeable clean, 0 check runs, 0 reviews. Không merge.
