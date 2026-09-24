@@ -46,6 +46,7 @@ Implementation commit: `8df4160` (`feat: integrate prototype UI as local mock`).
 
 - PR #4: https://github.com/CThawngs/Zero-Council/pull/4
 - State: `open`, `draft=false`, `merged=false`, `mergeable_state=unknown` sau docs push (trước đó GitHub báo `clean`).
+- Latest branch head observed: `900c660`.
 - Check runs: 0. Reviews: 0. Không merge.
 
 ## Bàn giao

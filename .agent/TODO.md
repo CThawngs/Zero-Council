@@ -28,7 +28,7 @@ Cập nhật: 2026-09-24. Governance: v7.1. Worktree: `.worktrees/feature-protot
 ## Cấp 4 — Git
 
 - [X] Commit source + governance docs trên `feature/prototype-ui-integration`
-- [X] Push branch `feature/prototype-ui-integration` (`6ba757c`)
+- [X] Push branch `feature/prototype-ui-integration` (`900c660` latest observed)
 - [X] Mở PR #4 vào `main`: https://github.com/CThawngs/Zero-Council/pull/4
 - [X] PR open; mergeability `unknown` sau docs push; 0 check runs, 0 reviews; không merge
 
