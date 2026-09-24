@@ -23,7 +23,7 @@ Cập nhật: 2026-09-24. Governance: v7.1. Worktree: `.worktrees/feature-protot
 - [X] `pnpm build` từ `web/`
 - [X] `node --test tests/budget.test.mjs` từ repo root
 - [X] Browser QA mobile/desktop, navigation, modal/drawer flows, storage/network/console
-- [ ] Commit evidence hash vào HANDOFF sau commit source
+- [X] Commit source evidence: `8df4160` (docs follow-up records final tree)
 
 ## Cấp 4 — Git
 

@@ -31,7 +31,7 @@ Cập nhật: 2026-09-24. Governance: v7.1.
 
 ## Evidence
 
-Các lệnh dưới đây chạy trên worktree trước commit cuối; sau commit phải ghi hash implementation vào bản HANDOFF tiếp theo:
+Implementation commit: `8df4160` (`feat: integrate prototype UI as local mock`). Checks below ran against that source tree before docs-only follow-up; docs follow-up does not change runtime files.
 
 - `pnpm lint` — pass, exit 0.
 - `pnpm exec tsc --noEmit` — pass, exit 0.
@@ -39,7 +39,7 @@ Các lệnh dưới đây chạy trên worktree trước commit cuối; sau comm
 - `node --test tests/budget.test.mjs` — 2 pass, 0 fail.
 - Browser `http://127.0.0.1:3100/`, viewport `390x844`: `scrollWidth=390`, không overflow.
 - Fresh reload: không console error/warning/issue; không XHR/fetch/WebSocket; `localStorage` và `sessionStorage` rỗng.
-- Đã click: overview/sample session, round navigation, concluded synthesis, export toast, counter-draft, framework modal, settings language/theme, provider mock connection, pricing/checkout; `/fixture` cũng đã kiểm trước final edits.
+- Đã click: overview/sample session, round navigation, concluded synthesis, export toast, counter-draft, framework modal, settings language/theme, provider mock connection, pricing/checkout; `/fixture` cũng đã kiểm.
 - Accessibility snapshot xác nhận icon-only controls có accessible names; checkout có alert `SAMPLE ONLY — DO NOT TRANSFER MONEY`.
 
 ## Bàn giao
