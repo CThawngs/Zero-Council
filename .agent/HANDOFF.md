@@ -1,32 +1,50 @@
-# HANDOFF — Zero Council
+# HANDOFF — Zero Council prototype UI integration
 
-Cập nhật 2026-09-18. Task: scaffold Next.js, cài dependency, hướng dẫn Supabase, commit/push/PR/merge được chủ dự án ủy quyền. Không deploy hoặc tạo dịch vụ.
+Cập nhật: 2026-09-24. Governance: v7.1.
 
 ## Git và phạm vi
 
-Base `origin/main` trước PR #2 là merge PR #1 (94e53b2); GitHub không tự đồng bộ hai nhánh như từng suy đoán. Nhánh task `feature/scaffold-webapp` dùng cho luồng scaffold và đồng bộ handoff.
-PR #2 (scaffold + docs, commit 509c3cf + e171840) tạo theo ủy quyền S5. Merge API lần đầu trả 403 — token thiếu quyền; chưa lách qua tool khác (rule 13). Chủ dự án cấp lại token read/write admin toàn repo, merge PR #2 thành công: merge commit `14247ba`, xác nhận bằng `git fetch`/`git log origin/main`. Mọi thay đổi tiếp theo qua nhánh task + PR; khi tiếp phiên kiểm `git status` và trạng thái PR thực tế, không suy commit hash cuối từ tài liệu này.
-Thêm app độc lập ở `web/` để giữ guard/test root. Root Directory dự kiến trên Vercel là `web`. Không đổi GUI DSH cổng 8787.
+- Worktree: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council\.worktrees\feature-prototype-ui-integration`
+- Branch: `feature/prototype-ui-integration`
+- Base: `52764ea8f3d52e82662374af133158b58196fa72` (`main` tại lúc bắt đầu)
+- Remote: `https://github.com/CThawngs/Zero-Council.git`
+- Prototype nguồn: `CThawngs/Prototype-UI-Zero-Council`, commit `fb0742e375ae82af9d494f757b82211b270ed857`
+- Main checkout không bị sửa. Không merge PR.
 
-## Đã thực hiện và kiểm
+## Đã tích hợp
 
-- create-next-app sinh Next.js 16.3.5, React 19.2.8, TypeScript/Tailwind/ESLint; `pnpm install` thành công, lockfile lưu trong web. Node v24.18.0, pnpm 11.5.2.
-- `pnpm lint` và `pnpm build` tại web sau chỉnh UI/layout: exit 0. Dùng font hệ thống, không tải Google Fonts khi build.
-- `node --test tests/budget.test.mjs`: 2 pass, 0 fail. Guard chưa tích hợp runtime, chỉ dành chi phí nhóm khi nối sau này.
-- Browser production preview http://127.0.0.1:3100: title Zero Council, lang vi; nút mở mẫu có aria-expanded=true, 4 article hiện; bấm lại aria-expanded=false và hidden=true. Console không có error/warning trong phiên kiểm. Preview tạm đã yêu cầu dừng sau kiểm.
-- Read-only subagent review app/config/docs: không phát hiện blocking trong phạm vi fixture; nhắc handoff cũ, đã thay bản này. Không coi review là audit bảo mật toàn sản phẩm.
-- Installer báo ESLint 9.39.5 deprecated; giữ major tương thích scaffold. Cần đánh giá nâng cấp riêng, không bỏ warning hoặc tự tuyên bố hết rủi ro dependency.
+- `/` render `web/src/prototype/App.tsx`; giữ navigation, view, visual system, modal/drawer, language/theme toggle và state React tạm.
+- `/fixture` giữ fixture tiếng Việt cũ.
+- `web/src/app/layout.tsx` đổi metadata sang prototype mock và English mặc định.
+- `web/src/app/globals.css` mang theme variables của prototype.
+- `lucide-react@0.546.0` là dependency mới duy nhất.
+- Đã thêm accessible names, labels, `fieldset/legend`, `aria-pressed`, keyboard-safe session cards và heading/contrast fixes.
+- Checkout không còn bank/account/company/memo/payment code; QR chỉ decorative `aria-hidden`, có cảnh báo sample-only.
+- Provider slots chỉ đổi state mock; không có credential input, lưu, truyền hoặc provider request.
 
-## Trạng thái đúng
+## Ranh giới runtime
 
-Trang tiếng Việt với câu hỏi thực tập và 3 ý kiến + tổng hợp viết sẵn. Nút chỉ mở/ẩn; không input tự do, API council, fan-out, model hoặc dữ liệu AI sinh. Các phát ngôn trong phiên về thêm API mock là đề xuất chưa triển khai; không mở scope khi đang chốt scaffold.
-Chưa có Supabase SDK/project/schema/auth callback/session/upload/BYOK runtime/search/decision frameworks. Không có CI hoặc ruleset được thiết lập trong task này. Không gọi AI tính phí hoặc gửi dữ liệu user.
-Nguồn setup: docs/SETUP.md, đã đọc docs Google OAuth chính thức. README root và web ghi trạng thái không production-ready.
+- Client prototype không có `fetch`, XHR, WebSocket, storage API, auth, payment, model/provider call hoặc persistence.
+- `/api/council` còn tồn tại như fixed fixture route của app; prototype tại `/` không gọi route đó.
+- Tên model/provider là nhãn fixture. Checkout, billing, persona, settings và reset chỉ là local mock.
+- Không deploy, tạo Supabase project, OAuth, CI, billing hoặc production account trong task này.
 
-## Quyết định còn hiệu lực và bước tiếp
+## Evidence
 
-- Supabase Free đã chốt nhưng chủ dự án tự tạo; chỉ Google OAuth cho login, không phải chỉ Google cho AI.
-- 0 USD chỉ nhóm/demo/hạ tầng; user BYOK được dùng model trả phí bằng key của họ.
-- File private lưu theo session, xóa cùng session; ngưỡng mỗi file/session/user và retention bên thứ ba còn OPEN.
-- Chủ dự án làm bước 2–3 docs/SETUP.md, không gửi secret. Task tiếp: auth Google + RLS/session có migration, hoặc API council giả lập có test khi chưa có project; chốt task trước triển khai.
-- Review/checks thực của PR phải đạt trước merge, không bypass. License, quotas cụ thể, provider đầu tiên, Six Hats/P1 JSON vẫn cần chốt.
+Các lệnh dưới đây chạy trên worktree trước commit cuối; sau commit phải ghi hash implementation vào bản HANDOFF tiếp theo:
+
+- `pnpm lint` — pass, exit 0.
+- `pnpm exec tsc --noEmit` — pass, exit 0.
+- `pnpm build` — pass, exit 0; static `/`, static `/fixture`, dynamic `/api/council`.
+- `node --test tests/budget.test.mjs` — 2 pass, 0 fail.
+- Browser `http://127.0.0.1:3100/`, viewport `390x844`: `scrollWidth=390`, không overflow.
+- Fresh reload: không console error/warning/issue; không XHR/fetch/WebSocket; `localStorage` và `sessionStorage` rỗng.
+- Đã click: overview/sample session, round navigation, concluded synthesis, export toast, counter-draft, framework modal, settings language/theme, provider mock connection, pricing/checkout; `/fixture` cũng đã kiểm trước final edits.
+- Accessibility snapshot xác nhận icon-only controls có accessible names; checkout có alert `SAMPLE ONLY — DO NOT TRANSFER MONEY`.
+
+## Bàn giao
+
+1. Commit source + docs, push branch.
+2. Mở PR vào `main`; kiểm tra trạng thái open và checks/review nếu có.
+3. Không merge.
+4. Giữ worktree/branch cho review. ZeroVault lesson ghi sau khi PR mở.

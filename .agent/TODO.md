@@ -1,25 +1,42 @@
-# TODO – Zero Council
+# TODO — Zero Council
 
-## Lập kế hoạch 4‑cấp
+Cập nhật: 2026-09-24. Governance: v7.1. Worktree: `.worktrees/feature-prototype-ui-integration`.
 
-- **Cấp 1: Mục tiêu dự án**
-  - [X] Định nghĩa sản phẩm, đối tượng, phạm vi (đã hoàn thành)
-  - [ ] Xác nhận yêu cầu tính năng chính
+## Cấp 1 — Mục tiêu
 
-- **Cấp 2: Thành phần nền tảng**
-  - [X] Scaffold Next.js và cấu hình web (đã hoàn thành)
-  - [ ] Thiết lập Auth Google OAuth (chưa bắt đầu)
-  - [ ] Cấu hình DB Supabase (chưa bắt đầu)
-  - [ ] Deploy preview môi trường (chưa bắt đầu)
+- [X] Tích hợp prototype UI tại `/`; giữ fixture cũ tại `/fixture`
+- [X] English mặc định; giữ toggle Vietnamese
+- [X] Giữ rõ ranh giới mock, không giả AI/auth/payment/provider/credential
 
-- **Cấp 3: Tính năng chi tiết**
-  - [ ] Xây dựng UI/UX cơ bản
-  - [ ] Kết nối API backend
-  - [ ] Kiểm thử unit & integration
+## Cấp 2 — Thành phần tích hợp
 
-- **Cấp 4: Phát hành & vận hành**
-  - [ ] CI/CD pipeline
-  - [ ] Monitoring & logging
-  - [ ] Documentation & handoff
+- [X] Copy prototype vào `web/src/prototype/`
+- [X] Nối `web/src/app/page.tsx` vào `PrototypeApp`
+- [X] Tạo route `/fixture`
+- [X] Thêm `lucide-react` làm dependency icon duy nhất
+- [X] Audit accessibility, keyboard controls, heading order, contrast
 
-> **Trạng thái hiện tại**: Scaffold web và handoff đã hoàn thành, các hạng mục Auth, DB và Deploy còn pending.
+## Cấp 3 — Kiểm chứng
+
+- [X] `pnpm lint` từ `web/`
+- [X] `pnpm exec tsc --noEmit` từ `web/`
+- [X] `pnpm build` từ `web/`
+- [X] `node --test tests/budget.test.mjs` từ repo root
+- [X] Browser QA mobile/desktop, navigation, modal/drawer flows, storage/network/console
+- [ ] Commit evidence hash vào HANDOFF sau commit source
+
+## Cấp 4 — Git
+
+- [ ] Commit source + governance docs trên `feature/prototype-ui-integration`
+- [ ] Push branch
+- [ ] Mở PR vào `main`
+- [ ] Kiểm tra PR open, CI/review state; không merge
+
+## Ngoài scope
+
+- [ ] Supabase/Google OAuth runtime
+- [ ] Provider/model inference, BYOK credential flow
+- [ ] Payment rail, invoice, webhook, deployment
+- [ ] Persistence, uploads, search, real account state
+
+Không tự mở các hạng mục ngoài scope khi demo prototype.

@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Zero Council — Hội đồng AI",
-  description: "Bản mẫu hội đồng cố vấn đa góc nhìn. Nội dung viết sẵn, chưa kết nối AI.",
+  title: "Zero Council — Multi-model deliberation, mocked",
+  description: "UI-only Zero Council prototype. All deliberation, billing, sign-in, and API-key flows are local mock data.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="vi" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
