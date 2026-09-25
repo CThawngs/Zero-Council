@@ -69,15 +69,15 @@ export const SessionConcludedView: React.FC = () => {
               onClick={openFrameworkModal}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-ink transition hover:border-brass/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
             >
-              <Layers3 className="h-4 w-4 text-brass" aria-hidden="true" />
-              <span className="truncate">{frameworkLabel}</span>
+              <Layers3 className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
+              <span className="min-w-0 truncate">{frameworkLabel}</span>
             </button>
             <button
               type="button"
               onClick={openCounterDraftModal}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-ink transition hover:border-brass/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
             >
-              <FilePenLine className="h-4 w-4 text-brass" aria-hidden="true" />
+              <FilePenLine className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
               {t.sampleDraft}
             </button>
           </div>

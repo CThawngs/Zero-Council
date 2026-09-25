@@ -114,7 +114,7 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
 
 .zc-modal {
   --zc-modal-max-height: min(48rem, calc(100dvh - 2rem));
-  width: min(42rem, calc(100vw - 2rem));
+  width: min(42rem, calc(100% - 2rem));
   max-width: none;
   max-height: var(--zc-modal-max-height);
   margin: auto;
@@ -229,7 +229,7 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
 }
 
 .content-shell {
-  width: min(100% - 2rem, 72rem);
+  width: min(100%, 72rem);
   margin-inline: auto;
   padding-block: 1.5rem 2.5rem;
 }
@@ -358,6 +358,44 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   color: var(--color-ink);
   border-color: color-mix(in srgb, var(--color-brass) 55%, var(--color-border));
   background: color-mix(in srgb, var(--color-brass) 8%, var(--color-background));
+}
+
+.mobile-navigation-panel {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  max-height: calc(100dvh - 76px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.header-cta,
+.header-settings,
+.header-menu {
+  display: none;
+}
+
+@media (min-width: 40rem) {
+  .header-cta,
+  .header-settings {
+    display: inline-flex;
+  }
+}
+
+@media (max-width: 64rem) {
+  .header-menu {
+    display: inline-flex;
+  }
+}
+
+@media (min-width: 64rem) {
+  .header-menu {
+    display: none;
+  }
+
+  .header-nav .nav-link {
+    width: auto;
+  }
 }
 
 .skip-link {
@@ -505,7 +543,7 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   color: var(--color-ink);
   padding: 0.7rem 0.85rem;
   font: inherit;
-  font-size: 0.875rem;
+  font-size: 1rem;
 }
 
 .field textarea {
@@ -580,7 +618,7 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
 
 @media (max-width: 640px) {
   .content-shell {
-    width: min(100% - 1.5rem, 72rem);
+    width: 100%;
     padding-block: 1rem 2rem;
   }
 }
@@ -608,7 +646,7 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
 @media (max-width: 640px) {
   .zc-modal {
     --zc-modal-max-height: min(44rem, calc(100dvh - 1rem));
-    width: calc(100vw - 1rem);
+    width: calc(100% - 1rem);
     border-radius: 0.875rem;
   }
 

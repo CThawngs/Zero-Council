@@ -2,7 +2,7 @@
 
 Cập nhật: 2026-09-25. Governance: v7.1.
 Trạng thái: IMPLEMENTED / FINAL_QA_PASS.
-Worktree task: `.worktrees/ui-ux-local-mock`; branch: `ui-ux-local-mock`; base `d4b254c` (`origin/main` tại task start).
+Worktree task: `.worktrees/responsive-polish`; branch: `responsive-polish`; base `c8c1e68` (`origin/main` tại task start, sau khi PR #5 merge).
 
 ## Mục tiêu
 
@@ -31,6 +31,10 @@ Giao diện trình diễn cấu trúc hội đồng đa góc nhìn bằng dữ l
 - Clipboard copy chỉ chạy sau user action và chỉ báo success sau khi `navigator.clipboard.writeText()` resolve.
 - Native `<dialog>`: `showModal()`, `close()`, Escape, backdrop coordinate check, focus return; explicit close button có accessible name.
 - Tương tác dùng native hover/focus/cursor feedback; motion CSS-only và bị tắt qua `prefers-reduced-motion`.
+- Header responsive: dưới 40rem chỉ giữ language/theme/menu; 40–64rem thêm CTA (public) hoặc settings icon (workspace) và menu; từ 64rem hiện desktop nav và ẩn menu.
+- Mobile navigation panel là disclosure panel `position:absolute` dưới header, `max-height: calc(100dvh - 76px)`, `overflow-y:auto`, `overscroll-behavior:contain`; focus trap giới hạn trong panel, Escape đóng và trả focus về menu button, pointerdown ngoài header đóng panel.
+- Layout chống overflow: `.content-shell width: min(100%, 72rem)`, modal dùng `calc(100% - gutter)` (không `100vw` vì scrollbar), mọi flex/grid con dài dùng `min-w-0` + `truncate`/`break-words`, icon dùng `shrink-0`.
+- Input/select/textarea giữ `font-size: 1rem` để iOS không zoom khi focus.
 
 ## Tiêu chí chấp nhận
 
@@ -42,12 +46,12 @@ Giao diện trình diễn cấu trúc hội đồng đa góc nhìn bằng dữ l
 - AC-06: Clipboard success/failure không báo thành công giả.
 - AC-07: Không có fetch/XHR/WebSocket/storage từ UI; `/api/council` không được gọi bởi prototype.
 - AC-08: Không có dữ liệu định danh, tài khoản, credential, invoice, renewal hoặc payment giả.
-- AC-09: Không overflow ở 375/768/1024/1440; interactive targets ≥44px; reduced motion không còn transition/animation.
+- AC-09: Không overflow ở 320/360/375/390/414/600/640/768/900/1024/1280/1440; interactive targets ≥44px; reduced motion không còn transition/animation.
 - AC-10: Lint, TypeScript, production build, budget test, `git diff --check`, Lighthouse và browser evidence pass trên final commit.
 
 ## Verify cuối
 
-Ghi command, URL, commit SHA và kết quả thật vào `.agent/HANDOFF.md` sau khi chạy. Không tái sử dụng evidence cũ của PR #4 cho source đã đổi.
+Ghi command, URL, commit SHA và kết quả thật vào `.agent/HANDOFF.md` sau khi chạy. Không tái sử dụng evidence cũ của PR #4 hoặc PR #5 cho source đã đổi.
 
 ## Ngoài scope
 
@@ -56,6 +60,7 @@ AI inference, provider adapters, real orchestration, web search, uploads, real c
 ## Risk / recovery
 
 - Risk: copy làm giả production, localization stale, hydration mismatch, dialog focus regression, unsupported claims.
+- Risk responsive: unlayered component CSS (`.button-primary`, `.icon-button`) đè Tailwind layered utilities nên `hidden`/`sm:inline-flex` bị bỏ qua — dùng semantic class unlayered riêng (`.header-cta`, `.header-settings`, `.header-menu`) với `display` tường minh trong media query.
 - Recovery: revert PR/commit trên branch task; không reset/stash/xóa thay đổi worktree khác.
 
 ## OPEN / delegated

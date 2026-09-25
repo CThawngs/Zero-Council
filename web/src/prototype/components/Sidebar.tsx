@@ -16,7 +16,7 @@ export const Sidebar: React.FC = () => {
   const labels = translations[language];
 
   return (
-    <aside className="sticky top-[76px] hidden h-[calc(100vh-76px)] w-64 shrink-0 border-r border-border/70 bg-surface/35 p-4 lg:flex lg:flex-col">
+    <aside className="sticky top-[76px] hidden h-[calc(100dvh-76px)] w-64 shrink-0 border-r border-border/70 bg-surface/35 p-4 lg:flex lg:flex-col">
       <button type="button" onClick={() => setCurrentView('empty-chamber')} className="button-primary mb-6 min-h-11 w-full justify-center">
         <Plus className="h-4 w-4" /> {labels.nav.newDeliberation}
       </button>

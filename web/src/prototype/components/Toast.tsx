@@ -23,7 +23,7 @@ export const Toast: React.FC = () => {
       {message && (
         <div className="toast-enter flex max-w-sm items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-xs leading-snug text-ink shadow-2xl">
           <CheckCircle2 className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
-          <span>{message}</span>
+          <span className="min-w-0 break-words">{message}</span>
         </div>
       )}
     </div>
