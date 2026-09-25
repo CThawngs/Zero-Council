@@ -1,6 +1,6 @@
 # Zero Council — UI/UX local mock spec
 
-Cập nhật: 2026-09-25. Governance: v7.1.
+Cập nhật: 2026-09-25. Governance khi soạn: v7.1. Repo đã lên v7.4 ngày 2026-09-26 (PR #8); spec này chưa rà lại dưới v7.4.
 Trạng thái: IMPLEMENTED / FINAL_QA_PASS.
 Worktree task: `.worktrees/vi-font-fix`; branch: `vi-font-fix`; base `49ec347` (`origin/main` tại task start, sau khi PR #6 merge).
 

@@ -1,6 +1,6 @@
 # HANDOFF — Zero Council Vietnamese font fix
 
-Cập nhật: 2026-09-25. Governance: v7.1.
+Cập nhật: 2026-09-25. Governance khi thu evidence: v7.1. Repo đã nâng lên v7.4 ngày 2026-09-26 (PR #8) — evidence dưới đây thu dưới v7.1, không tự động hợp lệ dưới v7.4. Xem `.agent/00_INDEX.md`.
 
 ## Git và phạm vi
 
