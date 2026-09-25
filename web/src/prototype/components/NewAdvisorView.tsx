@@ -70,7 +70,7 @@ export const NewAdvisorView: React.FC = () => {
         <label className="field"><span className="field-label">{t.instructions}</span><textarea ref={instructionsRef} value={instructions} onChange={(event) => { setInstructions(event.target.value); setShowRequiredError(false); setInvalidFields((value) => ({ ...value, instructions: false })); }} placeholder={t.instructionsPlaceholder} rows={5} required aria-invalid={invalidFields.instructions} aria-describedby={invalidFields.instructions ? 'advisor-form-error' : undefined} /></label>
         {showRequiredError && <p id="advisor-form-error" className="field-error" role="alert">{t.requiredFields}</p>}
         <div className="flex gap-3 rounded-lg border border-border bg-background/60 p-4 text-xs leading-relaxed text-ink-muted"><LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-brass" /><span>{t.capabilitiesDisabled}</span></div>
-        <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => setCurrentView('personas')} className="button-secondary min-h-11 justify-center">{t.cancel}</button><button type="submit" className="button-primary min-h-11 justify-center"><PlusCircle className="h-4 w-4" />{t.addPersona}</button></div>
+        <div className="flex flex-col-reverse gap-3 border-t border-border pt-5 sm:flex-row sm:justify-end"><button type="button" onClick={() => setCurrentView('personas')} className="button-secondary min-h-11 w-full justify-center sm:w-auto">{t.cancel}</button><button type="submit" className="button-primary min-h-11 w-full justify-center sm:w-auto"><PlusCircle className="h-4 w-4" />{t.addPersona}</button></div>
       </form>
     </div>
   );

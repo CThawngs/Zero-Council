@@ -99,8 +99,8 @@ export const EmptyChamberView: React.FC = () => {
                       </span>
                     )}
                   </span>
-                  <span className="mt-4 block text-sm font-semibold text-ink">{title}</span>
-                  <span className="mt-2 block text-xs leading-relaxed text-ink-muted">{body}</span>
+                  <span className="mt-4 block min-w-0 break-words text-sm font-semibold text-ink">{title}</span>
+                  <span className="mt-2 block min-w-0 break-words text-xs leading-relaxed text-ink-muted">{body}</span>
                 </button>
               );
             })}
@@ -134,8 +134,8 @@ export const EmptyChamberView: React.FC = () => {
                     aria-hidden="true"
                   />
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{persona.name}</p>
-                    <p className="truncate text-[11px] text-ink-muted">
+                    <p className="min-w-0 truncate text-sm font-medium text-ink">{persona.name}</p>
+                    <p className="min-w-0 truncate text-[11px] text-ink-muted">
                       {modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}
                     </p>
                   </div>
