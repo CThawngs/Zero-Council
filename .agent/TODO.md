@@ -35,9 +35,10 @@ Worktree: `.worktrees/vi-font-fix`; branch: `vi-font-fix`; base `49ec347` (`orig
 ## Cấp 4 — Git
 
 - [x] Commit source + governance docs trên `vi-font-fix`.
-- [x] Push branch và tạo PR mới vào `main`.
-- [x] Inspect required checks/ruleset; self-merge khi final status clean.
-- [ ] Dừng QA server trước bàn giao.
+- [x] Push branch và tạo PR mới `#7` vào `main` (không mở lại PR #4, #5, #6).
+- [x] Required checks/ruleset inspected: no checks reported, no branch protection (`404`), rulesets `[]`; self-merge khi `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
+- [x] PR #7 merged vào `main`, merge commit `064b44fcb9c6b74d22e5b213dd2b2a212d985055`.
+- [x] Dừng QA server trước bàn giao.
 
 ## Ngoài scope
 

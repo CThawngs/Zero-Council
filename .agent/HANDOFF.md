@@ -72,17 +72,18 @@ Evidence dưới đây chạy trên đúng source commit này. Commit kế tiế
 
 - Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7`.
 - Không mở lại PR #4, #5, #6.
-- PR number, required checks và ruleset status: ghi sau khi push.
-- Self-merge PR mới chỉ sau khi xác nhận `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
+- PR [#7](https://github.com/CThawngs/Zero-Council/pull/7) `vi-font-fix` → `main`, self-merged sau khi xác nhận `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
+- Required checks: `gh pr checks 7` báo không có check nào. Branch protection trên `main`: không có (`404 Branch not protected`). Repository rulesets: `[]`.
+- Merge commit trên `main`: `064b44fcb9c6b74d22e5b213dd2b2a212d985055`, merged at `2026-09-25T16:14:59Z`.
 
 ## Bàn giao
 
 1. ~~Stage source + governance docs.~~ — xong.
-2. ~~Commit final source/docs.~~ — xong.
-3. Push `vi-font-fix`, tạo PR mới vào `main`, kiểm tra checks rồi merge nếu sạch.
+2. ~~Commit final source/docs.~~ — `eec591b` (source) + commit evidence-only.
+3. ~~Push `vi-font-fix`, tạo PR mới vào `main`, kiểm tra checks rồi merge nếu sạch.~~ — PR #7 merged, merge commit `064b44f`.
 4. Dừng QA server trước khi kết thúc.
 
 ## ZeroVault
 
 - Đã refresh/search/load skill liên quan trong session.
-- Persist lesson về font fallback tiếng Việt và cách kiểm chứng bằng pixel signature: xem mục sau khi commit.
+- Lesson persist: `2026-09-25-declared-font-is-not-a-loaded-font` (ZeroVault commit `eb66b4948d4882cf77a567d4a4827aa9eb283b29`).
