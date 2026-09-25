@@ -37,9 +37,9 @@ Chỉ sửa responsive/layout; không đổi nội dung mock, không thêm depen
 
 ## Evidence
 
-Source commit: `b859caca4c78f921903ece476253682d935e79cb` (`fix(web): make responsive layout hold at 320-1440px`, branch `responsive-polish`).
+Source commit: `f0e183accee40b02d02f06f5848e54e8b4c49e82` (`fix(web): make responsive layout hold at 320-1440px`, branch `responsive-polish`).
 
-Evidence bên dưới được chạy trên đúng source commit này; chỉ có dòng `Git / PR` của chính file này được cập nhật sau commit và không đổi runtime source. Tất cả lệnh chạy tại worktree `responsive-polish`, `web/` trừ budget/diff ở root.
+Evidence bên dưới được chạy trên đúng source commit này. Commit kế tiếp chỉ cập nhật dòng SHA trong chính file handoff này và không đổi runtime source. Tất cả lệnh chạy tại worktree `responsive-polish`, `web/` trừ budget/diff ở root.
 
 ### Static (exit `0`)
 
@@ -71,7 +71,7 @@ Evidence bên dưới được chạy trên đúng source commit này; chỉ có
 ## Git / PR
 
 - Không merge PR #4; PR #5 đã merge trước task này và không được mở lại.
-- Source commit: `b859caca4c78f921903ece476253682d935e79cb`.
+- Source commit: `f0e183accee40b02d02f06f5848e54e8b4c49e82`.
 - Branch `responsive-polish` push và tạo PR mới vào `main` sau final QA; PR number, required checks và ruleset status ghi sau khi push.
 - Self-merge PR mới chỉ sau khi xác nhận `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
 
