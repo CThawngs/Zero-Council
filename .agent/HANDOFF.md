@@ -72,15 +72,16 @@ Evidence bên dưới được chạy trên đúng source commit này. Commit k�
 
 - Không merge PR #4; PR #5 đã merge trước task này và không được mở lại.
 - Source commit: `f0e183accee40b02d02f06f5848e54e8b4c49e82`.
-- Branch `responsive-polish` push và tạo PR mới vào `main` sau final QA; PR number, required checks và ruleset status ghi sau khi push.
-- Self-merge PR mới chỉ sau khi xác nhận `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
+- PR [#6](https://github.com/CThawngs/Zero-Council/pull/6) `responsive-polish` → `main`, self-merged sau khi xác nhận `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
+- Required checks: `gh pr checks 6` báo không có check nào được report. Branch protection trên `main`: không có (`404 Branch not protected`). Repository rulesets: `[]`.
+- Merge commit trên `main`: `49ec347895f89ba719c65efa9533f11d0456d99f`, merged at `2026-09-25T15:53:23Z`.
 
 ## Bàn giao
 
-1. Stage source + governance docs; loại toàn bộ `web/*.log` khỏi staging.
-2. Commit final source/docs.
-3. Push `responsive-polish`, tạo PR mới vào `main`.
-4. Chờ required checks, merge PR mới nếu được phép, rồi dừng QA server.
+1. ~~Stage source + governance docs; loại toàn bộ `web/*.log` khỏi staging.~~ — xong, không có untracked/log.
+2. ~~Commit final source/docs.~~ — `f0e183a` (source) + commit evidence-only.
+3. ~~Push `responsive-polish`, tạo PR mới vào `main`.~~ — PR #6 merged, merge commit `49ec347`.
+4. Chờ required checks, merge PR mới nếu được phép, rồi dừng QA server. — checks không tồn tại; đã merge; còn dừng QA server.
 
 ## ZeroVault
 

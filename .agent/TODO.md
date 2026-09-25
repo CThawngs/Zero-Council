@@ -34,9 +34,10 @@ Worktree: `.worktrees/responsive-polish`; branch: `responsive-polish`; base `c8c
 ## Cấp 4 — Git
 
 - [x] Commit source + governance docs trên `responsive-polish`.
-- [x] Push branch và tạo PR mới vào `main` (không dùng PR #4, không mở lại PR #5).
-- [x] Inspect required checks/ruleset; self-merge PR mới khi final status clean.
-- [ ] Dừng QA server trước bàn giao.
+- [x] Push branch và tạo PR mới `#6` vào `main` (không dùng PR #4, không mở lại PR #5).
+- [x] Required checks/ruleset inspected: no checks reported, no branch protection (`404`), rulesets `[]`; self-merge PR #6 khi `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`.
+- [x] PR #6 merged vào `main`, merge commit `49ec347895f89ba719c65efa9533f11d0456d99f`.
+- [x] Dừng QA server trước bàn giao.
 
 ## Ngoài scope
 
