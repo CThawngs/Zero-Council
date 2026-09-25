@@ -37,7 +37,9 @@ Cập nhật: 2026-09-25. Governance: v7.1.
 
 ## Evidence
 
-Source commit: xem mục `Git / PR`. Evidence dưới đây chạy tại worktree `vi-font-fix`, `web/` trừ budget/diff ở root.
+Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7` (`fix(web): load Inter and Fraunces with the Vietnamese subset`, branch `vi-font-fix`).
+
+Evidence dưới đây chạy trên đúng source commit này. Commit kế tiếp chỉ cập nhật dòng SHA trong chính file handoff này và không đổi runtime source. Tất cả lệnh chạy tại worktree `vi-font-fix`, `web/` trừ budget/diff ở root.
 
 ### Static
 
@@ -68,8 +70,9 @@ Source commit: xem mục `Git / PR`. Evidence dưới đây chạy tại worktre
 
 ## Git / PR
 
-- Source commit, PR number, required checks và ruleset status: ghi sau khi push.
+- Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7`.
 - Không mở lại PR #4, #5, #6.
+- PR number, required checks và ruleset status: ghi sau khi push.
 - Self-merge PR mới chỉ sau khi xác nhận `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
 
 ## Bàn giao
