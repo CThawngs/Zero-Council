@@ -56,9 +56,9 @@ Các commit chỉ cập nhật handoff/evidence không đổi runtime source:
 
 - Source commit: `15363c0e01cdc114899b17a088e01af4a0e5b59e`.
 - Target fix commit changed only `web/src/app/globals.css`; evidence-only handoff updates follow source commit and do not change runtime source.
-- Push branch, PR mới và required checks: `PENDING`.
+- Push branch, PR mới và required checks: branch pushed; PR [#5](https://github.com/CThawngs/Zero-Council/pull/5) open against `main`; `gh pr checks 5` reports no checks; branch protection absent; repository rulesets `[]`; merge pending self-merge after final status check.
 - Không merge PR #4.
-- Self-merge chỉ sau khi mọi required check của PR mới pass và ruleset cho phép.
+- Self-merge PR #5 chỉ sau khi xác nhận lại `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
 
 ## Bàn giao
 

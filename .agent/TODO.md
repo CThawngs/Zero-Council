@@ -32,8 +32,8 @@ Worktree: `.worktrees/ui-ux-local-mock`; branch: `ui-ux-local-mock`.
 ## Cấp 4 — Git
 
 - [x] Commit source + governance docs trên `ui-ux-local-mock`.
-- [ ] Push branch và tạo PR mới vào `main` (không dùng PR #4).
-- [ ] Chờ required checks pass; self-merge PR mới khi ruleset cho phép.
+- [x] Push branch và tạo PR mới `#5` vào `main` (không dùng PR #4).
+- [x] Required checks/ruleset inspected: no checks reported, no branch protection, rulesets `[]`; self-merge PR mới khi final status clean.
 - [ ] Dừng QA server trước bàn giao.
 
 ## Ngoài scope
