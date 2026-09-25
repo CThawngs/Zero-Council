@@ -27,10 +27,11 @@ Worktree: `.worktrees/ui-ux-local-mock`; branch: `ui-ux-local-mock`.
 - [x] Browser QA final source: language, persona submit, dialogs, clipboard, reduced motion, responsive widths, console/network/storage.
 - [x] Lighthouse final source không có failed audit.
 - [x] Cập nhật evidence sau commit; không dùng evidence cũ.
+- [x] Audit subagent không có finding sau khi sửa modal close target; target đo `44×44px`.
 
 ## Cấp 4 — Git
 
-- [ ] Commit source + governance docs trên `ui-ux-local-mock`.
+- [x] Commit source + governance docs trên `ui-ux-local-mock`.
 - [ ] Push branch và tạo PR mới vào `main` (không dùng PR #4).
 - [ ] Chờ required checks pass; self-merge PR mới khi ruleset cho phép.
 - [ ] Dừng QA server trước bàn giao.

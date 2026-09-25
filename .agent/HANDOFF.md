@@ -8,7 +8,7 @@ Cập nhật: 2026-09-25. Governance: v7.1.
 - Branch: `ui-ux-local-mock`
 - Base: `d4b254c` (`origin/main` tại task start)
 - Remote: `https://github.com/CThawngs/Zero-Council.git`
-- Main checkout và worktree `feature-prototype-ui-integration` không sửa.
+- Main checkout and worktree `feature-prototype-ui-integration` unchanged.
 - Không merge PR #4; PR mới sẽ được tạo sau final QA.
 
 ## Đã triển khai
@@ -33,29 +33,29 @@ Cập nhật: 2026-09-25. Governance: v7.1.
 
 ## Evidence
 
-Evidence final source, gắn với source commit `00e18feecdd33630161432a2d979035126415a76`.
+Evidence final source, gắn với source commit `15363c0e01cdc114899b17a088e01af4a0e5b59e`.
 Các commit chỉ cập nhật handoff/evidence không đổi runtime source:
 
-- `pnpm lint` — exit `0` (`web`, job `pwsh-76`).
-- `pnpm exec tsc --noEmit` — exit `0` (`web`, job `pwsh-77`).
-- `pnpm build` — exit `0` (`web`, job `pwsh-78`); Next.js `16.3.5`, TypeScript hoàn tất.
-- `node --test tests/budget.test.mjs` — `2 pass, 0 fail`, exit `0` (root, job `pwsh-74`).
-- `git diff --check` — exit `0`; chỉ có cảnh báo line-ending LF/CRLF, không có whitespace error.
-- Production browser server `http://localhost:3110` (job `pwsh-79`): `/` fresh load 9 document/static requests, tất cả `200`/`304`; không có application fetch/XHR/WebSocket/API. Console không có error/warning.
+- `pnpm lint` — exit `0` (`web`, job `pwsh-89`).
+- `pnpm exec tsc --noEmit` — exit `0` (`web`, job `pwsh-89`).
+- `pnpm build` — exit `0` (`web`, job `pwsh-89`); Next.js `16.3.5`, TypeScript completed.
+- `node --test tests/budget.test.mjs` — `2 pass, 0 fail`, exit `0` (root, job `pwsh-90`).
+- `git diff --check` — exit `0` (root, job `pwsh-90`); không có whitespace error.
+- Production browser server `http://localhost:3110` (job `pwsh-85`): `/` fresh load 9 document/static requests, tất cả `200`; không có application fetch/XHR/WebSocket/API. Console không có error/warning.
 - `/`: English mặc định; toggle Vietnamese cập nhật `lang`, title và localized description. Arbitrary question tạo fixed generic sample flow, không personalized recommendation.
 - Persona: empty submit hiện required validation; valid submit tạo `Sample Reviewer`; toggle VI đổi `Mẫu Reviewer`, giữ user-entered archetype/stance/instructions trong browser memory.
-- Native draft dialog: mở bằng trigger; Escape đóng và trả focus về `Open sample draft`; backdrop click đóng và trả focus; click trong surface không đóng.
-- Clipboard: success toast `Sample text copied to clipboard.` chỉ sau `writeText()` resolve; code path có failure toast khi promise reject.
-- Responsive audit: `375x812` scrollWidth `365`; `768x900` `758`; `1024x900` `1014`; `1440x1000` `1430`; không overflow và không có target <44px.
-- Reduced-motion: CSS có `@media (prefers-reduced-motion: reduce)`; audit xác nhận transition/animation `0s`, transform `none`.
-- `/fixture`: English/Vietnamese visible copy, title, description đều đổi; không có application API call. Hai `_rsc` request là Next navigation prefetch, không phải app integration.
-- Lighthouse navigation desktop final build: Accessibility `100`, Best Practices `100`, SEO `100`, Agentic Browsing `100`; `52` passed, `0` failed.
-- Không có secret hoặc realistic identity/billing/credential data trong source hoặc browser storage.
+- Native draft dialog: mở bằng trigger; Escape đóng và trả focus về `Open sample draft`; backdrop click đóng và trả focus; click trong surface không đóng. Header close target đo `44×44px`.
+- Clipboard: success toast chỉ sau `writeText()` resolve; code path có failure toast khi promise reject.
+- Responsive audit cuối: `375×812` scrollWidth `375`; `768×900` `758`; `1024×900` `1014`; `1440×1000` `1430`; không overflow. Audit target cuối: `13` interactive elements, min `44px`, không target <44px.
+- Reduced-motion: audit Playwright với `prefers-reduced-motion: reduce` xác nhận transition/animation `1e-05s`, transform `none`; CSS giữ media query.
+- `/fixture`: English/Vietnamese visible copy, title, description and `document.documentElement.lang` both changed; no application API call. `_rsc` request is Next navigation prefetch, not app integration.
+- Lighthouse navigation sau target fix: desktop và mobile đều Accessibility `100`, Best Practices `100`, SEO `100`, Agentic Browsing `100`; mỗi lượt `52` passed, `0` failed.
+- Fresh Playwright context: cookies, `localStorage`, `sessionStorage` đều rỗng; không có application network request sau static assets.
 
 ## Git / PR
 
-- Source commit: `00e18feecdd33630161432a2d979035126415a76`.
-- Evidence-only handoff updates follow this source commit; runtime source is unchanged by them.
+- Source commit: `15363c0e01cdc114899b17a088e01af4a0e5b59e`.
+- Target fix commit changed only `web/src/app/globals.css`; evidence-only handoff updates follow source commit and do not change runtime source.
 - Push branch, PR mới và required checks: `PENDING`.
 - Không merge PR #4.
 - Self-merge chỉ sau khi mọi required check của PR mới pass và ruleset cho phép.
