@@ -1,455 +1,93 @@
-import { AdvisorPersona, DeliberationSession, ApiKeyConfig, InvoiceRecord } from '../types';
+import { AdvisorPersona, ApiKeyConfig, DeliberationSession, Language, ModelProvider, SupportedModel } from '../types';
+import { copy } from '../i18n';
+
+const sessionFixture = (
+  id: string,
+  title: string,
+  framework: DeliberationSession['framework'],
+  language: Language = 'en'
+): DeliberationSession => {
+  const t = copy[language];
+  return {
+    id,
+    title,
+    summary: t.sampleSessionSummary,
+    framework,
+    timestamp: '2026-01-01T00:00:00Z',
+    relativeTime: t.sample,
+    status: 'Concluded',
+    advisors: initialPersonas.map((persona) => localizePersona(persona, language)),
+    testimonies: [
+      { advisorId: 'pragmatist', heading: t.pragmatistName, stanceBadge: t.pragmatistStance, primaryText: t.pragmatistQuote, secondaryText: t.pragmatistInstructions },
+      { advisorId: 'dreamer', heading: t.dreamerName, stanceBadge: t.dreamerStance, primaryText: t.dreamerQuote, secondaryText: t.dreamerInstructions },
+      { advisorId: 'skeptic', heading: t.skepticName, stanceBadge: t.skepticStance, primaryText: t.skepticQuote, secondaryText: t.skepticInstructions },
+    ],
+    synthesis: {
+      chairTitle: t.sampleChair,
+      chairRole: t.sampleNarrator,
+      statusBadge: t.fixtureNotConsensus,
+      coreOutput: t.sampleTakeaway,
+      stipulations: [t.sampleStipulationOne, t.sampleStipulationTwo],
+      nextAction: t.sampleNextAction,
+      quote: t.sampleQuote,
+    },
+    scenarios: {
+      good: { title: t.favorableTitle, subtitle: t.illustrativeOnly, description: t.favorableDescription, actions: [t.favorableActionOne, t.favorableActionTwo] },
+      normal: { title: t.baselineTitle, subtitle: t.illustrativeOnly, description: t.baselineDescription, actions: [t.baselineActionOne, t.baselineActionTwo] },
+      bad: { title: t.difficultTitle, subtitle: t.illustrativeOnly, description: t.difficultDescription, actions: [t.difficultActionOne, t.difficultActionTwo] },
+    },
+  };
+};
+
+export const localizePersona = (persona: AdvisorPersona, language: Language): AdvisorPersona => {
+  const t = copy[language];
+  const translated: Record<string, Pick<AdvisorPersona, 'name' | 'archetype' | 'stance' | 'instructions' | 'sampleQuote'>> = {
+    pragmatist: { name: t.pragmatistName, archetype: t.pragmatistArchetype, stance: t.pragmatistStance, instructions: t.pragmatistInstructions, sampleQuote: t.pragmatistQuote },
+    dreamer: { name: t.dreamerName, archetype: t.dreamerArchetype, stance: t.dreamerStance, instructions: t.dreamerInstructions, sampleQuote: t.dreamerQuote },
+    skeptic: { name: t.skepticName, archetype: t.skepticArchetype, stance: t.skepticStance, instructions: t.skepticInstructions, sampleQuote: t.skepticQuote },
+  };
+  const fixture = translated[persona.id];
+  if (fixture) return { ...persona, ...fixture };
+  if (!persona.generatedName) return persona;
+  return {
+    ...persona,
+    name: t.samplePersonaName.replace('{name}', persona.archetype),
+    sampleQuote: t.samplePersonaQuote,
+  };
+};
 
 export const initialPersonas: AdvisorPersona[] = [
-  {
-    id: 'pragmatist',
-    name: 'The Pragmatist',
-    archetype: 'Pragmatist',
-    model: 'GPT-5.2',
-    provider: 'OpenAI',
-    colorToken: 'persona-sage',
-    colorHex: '#7C9885',
-    stance: 'Economic Runway & Solvency',
-    instructions:
-      'You are a pragmatic advisor who always prioritizes feasibility and financial risk in personal decisions. When evaluating career moves, large purchases, or life changes, calculate the real spendable impact, down-side runway, and long-term solvency before offering guidance.',
-    webSearchEnabled: true,
-    generateDiagramEnabled: true,
-    sampleQuote:
-      'When factoring direct operational overhead into current compensation, the nominal 15% reduction is statistically distorted. Eliminating metropolitan transit, regional parking levies, and daily commuter meals recuperates an average of $640 monthly in after-tax capital.',
-    solvencyMetric: 'Solvency Horizon: Net liquidity neutral within 90 days',
-  },
-  {
-    id: 'dreamer',
-    name: 'The Dreamer',
-    archetype: 'Dreamer',
-    model: 'Claude 4.6',
-    provider: 'Anthropic',
-    colorToken: 'persona-rose',
-    colorHex: '#B98389',
-    stance: 'Autonomy, Leverage & Well-being',
-    instructions:
-      'You evaluate decisions through the lens of human sovereignty, deep creative agency, stress mitigation, and long-term vitality. Highlight sovereign time dividend, reclaimed life hours, and high-upside pursuits.',
-    webSearchEnabled: true,
-    generateDiagramEnabled: true,
-    sampleQuote:
-      'Autonomy is the primary multiplier of cognitive clarity and longevity. The 20 hours reclaimed per month represent 240 hours annually—equivalent to six full working weeks of unmetered sovereignty.',
-    solvencyMetric: 'Autonomy Dividend: Six work-weeks equivalent per annum',
-  },
-  {
-    id: 'skeptic',
-    name: 'The Skeptic',
-    archetype: 'Skeptic',
-    model: 'Gemini 3 Pro',
-    provider: 'Google Gemini',
-    colorToken: 'persona-slate',
-    colorHex: '#6E85A6',
-    stance: 'Vulnerability & Risk Assessment',
-    instructions:
-      'You examine unseen friction, informational asymmetry, proximity bias, and downside salary anchoring. Demand concrete contractual protection and exit triggers.',
-    webSearchEnabled: true,
-    generateDiagramEnabled: true,
-    sampleQuote:
-      'Remote structures introduce severe informational asymmetry and proximity bias. In poorly governed remote organizations, remote individual contributors often face an invisible promotion ceiling compared to co-located executive peers.',
-    solvencyMetric: 'Vulnerability Exposure: Proximity bias & salary anchoring risk',
-  },
+  { id: 'pragmatist', name: copy.en.pragmatistName, archetype: copy.en.pragmatistArchetype, model: 'Model label A', provider: 'Provider label A', colorToken: 'persona-sage', colorHex: '#7C9885', stance: copy.en.pragmatistStance, instructions: copy.en.pragmatistInstructions, sampleQuote: copy.en.pragmatistQuote },
+  { id: 'dreamer', name: copy.en.dreamerName, archetype: copy.en.dreamerArchetype, model: 'Model label B', provider: 'Provider label B', colorToken: 'persona-rose', colorHex: '#B98389', stance: copy.en.dreamerStance, instructions: copy.en.dreamerInstructions, sampleQuote: copy.en.dreamerQuote },
+  { id: 'skeptic', name: copy.en.skepticName, archetype: copy.en.skepticArchetype, model: 'Model label C', provider: 'Provider label C', colorToken: 'persona-slate', colorHex: '#6E85A6', stance: copy.en.skepticStance, instructions: copy.en.skepticInstructions, sampleQuote: copy.en.skepticQuote },
 ];
 
 export const initialSessions: DeliberationSession[] = [
-  {
-    id: 'remote-job-flexibility',
-    title: 'Should I accept a remote job offer that pays less but gives more flexibility?',
-    summary: 'Sample consensus preview: conditional accept with 6-month salary parity clause and equipment stipend.',
-    framework: 'Good / Normal / Bad Scenarios',
-    timestamp: '2026-09-24T06:30:00Z',
-    relativeTime: '24 mins ago',
-    status: 'Concluded',
-    voteCount: 3,
-    voteSummary: 'Sample consensus preview: 2 conditional proceed, 1 strong support',
-    referenceCode: 'D-882',
-    advisors: initialPersonas,
-    baselineMetrics: {
-      baselineCashflow: 'Current Role',
-      baseAdjustment: '-15.0% Gross',
-      locationModel: '100% Remote',
-      commuteRecovery: '+20 hrs/mo',
-    },
-    testimonies: [
-      {
-        advisorId: 'pragmatist',
-        heading: 'The Pragmatist',
-        stanceBadge: 'Conditional Proceed',
-        primaryText:
-          'When factoring direct operational overhead into current compensation, the nominal 15% reduction is statistically distorted. Eliminating metropolitan transit, regional parking levies, and daily commuter meals recuperates an average of $640 monthly in after-tax capital.',
-        secondaryText:
-          'Accounting for tax brackets, the authentic net impact stands at -6.5% real spendable variance. However, this holds only if living expenditure boundaries remain rigorous. With 20 hours reclaimed each month, the effective hourly realization of your labor actually increases by approximately 4.8%.',
-        metricLabel: 'Solvency Horizon',
-        metricValue: 'Net liquidity neutral within 90 days',
-      },
-      {
-        advisorId: 'dreamer',
-        heading: 'The Dreamer',
-        stanceBadge: 'Strong Support',
-        primaryText:
-          'Autonomy is the primary multiplier of cognitive clarity and longevity. The 20 hours reclaimed per month represent 240 hours annually—equivalent to six full working weeks of unmetered sovereignty.',
-        secondaryText:
-          'Removing physical surveillance and commuter friction directly reduces chronic cortisol load. More critically, that recaptured bandwidth offers fertile ground for high-upside pursuits: asynchronous deep work, personal engineering projects, or foundational health compounding that an inflexible office schedule continuously exhausts.',
-        metricLabel: 'Autonomy Dividend',
-        metricValue: 'Six work-weeks equivalent per annum',
-      },
-      {
-        advisorId: 'skeptic',
-        heading: 'The Skeptic',
-        stanceBadge: 'Caution & Counter-propose',
-        primaryText:
-          'Remote structures introduce severe informational asymmetry and proximity bias. In poorly governed remote organizations, remote individual contributors often face an invisible promotion ceiling compared to co-located executive peers.',
-        secondaryText:
-          'Furthermore, taking an upfront 15% discount anchors your market valuation at a lower baseline for future equity rounds or tier reassessments. Without explicit contractual performance metrics and formalized home-office infrastructure commitments, home boundary dissipation can easily convert your flexibility into perpetual, uncompensated availability.',
-        metricLabel: 'Vulnerability Exposure',
-        metricValue: 'Proximity bias & salary anchoring risk',
-      },
-    ],
-    synthesis: {
-      chairTitle: 'The Chair',
-      chairRole: 'Sample Executive Synthesis & Deliberative Convergence',
-      statusBadge: 'Sample Consensus',
-      coreRecommendation: 'Accept offer conditionally. Execute with 2 binding negotiating stipulations to negate downside anchoring.',
-      stipulations: [
-        'Formal salary review at 6 months pegged to milestone delivery',
-        'One-time $2,500 home studio and hardware stipend upon signing',
-      ],
-      tradeOffCalculus: {
-        grossDeficit: '-15.0%',
-        effectiveLaborRate: '+4.8%',
-        reclaimedHours: '240 hrs',
-      },
-      nextAction: 'Dispatch structured counter-proposal email emphasizing remote execution benchmarks.',
-      quote:
-        'The trade is mathematically defensible and psychologically asymmetric in your favor, provided you refuse to absorb organizational opacity as a passive observer.',
-    },
-    scenarios: {
-      good: {
-        title: 'Good Scenario: Accelerated Skill Growth & Equity Upside',
-        subtitle: 'High Compounding',
-        description:
-          '20 hrs saved yields side consulting or rapid skill acquisition. 6-month review restores baseline salary while remote autonomy remains part of the sample scenario.',
-        actions: ['Immediate validation checkpoint at month 3', 'Negotiate advisory shares equity cliff'],
-      },
-      normal: {
-        title: 'Normal Scenario: Steady Linear Trajectory',
-        subtitle: 'Stable Equilibrium',
-        description:
-          'Cost of living reductions absorb the majority of the pay variance. Restored life balance improves personal health without rapid corporate acceleration.',
-        actions: ['Establish semi-annual market salary review', 'Protect 15% dedicated study/experimentation hours'],
-      },
-      bad: {
-        title: 'Bad Scenario: Runway Depletion & Boundary Erosion',
-        subtitle: 'Boundary Erosion',
-        description:
-          'Isolated from key promotions due to executive proximity bias. Work creeps into evening hours, nullifying the commute time savings.',
-        actions: ['Require 6-month liquid reserve buffer before accepting', 'Clear exit triggers at 90 days if milestones miss'],
-      },
-    },
-    matrixRows: [
-      {
-        criteria: 'Base Compensation & Liquidity',
-        criteriaDesc: 'Illustrative yield, sample baseline cashflow',
-        weight: '25%',
-        offerAScore: '9.0',
-        offerBScore: '6.0',
-        variance: '+0.75 (A)',
-        favors: 'A',
-      },
-      {
-        criteria: 'Long-term Career Autonomy & Learning Velocity',
-        criteriaDesc: 'Technical sovereignty, domain leadership exposure',
-        weight: '30%',
-        offerAScore: '6.0',
-        offerBScore: '9.5',
-        variance: '+1.05 (B)',
-        favors: 'B',
-      },
-      {
-        criteria: 'Work-Life Balance & Schedule Flexibility',
-        criteriaDesc: 'Operational boundaries, on-call predictability',
-        weight: '20%',
-        offerAScore: '8.0',
-        offerBScore: '6.5',
-        variance: '+0.30 (A)',
-        favors: 'A',
-      },
-      {
-        criteria: 'Downside Financial Safety & Solvency',
-        criteriaDesc: 'Severance resilience, organizational balance sheet',
-        weight: '25%',
-        offerAScore: '9.0',
-        offerBScore: '5.5',
-        variance: '+0.87 (A)',
-        favors: 'A',
-      },
-    ],
-  },
-  {
-    id: 'company-b-offer',
-    title: 'Should I take the job offer from Company B?',
-    summary: 'Sample consensus preview: career growth potential outweighs compensation variance.',
-    framework: 'Good / Normal / Bad Scenarios',
-    timestamp: '2026-09-24T05:00:00Z',
-    relativeTime: '2 hours ago',
-    status: 'Concluded',
-    voteCount: 3,
-    voteSummary: 'Sample unanimous consensus preview',
-    referenceCode: 'D-879',
-    advisors: initialPersonas,
-    baselineMetrics: {
-      baselineCashflow: 'Current Firm',
-      baseAdjustment: '+8.0% Base',
-      locationModel: 'Hybrid (3 days)',
-      commuteRecovery: '-5 hrs/mo',
-    },
-    testimonies: [],
-    synthesis: {
-      chairTitle: 'The Chair',
-      chairRole: 'Sample Executive Synthesis',
-      statusBadge: 'Sample Consensus',
-      coreRecommendation: 'Accept Company B offer; the equity upside and accelerated seniority outpace current tenure drag.',
-      stipulations: ['Insist on 4-year vesting schedule with 1-year cliff', 'Negotiate flexible commute transit allowance'],
-      tradeOffCalculus: {
-        grossDeficit: '+8.0%',
-        effectiveLaborRate: '+12.5%',
-        reclaimedHours: '120 hrs',
-      },
-      nextAction: 'Finalize written employment agreement.',
-      quote: 'Career optionality compound interest out-earns short-term incremental salary security.',
-    },
-    scenarios: {
-      good: {
-        title: 'Good Scenario: Rapid Promotion',
-        subtitle: 'High Compounding',
-        description: 'Lead engineering team within 12 months with substantial equity appreciation.',
-        actions: ['Establish quarterly milestone audits'],
-      },
-      normal: {
-        title: 'Normal Scenario: Steady Lateral Impact',
-        subtitle: 'Stable Equilibrium',
-        description: 'Standard performance rating with reliable 8% annual compensation bump.',
-        actions: ['Protect peer collaboration cadence'],
-      },
-      bad: {
-        title: 'Bad Scenario: Reorganization Risk',
-        subtitle: 'Boundary Erosion',
-        description: 'Mid-tier restructuring shifts project scope away from core strengths.',
-        actions: ['Maintain external market network'],
-      },
-    },
-  },
-  {
-    id: 'hybrid-car-purchase',
-    title: 'Is it worth buying a used hybrid car this year?',
-    summary: 'Sample recommendation preview: delay purchase until Q3 depreciation stabilizes.',
-    framework: 'Decision Matrix',
-    timestamp: '2026-09-23T14:20:00Z',
-    relativeTime: 'Yesterday',
-    status: 'Concluded',
-    voteCount: 3,
-    voteSummary: 'Sample split outcome preview: 2 defer, 1 proceed',
-    referenceCode: 'D-864',
-    advisors: initialPersonas,
-    baselineMetrics: {
-      baselineCashflow: 'Current Vehicle',
-      baseAdjustment: '₫480M Outlay',
-      locationModel: 'Urban Commute',
-      commuteRecovery: '₫1.8M/mo Fuel',
-    },
-    testimonies: [],
-    synthesis: {
-      chairTitle: 'The Chair',
-      chairRole: 'Sample Executive Synthesis',
-      statusBadge: 'Sample Consensus',
-      coreRecommendation: 'Defer purchase for 4 months. Used battery health certification standards and supply easing will compress prices.',
-      stipulations: ['Set up vehicle auction alerts', 'Monitor hybrid battery replacement warranty regulations'],
-      tradeOffCalculus: {
-        grossDeficit: '-₫480M',
-        effectiveLaborRate: '+0.0%',
-        reclaimedHours: '0 hrs',
-      },
-      nextAction: 'Re-evaluate market index in Q3.',
-      quote: 'Patience on depreciating mechanical assets yields immediate tax and liquidity leverage.',
-    },
-    scenarios: {
-      good: {
-        title: 'Good Scenario: Optimal Valuation Dip',
-        subtitle: 'High Compounding',
-        description: 'Pick up 2023 certified model at 20% discount with pristine battery pack.',
-        actions: ['Execute purchase in August'],
-      },
-      normal: {
-        title: 'Normal Scenario: Modest Fuel Offset',
-        subtitle: 'Stable Equilibrium',
-        description: 'Modest monthly fuel savings offset higher initial insurance premium.',
-        actions: ['Calculate total cost of ownership'],
-      },
-      bad: {
-        title: 'Bad Scenario: Battery Degeneration',
-        subtitle: 'Boundary Erosion',
-        description: 'Uncovered battery pack cell imbalance requires out-of-pocket overhaul.',
-        actions: ['Never buy without certified cell diagnostic report'],
-      },
-    },
-  },
-  {
-    id: 'freelance-to-consulting',
-    title: 'Should I switch my freelance focus to full-time AI workflow consulting?',
-    summary: 'Sample preview: high strategic upside under structured cashflow-risk mitigation.',
-    framework: 'Six Thinking Hats',
-    timestamp: '2026-09-21T09:10:00Z',
-    relativeTime: '3 days ago',
-    status: 'Concluded',
-    voteCount: 3,
-    voteSummary: 'Sample synthesis preview',
-    referenceCode: 'D-851',
-    advisors: initialPersonas,
-    baselineMetrics: {
-      baselineCashflow: 'Ad-hoc Freelance',
-      baseAdjustment: 'Retainer Model',
-      locationModel: 'Independent Studio',
-      commuteRecovery: '+15 hrs/mo',
-    },
-    testimonies: [],
-    synthesis: {
-      chairTitle: 'The Chair',
-      chairRole: 'Sample Executive Synthesis',
-      statusBadge: 'Sample Consensus',
-      coreRecommendation: 'Sample recommendation: transition gradually by testing recurring retainers before ending hourly contracts.',
-      stipulations: ['Secure 3-month living expense reserve', 'Standardize 3 core service packages'],
-      tradeOffCalculus: {
-        grossDeficit: '+35.0%',
-        effectiveLaborRate: '+40.0%',
-        reclaimedHours: '180 hrs',
-      },
-      nextAction: 'Draft retainer proposal for flagship client.',
-      quote: 'Positioning is the silent arbiter of pricing power; refuse to sell hours when clients buy outcomes.',
-    },
-    scenarios: {
-      good: {
-        title: 'Good Scenario: Retainer Monopoly',
-        subtitle: 'High Compounding',
-        description: '3 enterprise clients on $3,500/mo retainers generate predictable sovereign cashflow.',
-        actions: ['Systematize delivery checklists'],
-      },
-      normal: {
-        title: 'Normal Scenario: Gradual Pivot',
-        subtitle: 'Stable Equilibrium',
-        description: 'Mixed revenue stream with steady transition over 6 months.',
-        actions: ['Monitor monthly burn rate'],
-      },
-      bad: {
-        title: 'Bad Scenario: Scope Creep Burnout',
-        subtitle: 'Boundary Erosion',
-        description: 'Vague consulting briefs cause unpaid revision cycles.',
-        actions: ['Hard contracts with defined deliverables'],
-      },
-    },
-  },
-  {
-    id: 'relocate-danang-vs-hcmc',
-    title: 'Relocating to Da Nang vs staying in Ho Chi Minh City for remote work',
-    summary: 'Sample preview: quality of life favors Da Nang; networking retention favors HCMC.',
-    framework: 'Good / Normal / Bad Scenarios',
-    timestamp: '2026-09-17T11:00:00Z',
-    relativeTime: 'Last week',
-    status: 'Concluded',
-    voteCount: 3,
-    voteSummary: 'Sample comparative analysis preview',
-    referenceCode: 'D-838',
-    advisors: initialPersonas,
-    baselineMetrics: {
-      baselineCashflow: 'HCMC Living Costs',
-      baseAdjustment: '-35% Rent',
-      locationModel: 'Da Nang Coastal',
-      commuteRecovery: '+25 hrs/mo',
-    },
-    testimonies: [],
-    synthesis: {
-      chairTitle: 'The Chair',
-      chairRole: 'Sample Executive Synthesis',
-      statusBadge: 'Sample Consensus',
-      coreRecommendation: 'Sample recommendation: try a 3-month trial sublease in Da Nang before evaluating longer-term relocation.',
-      stipulations: ['Retain co-working access for fast fiber backup', 'Schedule bi-monthly 3-day networking sprints to HCMC'],
-      tradeOffCalculus: {
-        grossDeficit: '-35.0% Spend',
-        effectiveLaborRate: '+18.0%',
-        reclaimedHours: '300 hrs',
-      },
-      nextAction: 'Book temporary housing for trial period.',
-      quote: 'Environmental serenity pays exponential cognitive dividends when balanced with intentional network maintenance.',
-    },
-    scenarios: {
-      good: {
-        title: 'Good Scenario: Coastal Productivity Zenith',
-        subtitle: 'High Compounding',
-        description: 'Significant reduction in living expenditure paired with dramatic health and focus improvements.',
-        actions: ['Establish routine coastal schedule'],
-      },
-      normal: {
-        title: 'Normal Scenario: Balanced Repose',
-        subtitle: 'Stable Equilibrium',
-        description: 'Pleasant lifestyle with occasional flight travel to maintain urban ties.',
-        actions: ['Budget quarterly travel allowance'],
-      },
-      bad: {
-        title: 'Bad Scenario: Professional Isolation',
-        subtitle: 'Boundary Erosion',
-        description: 'Distance from major tech hubs dampens spontaneous career opportunities.',
-        actions: ['Plan structured quarterly visits to HCMC'],
-      },
-    },
-  },
+  sessionFixture('project-proposal', copy.en.initialProjectTitle, 'Good / Normal / Bad Scenarios'),
+  sessionFixture('team-priority', copy.en.initialTeamTitle, 'Six Thinking Hats'),
+  sessionFixture('process-change', copy.en.initialProcessTitle, 'Decision Matrix'),
 ];
 
 export const initialApiKeys: ApiKeyConfig[] = [
-  {
-    provider: 'OpenAI',
-    modelName: 'GPT-5.2',
-    connected: false,
-  },
-  {
-    provider: 'Anthropic',
-    modelName: 'Claude 4.6',
-    connected: false,
-  },
-  {
-    provider: 'Google Gemini',
-    modelName: 'Gemini 3 Pro',
-    connected: false,
-  },
+  { provider: 'Provider label A', modelName: 'Model label A', connected: false },
+  { provider: 'Provider label B', modelName: 'Model label B', connected: false },
+  { provider: 'Provider label C', modelName: 'Model label C', connected: false },
 ];
 
-export const initialInvoices: InvoiceRecord[] = [
-  {
-    id: 'inv-1',
-    date: 'Mar 28, 2026',
-    clearingTime: 'Sample clearing time: 09:15 GMT+7',
-    plan: 'Mock concept plan',
-    receiptCode: 'ZC-INV-88214',
-    amount: 149000,
-    status: 'Mock settled',
-  },
-  {
-    id: 'inv-2',
-    date: 'Feb 28, 2026',
-    clearingTime: 'Sample clearing time: 09:12 GMT+7',
-    plan: 'Mock concept plan',
-    receiptCode: 'ZC-INV-77309',
-    amount: 149000,
-    status: 'Mock settled',
-  },
-  {
-    id: 'inv-3',
-    date: 'Jan 28, 2026',
-    clearingTime: 'Sample clearing time: 09:14 GMT+7',
-    plan: 'Mock concept plan',
-    receiptCode: 'ZC-INV-66192',
-    amount: 149000,
-    status: 'Mock settled',
-  },
-];
+const modelLabelKeys: Record<SupportedModel, 'modelLabelA' | 'modelLabelB' | 'modelLabelC'> = {
+  'Model label A': 'modelLabelA',
+  'Model label B': 'modelLabelB',
+  'Model label C': 'modelLabelC',
+};
+
+const providerLabelKeys: Record<ModelProvider, 'providerLabelA' | 'providerLabelB' | 'providerLabelC'> = {
+  'Provider label A': 'providerLabelA',
+  'Provider label B': 'providerLabelB',
+  'Provider label C': 'providerLabelC',
+};
+
+export const modelLabel = (model: SupportedModel, language: Language) =>
+  copy[language][modelLabelKeys[model]];
+
+export const providerLabel = (provider: ModelProvider, language: Language) =>
+  copy[language][providerLabelKeys[provider]];

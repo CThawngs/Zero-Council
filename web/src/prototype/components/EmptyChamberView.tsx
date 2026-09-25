@@ -1,221 +1,182 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { DecisionFramework } from '../types';
-import { Compass, ShieldCheck } from 'lucide-react';
+import type { DecisionFramework } from '../types';
+import { modelLabel, providerLabel } from '../data/mockData';
+import { Check, Compass, GitBranch, Layers3, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
 
 export const EmptyChamberView: React.FC = () => {
-  const { startNewSession, personas, setCurrentView, openFrameworkModal } = useApp();
-  const [dilemma, setDilemma] = useState('');
+  const { startNewSession, personas, setCurrentView, t, language } = useApp();
+  const [question, setQuestion] = useState('');
   const [selectedFramework, setSelectedFramework] =
     useState<DecisionFramework>('Good / Normal / Bad Scenarios');
 
-  const frameworks: DecisionFramework[] = [
-    'Good / Normal / Bad Scenarios',
-    'Six Thinking Hats',
-    'Decision Matrix',
-  ];
-
-  const suggestedPrompts = [
+  const frameworks = [
     {
-      title: 'Should I accept a remote job offer that pays less but gives more flexibility?',
-      tag: 'Career & Autonomy',
+      id: 'Good / Normal / Bad Scenarios' as const,
+      title: t.scenarioTitle,
+      body: t.scenarioBody,
+      icon: GitBranch,
     },
     {
-      title: 'Should I bootstrap our AI product or raise $500k in pre-seed funding?',
-      tag: 'Founder Dilemma',
+      id: 'Six Thinking Hats' as const,
+      title: t.hatsTitle,
+      body: t.hatsBody,
+      icon: Layers3,
     },
     {
-      title: 'Relocating to Da Nang vs staying in Ho Chi Minh City for remote work',
-      tag: 'Location & Lifestyle',
-    },
-    {
-      title: 'Should I quit my senior engineering role to build full-time open source tools?',
-      tag: 'Risk & Purpose',
+      id: 'Decision Matrix' as const,
+      title: t.matrixTitle,
+      body: t.matrixBody,
+      icon: SlidersHorizontal,
     },
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!dilemma.trim()) return;
-    startNewSession(dilemma, selectedFramework);
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const normalizedQuestion = question.trim();
+    if (!normalizedQuestion) return;
+    startNewSession(normalizedQuestion, selectedFramework);
   };
 
   return (
-    <div className="max-w-4xl mx-auto py-6 sm:py-10 space-y-8 text-left">
-      {/* Chamber Header */}
-      <div className="space-y-2">
-        <div className="inline-flex items-center gap-2 text-xs text-brass font-medium">
-          <span className="w-2 h-2 rounded-full bg-brass" />
-          <span>Sample Council Workspace</span>
-        </div>
-        <h1 className="font-serif text-2xl sm:text-4xl text-ink font-normal">
-          The Chamber is Silent
-        </h1>
-        <p className="text-xs sm:text-sm text-ink-muted max-w-2xl leading-relaxed">
-          Enter a sample dilemma to preview how opposing advisor personas might frame a decision. No model runs in this build.
+    <div className="mx-auto w-full max-w-5xl space-y-8 py-4 sm:py-8">
+      <header className="max-w-3xl">
+        <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
+          <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
+          {t.emptyEyebrow}
         </p>
-      </div>
+        <h1 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{t.emptyTitle}</h1>
+        <p className="mt-3 text-sm leading-relaxed text-ink-muted sm:text-base">{t.emptyBody}</p>
+      </header>
 
-      {/* Main Dilemma Input Container */}
-      <form onSubmit={handleSubmit} className="p-5 sm:p-7 rounded-lg bg-surface border border-border shadow-lg space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <label htmlFor="dilemma" className="text-xs font-medium text-ink">
-              Dilemma Statement & Context
-            </label>
-            <span className="text-[11px] text-ink-muted">
-              Include numbers, timelines, or emotional stakes
-            </span>
-          </div>
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-7 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7"
+      >
+        <div>
+          <label htmlFor="decision-question" className="text-sm font-semibold text-ink">
+            {t.questionLabel}
+          </label>
+          <p id="question-hint" className="mt-1 text-xs leading-relaxed text-ink-muted">
+            {t.questionHint}
+          </p>
           <textarea
-            id="dilemma"
-            name="dilemma"
-            rows={4}
+            id="decision-question"
+            name="decision-question"
+            rows={5}
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder={t.questionPlaceholder}
+            aria-describedby="question-hint"
             autoComplete="off"
-            value={dilemma}
-            onChange={(e) => setDilemma(e.target.value)}
-            placeholder="e.g. I have an offer from a remote US studio offering $110k/yr with full schedule autonomy, while my current enterprise role pays $135k/yr with mandatory 3 days on-site in district 1. Should I make the transition?"
-            className="w-full p-4 rounded-md bg-background border border-border text-sm text-ink placeholder:text-ink-muted/50 focus:outline-none focus:border-brass leading-relaxed resize-none transition-colors"
+            required
+            className="mt-3 w-full resize-y rounded-xl border border-border bg-background px-4 py-3 text-sm leading-relaxed text-ink placeholder:text-ink-muted/60 focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/20"
           />
         </div>
 
-        {/* Framework Selector Pills (Strictly the 3 allowed) */}
-        <fieldset className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <legend className="text-xs font-medium text-ink-muted">
-              Select Analytical Framework
-            </legend>
-            <button
-              type="button"
-              onClick={openFrameworkModal}
-              className="text-[11px] text-brass hover:underline"
-            >
-              Compare framework methodologies
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {frameworks.map((fw) => {
-              const isSelected = selectedFramework === fw;
+        <fieldset>
+          <legend className="text-sm font-semibold text-ink">{t.frameworkLabel}</legend>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {frameworks.map(({ id, title, body, icon: Icon }) => {
+              const isSelected = selectedFramework === id;
               return (
                 <button
-                  key={fw}
+                  key={id}
                   type="button"
-                  onClick={() => setSelectedFramework(fw)}
                   aria-pressed={isSelected}
-                  className={`p-3 rounded-md border text-left text-xs transition-all ${
+                  onClick={() => setSelectedFramework(id)}
+                  className={`rounded-xl border p-4 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass ${
                     isSelected
-                      ? 'border-brass bg-background text-ink shadow-xs'
-                      : 'border-border bg-background/50 text-ink-muted hover:text-ink hover:border-border/80'
+                      ? 'border-brass bg-background shadow-sm'
+                      : 'border-border bg-background/50 hover:border-brass/50 hover:bg-background'
                   }`}
                 >
-                  <p className="font-medium truncate">{fw}</p>
-                  <p className="text-[10px] text-ink-muted mt-1 line-clamp-1">
-                    {fw === 'Good / Normal / Bad Scenarios'
-                      ? 'Compounding, baseline & erosion paths'
-                      : fw === 'Six Thinking Hats'
-                      ? 'Fact, emotion, risk, logic & synthesis'
-                      : 'Weighted multi-factor score calculus'}
-                  </p>
+                  <span className="flex items-start justify-between gap-3">
+                    <Icon className="h-5 w-5 shrink-0 text-brass" aria-hidden="true" />
+                    {isSelected && (
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brass text-background">
+                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-4 block text-sm font-semibold text-ink">{title}</span>
+                  <span className="mt-2 block text-xs leading-relaxed text-ink-muted">{body}</span>
                 </button>
               );
             })}
           </div>
         </fieldset>
 
-        {/* Council Chamber Roster (Each advisor has a DISTINCT model) */}
-        <div className="space-y-2.5 pt-2 border-t border-border">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-ink-muted">
-              Sample Advisor Slots
-            </span>
+        <section className="space-y-3 border-t border-border pt-6" aria-labelledby="persona-slots-title">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <h2 id="persona-slots-title" className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <UsersRound className="h-4 w-4 text-brass" aria-hidden="true" />
+              {t.personasLabel}
+            </h2>
             <button
               type="button"
               onClick={() => setCurrentView('personas')}
-              className="text-[11px] text-brass hover:underline"
+              className="min-h-11 self-start rounded-lg px-2 text-left text-xs font-medium text-brass underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:self-auto"
             >
-              Preview persona configuration
+              {t.editPersonas}
             </button>
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <ul className="grid gap-3 sm:grid-cols-3">
             {personas.map((persona) => (
-              <div
+              <li
                 key={persona.id}
-                className="p-3 rounded-md bg-background border border-border flex items-center justify-between"
+                className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-background/70 p-3"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex min-w-0 items-center gap-2.5">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                      persona.colorToken === 'persona-sage'
-                        ? 'bg-persona-sage'
-                        : persona.colorToken === 'persona-rose'
-                        ? 'bg-persona-rose'
-                        : persona.colorToken === 'persona-ochre'
-                        ? 'bg-persona-ochre'
-                        : 'bg-persona-slate'
-                    }`}
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: persona.colorHex }}
+                    aria-hidden="true"
                   />
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-ink truncate">{persona.name}</p>
-                    <p className="text-[10px] text-ink-muted truncate font-mono">
-                      {persona.model} · {persona.provider}
+                    <p className="truncate text-sm font-medium text-ink">{persona.name}</p>
+                    <p className="truncate text-[11px] text-ink-muted">
+                      {modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-surface border border-border text-ink-muted shrink-0">
-                  Mock Ready
+                <span className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-ink-muted">
+                  {t.fixture}
                 </span>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </section>
 
-        {/* Action Button */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-2">
-          <div className="flex items-center gap-2 text-xs text-ink-muted">
-            <ShieldCheck className="w-4 h-4 text-sage" />
-            <span>Local mock flow · no AI or provider call</span>
-          </div>
-
+        <div className="flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
+          <p className="flex items-center gap-2 text-xs leading-relaxed text-ink-muted">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
+            {t.noAi}
+          </p>
           <button
             type="submit"
-            disabled={!dilemma.trim()}
-            className="w-full sm:w-auto px-6 py-3 rounded-md bg-brass hover:bg-brass/90 text-background font-medium text-xs transition-colors flex items-center justify-center gap-2 shadow-xs disabled:opacity-40"
+            disabled={!question.trim()}
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
           >
-            <Compass className="w-4 h-4" />
-            <span>Preview Council Deliberation</span>
+            <Compass className="h-4 w-4" aria-hidden="true" />
+            {t.preview}
           </button>
         </div>
       </form>
 
-      {/* Recommended Case Dilemmas */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-medium text-ink-muted">
-          Sample Dilemmas
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {suggestedPrompts.map((item, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => {
-                setDilemma(item.title);
-                startNewSession(item.title, selectedFramework);
-              }}
-              className="p-4 rounded-md bg-surface border border-border hover:border-brass/50 text-left transition-all group flex flex-col justify-between"
-            >
-              <p className="text-xs font-medium text-ink leading-relaxed group-hover:text-brass transition-colors">
-                {item.title}
-              </p>
-              <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/50 text-[11px] text-ink-muted">
-                <span>{item.tag}</span>
-                <span className="text-brass">Preview</span>
-              </div>
-            </button>
-          ))}
-        </div>
-      </div>
+      <section className="rounded-2xl border border-border bg-background/60 p-5" aria-labelledby="examples-title">
+        <h2 id="examples-title" className="text-sm font-semibold text-ink">
+          {t.examples}
+        </h2>
+        <button
+          type="button"
+          onClick={() => setQuestion(t.questionPlaceholder)}
+          className="mt-3 flex min-h-11 w-full items-center justify-between gap-4 rounded-xl border border-border bg-surface px-4 py-3 text-left text-sm leading-relaxed text-ink-muted transition hover:border-brass/50 hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
+        >
+          <span>{t.questionPlaceholder}</span>
+          <span className="shrink-0 text-xs font-semibold text-brass">{t.useExample}</span>
+        </button>
+      </section>
     </div>
   );
 };

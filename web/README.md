@@ -1,16 +1,16 @@
 # Zero Council web
 
-Next.js App Router scaffold với dữ liệu viết sẵn; chưa có auth, persistence hoặc API AI.
+Next.js App Router local mock với dữ liệu mẫu cố định; không có AI/provider call, auth, persistence, payment, analytics hoặc deploy.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm dev
 pnpm lint
+pnpm exec tsc --noEmit
 pnpm build
 ```
 
-Node 24 LTS, pnpm 11.5.2. URL mặc định http://localhost:3000; không cần `.env` trong bản mẫu.
+Node 24 LTS, pnpm 11.5.2. URL mặc định `http://localhost:3000`; local mock không cần `.env`, API key hoặc cloud project.
 Dùng font hệ thống, build không tải Google Fonts.
 
-Hướng dẫn đầy đủ: [README repo](../README.md), [Supabase/Google setup](../docs/SETUP.md).
-Vercel Root Directory dự kiến: `web`; chưa deploy. `allowBuilds` giữ cấu hình create-next-app, không bật lifecycle scripts mới.
+Hướng dẫn đầy đủ: [README repo](../README.md), [local setup](../docs/SETUP.md), [spec](../.agent/SPEC.md).

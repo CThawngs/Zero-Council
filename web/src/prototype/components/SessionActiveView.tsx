@@ -1,178 +1,129 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Layers, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Eye, Layers3, ShieldCheck, UsersRound } from 'lucide-react';
+import { modelLabel, providerLabel } from '../data/mockData';
 
 export const SessionActiveView: React.FC = () => {
-  const { currentSession, setCurrentView, openFrameworkModal } = useApp();
-  const [activeRound, setActiveRound] = useState(1);
+  const { currentSession, setCurrentView, openFrameworkModal, t, language } = useApp();
+  const frameworkLabel = {
+    'Good / Normal / Bad Scenarios': t.scenarioTitle,
+    'Six Thinking Hats': t.hatsTitle,
+    'Decision Matrix': t.matrixTitle,
+  }[currentSession.framework];
 
   return (
-    <div className="max-w-5xl mx-auto py-6 space-y-6 text-left">
-      {/* Session Header Strip */}
-      <div className="p-5 rounded-lg bg-surface border border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-sage animate-ping" />
-            <span className="text-xs font-mono text-sage font-medium">Mock Deliberation Preview</span>
-            <span className="text-border">·</span>
-            <span className="text-xs font-mono text-ink-muted">Ref: {currentSession.referenceCode}</span>
+    <div className="mx-auto w-full max-w-6xl space-y-8 py-4 sm:py-8">
+      <header className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brass">
+              <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
+              {t.activeEyebrow}
+              <span className="rounded-md border border-border bg-background px-2 py-1 text-[10px] font-medium normal-case tracking-normal text-ink-muted">
+                {t.fixtureOutput}
+              </span>
+            </p>
+            <h1 className="mt-3 break-words font-serif text-2xl leading-snug text-ink sm:text-3xl">
+              {currentSession.title}
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">{t.activeBody}</p>
           </div>
-          <h1 className="font-serif text-xl sm:text-2xl text-ink font-normal">
-            {currentSession.title}
-          </h1>
-        </div>
-
-        {/* Framework & Conclude CTA */}
-        <div className="flex items-center gap-3 shrink-0">
-          <button
-            onClick={openFrameworkModal}
-            type="button"
-            className="px-3 py-2 rounded-md bg-background border border-border hover:border-brass/60 text-xs text-ink transition-colors flex items-center gap-2"
-          >
-            <Layers className="w-3.5 h-3.5 text-brass" />
-            <span className="font-medium">{currentSession.framework}</span>
-          </button>
-
-          <button
-            onClick={() => setCurrentView('session-concluded')}
-            type="button"
-            className="px-4 py-2 rounded-md bg-brass hover:bg-brass/90 text-background font-medium text-xs transition-colors shadow-xs"
-          >
-            Preview Consensus
-          </button>
-        </div>
-      </div>
-
-      {/* Sample round selector */}
-      <div className="flex items-center justify-between p-3 rounded-md bg-surface/60 border border-border text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-ink-muted">Deliberation Stage:</span>
-          <span className="font-medium text-ink">
-            {activeRound === 1
-              ? 'Round 1 of 3: Sample Advisor Testimonies'
-              : activeRound === 2
-              ? 'Sample Cross-Examination & Friction'
-              : 'Sample Convergent Chair Synthesis'}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          {[1, 2, 3].map((r) => (
+          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:shrink-0">
             <button
-              key={r}
               type="button"
-              onClick={() => setActiveRound(r)}
-              className={`px-2.5 py-1 rounded-md text-[11px] font-mono transition-colors ${
-                activeRound === r
-                  ? 'bg-brass text-background font-bold'
-                  : 'bg-background border border-border text-ink-muted hover:text-ink'
-              }`}
+              onClick={openFrameworkModal}
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-ink transition hover:border-brass/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
             >
-              Round {r}
+              <Layers3 className="h-4 w-4 text-brass" aria-hidden="true" />
+              <span className="truncate">{frameworkLabel}</span>
+              <span className="text-xs text-ink-muted">{t.change}</span>
             </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Council Testimonies Stack / Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        {currentSession.testimonies.map((testimony) => {
-          const advisor = currentSession.advisors.find((a) => a.id === testimony.advisorId);
-          const colorToken = advisor?.colorToken || 'persona-sage';
-
-          return (
-            <div
-              key={testimony.advisorId}
-              className="p-5 rounded-lg bg-surface border border-border flex flex-col justify-between space-y-4"
+            <button
+              type="button"
+              onClick={() => setCurrentView('session-concluded')}
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
             >
-              <div className="space-y-3">
-                {/* Advisor Header */}
-                <div className="flex items-center justify-between pb-3 border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full ${
-                        colorToken === 'persona-sage'
-                          ? 'bg-persona-sage'
-                          : colorToken === 'persona-rose'
-                          ? 'bg-persona-rose'
-                          : colorToken === 'persona-ochre'
-                          ? 'bg-persona-ochre'
-                          : 'bg-persona-slate'
-                      }`}
-                    />
-                    <div>
-                      <h3 className="text-sm font-medium text-ink">{testimony.heading}</h3>
-                      <p className="text-[10px] text-ink-muted font-mono">
-                        {advisor?.model} · {advisor?.provider}
-                      </p>
-                    </div>
+              {t.conclude}
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section className="space-y-4" aria-labelledby="composition-title">
+        <div className="flex items-center gap-2">
+          <UsersRound className="h-5 w-5 text-brass" aria-hidden="true" />
+          <h2 id="composition-title" className="font-serif text-2xl text-ink">
+            {t.composition}
+          </h2>
+        </div>
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {currentSession.advisors.map((advisor) => (
+            <li key={advisor.id} className="rounded-xl border border-border bg-surface p-4">
+              <div className="flex items-start gap-3">
+                <span
+                  className="mt-1 h-3 w-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: advisor.colorHex }}
+                  aria-hidden="true"
+                />
+                <div className="min-w-0">
+                  <h3 className="font-medium text-ink">{advisor.name}</h3>
+                  <p className="mt-1 text-xs leading-relaxed text-ink-muted">{advisor.stance}</p>
+                  <p className="mt-2 text-[11px] text-ink-muted">
+                    {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.modelLabel}
+                  </p>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="perspectives-title">
+        <div className="flex items-center gap-2">
+          <Eye className="h-5 w-5 text-brass" aria-hidden="true" />
+          <h2 id="perspectives-title" className="font-serif text-2xl text-ink">
+            {t.perspectives}
+          </h2>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          {currentSession.testimonies.map((testimony) => {
+            const advisor = currentSession.advisors.find((item) => item.id === testimony.advisorId);
+            return (
+              <article key={testimony.advisorId} className="rounded-2xl border border-border bg-surface p-5">
+                <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
+                  <div className="min-w-0">
+                    <h3 className="font-medium text-ink">{testimony.heading}</h3>
+                    <p className="mt-1 text-[11px] text-ink-muted">
+                      {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.modelLabel}
+                    </p>
                   </div>
-                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-background border border-border text-brass font-medium">
-                    {testimony.stanceBadge}
+                  <span className="shrink-0 rounded-md border border-border bg-background px-2 py-1 text-[10px] text-brass">
+                    {t.fixture}
                   </span>
                 </div>
-
-                {/* Testimony Text */}
-                <div className="space-y-2.5 text-xs text-ink-muted leading-relaxed">
-                  <p className="text-ink">{testimony.primaryText}</p>
-                  <p>{testimony.secondaryText}</p>
-                </div>
-              </div>
-
-              {/* Metric Callout */}
-              <div className="p-3 rounded-md bg-background border border-border mt-auto space-y-1">
-                <span className="text-[10px] text-ink-muted block uppercase tracking-wider font-mono">
-                  {testimony.metricLabel}
-                </span>
-                <span className="text-xs font-mono text-ink font-medium">
-                  {testimony.metricValue}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Intermediate Convergence Preview */}
-      <div className="p-5 rounded-lg bg-surface border border-border space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-brass" />
-            <h3 className="text-xs font-medium text-ink">Sample Consensus Points</h3>
-          </div>
-          <span className="text-xs text-ink-muted">Sample consensus rate: 84%</span>
+                <p className="mt-4 text-sm leading-relaxed text-ink">{testimony.primaryText}</p>
+                <p className="mt-3 text-xs leading-relaxed text-ink-muted">{testimony.secondaryText}</p>
+              </article>
+            );
+          })}
         </div>
+      </section>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-          <div className="p-3 rounded-md bg-background border border-border space-y-1">
-            <p className="text-brass font-medium">1. Financial Equivalence</p>
-            <p className="text-ink-muted text-[11px]">
-              Net spendable disparity is minimal when commuting, wardrobe, and transit fees are removed.
-            </p>
-          </div>
-          <div className="p-3 rounded-md bg-background border border-border space-y-1">
-            <p className="text-sage font-medium">2. Reclaimed Time</p>
-            <p className="text-ink-muted text-[11px]">
-              Autonomy dividend yields ~20 hours per month of recaptured bandwidth for sovereign compounding.
-            </p>
-          </div>
-          <div className="p-3 rounded-md bg-background border border-border space-y-1">
-            <p className="text-persona-slate font-medium">3. Stipulated Protection</p>
-            <p className="text-ink-muted text-[11px]">
-              Protection against proximity bias demands formal 6-month milestone compensation triggers.
-            </p>
-          </div>
-        </div>
+      <aside className="flex items-start gap-3 rounded-xl border border-sage/35 bg-sage/10 p-4 text-sm leading-relaxed text-ink-muted">
+        <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
+        {t.synthetic}
+      </aside>
 
-        <div className="pt-2 flex justify-end">
-          <button
-            onClick={() => setCurrentView('session-concluded')}
-            type="button"
-            className="px-5 py-2.5 rounded-md bg-brass hover:bg-brass/90 text-background font-medium text-xs transition-colors shadow-xs flex items-center gap-2"
-          >
-            <CheckCircle2 className="w-4 h-4" />
-            <span>Review Sample Chair Synthesis</span>
-          </button>
-        </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setCurrentView('session-concluded')}
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:w-auto"
+        >
+          {t.conclude}
+          <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );

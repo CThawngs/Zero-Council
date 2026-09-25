@@ -1,42 +1,44 @@
-# TODO — Zero Council
+# TODO — Zero Council UI/UX local mock
 
-Cập nhật: 2026-09-24. Governance: v7.1. Worktree: `.worktrees/feature-prototype-ui-integration`.
+Cập nhật: 2026-09-25. Governance: v7.1.
+Worktree: `.worktrees/ui-ux-local-mock`; branch: `ui-ux-local-mock`.
 
 ## Cấp 1 — Mục tiêu
 
-- [X] Tích hợp prototype UI tại `/`; giữ fixture cũ tại `/fixture`
-- [X] English mặc định; giữ toggle Vietnamese
-- [X] Giữ rõ ranh giới mock, không giả AI/auth/payment/provider/credential
+- [x] `/` dùng polished local mock với responsive desktop/mobile.
+- [x] English mặc định; toggle Vietnamese đầy đủ cho copy và metadata.
+- [x] Không giả AI, provider, auth, BYOK, payment, analytics, persistence hoặc deploy.
+- [x] Input tùy ý chỉ mở fixed generic fixture; không cá nhân hóa khuyến nghị.
 
-## Cấp 2 — Thành phần tích hợp
+## Cấp 2 — Thành phần
 
-- [X] Copy prototype vào `web/src/prototype/`
-- [X] Nối `web/src/app/page.tsx` vào `PrototypeApp`
-- [X] Tạo route `/fixture`
-- [X] Thêm `lucide-react` làm dependency icon duy nhất
-- [X] Audit accessibility, keyboard controls, heading order, contrast
+- [x] Ranh giới mock/fixed sample hiển thị rõ trong UI.
+- [x] Persona configuration dùng model/provider labels; không credential input.
+- [x] Paid/auth surfaces không provision và không có dữ liệu định danh/billing giả.
+- [x] Native `<dialog>` cho framework, draft, clear-state confirmations.
+- [x] Focus return, Escape, backdrop close, 44px controls, focus-visible, reduced motion.
+- [x] `/fixture` bilingual fixed text; `/api/council` fixed English fixture.
+- [x] Không thêm dependency ngoài `lucide-react`.
 
 ## Cấp 3 — Kiểm chứng
 
-- [X] `pnpm lint` từ `web/`
-- [X] `pnpm exec tsc --noEmit` từ `web/`
-- [X] `pnpm build` từ `web/`
-- [X] `node --test tests/budget.test.mjs` từ repo root
-- [X] Browser QA mobile/desktop, navigation, modal/drawer flows, storage/network/console
-- [X] Commit source evidence: `8df4160` (docs follow-up records final tree)
+- [x] Chạy lại `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm build` trên final source.
+- [x] Chạy `node --test tests/budget.test.mjs` và `git diff --check`.
+- [x] Browser QA final source: language, persona submit, dialogs, clipboard, reduced motion, responsive widths, console/network/storage.
+- [x] Lighthouse final source không có failed audit.
+- [x] Cập nhật evidence sau commit; không dùng evidence cũ.
 
 ## Cấp 4 — Git
 
-- [X] Commit source + governance docs trên `feature/prototype-ui-integration`
-- [X] Push branch `feature/prototype-ui-integration` (đã đối chiếu origin)
-- [X] Mở PR #4 vào `main`: https://github.com/CThawngs/Zero-Council/pull/4
-- [X] PR open; mergeability `unknown` lúc đọc cuối; 0 check runs, 0 reviews; không merge
+- [ ] Commit source + governance docs trên `ui-ux-local-mock`.
+- [ ] Push branch và tạo PR mới vào `main` (không dùng PR #4).
+- [ ] Chờ required checks pass; self-merge PR mới khi ruleset cho phép.
+- [ ] Dừng QA server trước bàn giao.
 
 ## Ngoài scope
 
-- [ ] Supabase/Google OAuth runtime
-- [ ] Provider/model inference, BYOK credential flow
-- [ ] Payment rail, invoice, webhook, deployment
-- [ ] Persistence, uploads, search, real account state
+- [ ] AI inference, provider adapters, web search, uploads, real framework calculations.
+- [ ] Google/Supabase auth, session, persistence, BYOK runtime.
+- [ ] Payments, subscriptions, checkout, billing, analytics, deployment.
 
-Không tự mở các hạng mục ngoài scope khi demo prototype.
+Không mở hạng mục ngoài scope trong PR local mock này.
