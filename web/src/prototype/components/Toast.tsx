@@ -1,18 +1,31 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { providerLabel } from '../data/mockData';
+import { copy } from '../i18n';
+import { ModelProvider } from '../types';
 import { CheckCircle2 } from 'lucide-react';
 
 export const Toast: React.FC = () => {
-  const { toastMessage } = useApp();
-
-  if (!toastMessage) return null;
+  const { toastMessage, language } = useApp();
+  const values = toastMessage?.values ? { ...toastMessage.values } : undefined;
+  if (toastMessage?.key === 'toastPersona' && values?.name) {
+    values.name = copy[language].samplePersonaName.replace('{name}', values.name);
+  }
+  if ((toastMessage?.key === 'toastProviderOn' || toastMessage?.key === 'toastProviderOff') && values?.provider) {
+    values.provider = providerLabel(values.provider as ModelProvider, language);
+  }
+  const message = toastMessage
+    ? copy[language][toastMessage.key].replace(/\{(\w+)\}/g, (_, name: string) => values?.[name] ?? '')
+    : null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
-      <div className="bg-surface border border-border shadow-lg rounded-md px-4 py-3 flex items-center gap-3 text-xs text-ink max-w-sm">
-        <CheckCircle2 className="w-4 h-4 text-brass shrink-0" />
-        <span className="leading-snug">{toastMessage}</span>
-      </div>
+    <div className="pointer-events-none fixed inset-x-4 bottom-5 z-[60] flex justify-end sm:left-auto sm:right-6" role="status" aria-live="polite" aria-atomic="true">
+      {message && (
+        <div className="toast-enter flex max-w-sm items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-xs leading-snug text-ink shadow-2xl">
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
+          <span>{message}</span>
+        </div>
+      )}
     </div>
   );
 };

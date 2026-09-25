@@ -1,13 +1,12 @@
 # Zero Council
 
-Website hội đồng AI hỗ trợ ra quyết định — Đồ án Chuyên ngành, lớp 25C2-LTM1.
-Nhóm: Nguyễn Chí Thắng, Lê Tấn Minh Tâm, Đào Nguyên Anh.
+Giao diện local song ngữ để trình diễn cấu trúc hội đồng đa góc nhìn bằng nội dung mẫu cố định. Đây là UI concept, không phải sản phẩm AI hay dịch vụ tư vấn.
 
 ## Trạng thái
 
-Scaffold Next.js 16.3.5 / React 19.2.8 / TypeScript / Tailwind 4 tại `web/`.
-Trang tiếng Việt có hội đồng và phân tích **viết sẵn**, nút mở/ẩn; không gọi model, không thu/lưu dữ liệu người dùng.
-**Chưa có** chat tự do, fan-out thật, auth Google, Supabase/session, upload, BYOK runtime, web search hoặc decision framework chạy thật. Không dùng scaffold làm production.
+Next.js 16.3.5 / React 19.2.8 / TypeScript / Tailwind 4 tại `web/`.
+Luồng `/` dùng React/browser memory; refresh đặt lại state. Không gọi model/provider, không lưu transcript, không có auth, payment, credential, analytics hoặc deploy.
+`/fixture` hiển thị fixture song ngữ cố định. `/api/council` là route fixture riêng và giao diện `/` không gọi route này.
 
 ## Chạy
 
@@ -23,16 +22,16 @@ URL mặc định http://localhost:3000; xem terminal nếu port bận. Không c
 ```sh
 node --test tests/budget.test.mjs
 pnpm --dir web lint
+pnpm --dir web exec tsc --noEmit
 pnpm --dir web build
 ```
 
-Guard giá ở `src/lib/budget.mjs` kiểm quote chi phí nhóm, chưa nối app/provider và không chặn user BYOK trả phí.
+Guard giá ở `src/lib/budget.mjs` là kiểm tra scaffold cũ, không được nối vào app/provider trong local mock này.
 
 ## Tài liệu
 
-- [Thiết lập Supabase Free và Google OAuth](docs/SETUP.md) — chủ dự án tự tạo project.
-- [Spec](.agent/SPEC.md) — đọc cập nhật S4 trước các OPEN lịch sử.
-- [Bàn giao](.agent/HANDOFF.md) — evidence và phần chưa kiểm.
+- [Spec](.agent/SPEC.md) — phạm vi và ranh giới local mock hiện tại.
+- [Bàn giao](.agent/HANDOFF.md) — evidence và trạng thái kiểm chứng.
 - [Quy trình](AGENTS.md).
 
-Thay đổi qua nhánh task/PR. Không commit secret hoặc `.env.local`; không bật dịch vụ trả phí với ngân sách nhóm 0 USD. Chưa chọn license; repo public không đồng nghĩa được cấp license mã nguồn mở.
+Thay đổi qua nhánh task/PR. Không commit secret hoặc `.env.local`; không bật dịch vụ trả phí. Repo public không đồng nghĩa được cấp license mã nguồn mở.
