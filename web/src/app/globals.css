@@ -185,9 +185,11 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
 .zc-modal__close {
   display: inline-grid;
   flex: 0 0 auto;
-  width: 2.25rem;
-  height: 2.25rem;
-  margin: -0.25rem -0.25rem 0 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  margin: -0.5rem -0.5rem 0 0;
   place-items: center;
   padding: 0;
   color: var(--color-ink-muted);
