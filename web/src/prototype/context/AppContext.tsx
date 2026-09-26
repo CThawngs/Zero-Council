@@ -5,7 +5,6 @@ import {
   DeliberationSession,
   Language,
   ModelProvider,
-  Theme,
   ViewType,
 } from '../types';
 import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
@@ -20,8 +19,6 @@ interface AppContextType {
   setCurrentView: (view: ViewType) => void;
   language: Language;
   setLanguage: (language: Language) => void;
-  theme: Theme;
-  toggleTheme: () => void;
   t: (typeof copy)[Language];
   sessions: DeliberationSession[];
   currentSessionId: string;
@@ -130,7 +127,6 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentView, setCurrentView] = useState<ViewType>('overview');
   const [language, setLanguage] = useState<Language>('en');
-  const [theme, setTheme] = useState<Theme>('dark');
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
@@ -155,14 +151,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     () => personas.map((persona) => localizePersona(persona, language)),
     [language, personas]
   );
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.toggle('dark', theme === 'dark');
-    root.classList.toggle('light', theme === 'light');
-  }, [theme]);
-
-  const toggleTheme = () => setTheme((value) => (value === 'dark' ? 'light' : 'dark'));
 
   const showToast = (key: ToastKey, values?: ToastValues) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -246,8 +234,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentView,
         language,
         setLanguage,
-        theme,
-        toggleTheme,
         t: copy[language],
         sessions: localizedSessions,
         currentSessionId,

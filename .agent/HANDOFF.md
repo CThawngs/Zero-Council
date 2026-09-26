@@ -1,88 +1,59 @@
-# HANDOFF — Zero Council Vietnamese font fix
+# HANDOFF — Zero Council product voice, Literata, brass-only hero
 
-Cập nhật: 2026-09-25. Governance khi thu evidence: v7.1. Repo đã nâng lên v7.4 ngày 2026-09-26 (PR #8) — evidence dưới đây thu dưới v7.1, không tự động hợp lệ dưới v7.4. Xem `.agent/00_INDEX.md`.
+Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các worktree khác không đụng tới; handoff cũ của `vi-font-fix` giữ nguyên lịch sử ở commit trước.
 
 ## Git và phạm vi
 
-- Worktree: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council\.worktrees\vi-font-fix`
-- Branch: `vi-font-fix`
-- Base: `49ec347` (`origin/main` tại task start, sau khi PR #6 merge)
+- Worktree: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council\.worktrees\product-voice-ui`
+- Branch: `product-voice-ui`
+- Base: `83ee993` (`origin/main` sau PR #9 merge)
 - Remote: `https://github.com/CThawngs/Zero-Council.git`
-- Main checkout và các worktree khác (`responsive-polish`, `ui-ux-local-mock`, `feature-prototype-ui-integration`) unchanged.
-- Không mở lại PR #4, #5 hoặc #6.
+- **Chưa push, chưa tạo PR** — chờ chủ dự án duyệt.
 
-## Nguyên nhân (đã kiểm chứng, không phải giả định)
+## Đã làm
 
-`globals.css` khai báo `--font-sans: "Inter"` và `--font-serif: "Fraunces"`, nhưng repo **không có** `next/font`, `@font-face` hay file `.woff2` nào. Tên font chỉ là chuỗi trong stack nên browser luôn fallback.
+1. Font: `Fraunces` → `Literata` (`web/src/app/fonts.ts`, weight 500/600, subset `latin` + `vietnamese`), Inter giữ nguyên; `globals.css` đổi `--font-serif` và bỏ fallback chain cũ.
+2. Hero glow: thêm đúng một `.glow` brass theo spec; `CouncilOrb` 4 node chuyển sang cùng hue brass, phân cấp bằng opacity; bỏ `--node-color`.
+3. Theme toggle: xoá hẳn khỏi `Header`, `SettingsView`, `AppContext` (`Theme`/`toggleTheme`), `types.ts`, và bỏ khối palette `html.light` trong `globals.css`.
+4. Copy: viết lại toàn bộ EN + VI trong `i18n.ts`; xoá key chết; header không còn dòng phụ dưới logo; nav public = How it works / Why Zero Council / Pricing; hero, 3 card How-it-works, 3 card framework, section mới "Why Zero Council" (thay cho access map), footer `© 2026 Zero Council.`
+5. `PricingView` được render thật (`App.tsx`, view `pricing` là public page).
+6. Hydration mismatch: `<body suppressHydrationWarning>` tại `layout.tsx` — do extension (Grammarly) chèn `data-gr-ext-installed` / `cz-shortcut-listen` vào `<body>`, không phải code app.
+7. `/fixture` + `council-fixture.ts` chuyển từ "illustrative" sang "reference".
 
-Đo bằng canvas `measureText` với tên font giả (`__zzz__`) làm mốc:
+## Evidence (trên working tree này, chưa commit lúc ghi)
 
-- `Fraunces` cho width giống hệt tên font giả → **không được cài**. Mọi heading serif vì thế rơi về `Georgia`.
-- `Georgia` có dấu tiếng Việt nhưng thiết kế dấu rất yếu, khớp với ảnh báo lỗi của bạn.
-- `Inter` tình cờ có sẵn trên máy này, nên phần sans nhìn ổn và che mất vấn đề.
-
-## Đã triển khai (task này)
-
-- `web/src/app/fonts.ts` (mới): `Inter` + `Fraunces` qua `next/font/google`, `subsets: ['latin', 'vietnamese']`, `display: 'swap'`, expose `--font-inter` / `--font-fraunces`.
-- `web/src/app/layout.tsx`: gắn `sans.variable` + `serif.variable` vào `<html>`.
-- `web/src/app/globals.css`: `--font-sans` / `--font-serif` trỏ vào biến trên; fallback dùng font có dấu tiếng Việt tốt (`system-ui`, `Segoe UI`, `Iowan Old Style`, `Palatino Linotype`, `Palatino`).
-- `globals.css`: bỏ `, Georgia, serif` thừa ở `.page-header h1` và `.panel-title` (đã nằm trong fallback chain).
-- Không thêm dependency; không đổi nội dung copy, không đổi layout, không đổi truth boundary.
-
-## Ranh giới runtime (không đổi)
-
-- Không có fetch/XHR/WebSocket từ UI, không có storage API, không có provider call, auth, payment, analytics.
-- `next/font` tải và self-host font ở **build time**; runtime không có request ra ngoài origin.
-- Build cần mạng lần đầu để tải font. Nếu build offline không có cache sẽ fail; recovery là `next/font/local` với file đặt sẵn.
-
-## Evidence
-
-Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7` (`fix(web): load Inter and Fraunces with the Vietnamese subset`, branch `vi-font-fix`).
-
-Evidence dưới đây chạy trên đúng source commit này. Commit kế tiếp chỉ cập nhật dòng SHA trong chính file handoff này và không đổi runtime source. Tất cả lệnh chạy tại worktree `vi-font-fix`, `web/` trừ budget/diff ở root.
+Tất cả lệnh chạy tại `web/`, budget test ở root.
 
 ### Static
 
-- `pnpm install --frozen-lockfile` — exit `0`, không thêm dependency.
-- `pnpm lint` — exit `0`.
-- `pnpm exec tsc --noEmit` — exit `0`.
-- `pnpm build` — exit `0`; compiled successfully, static pages generated.
-- 10 file `.woff2` trong `.next/static/media/` → font được self-host, không phải link ngoài.
-- `node --test tests/budget.test.mjs` — `2 pass, 0 fail`.
-- `git diff --check` — sạch.
+- `pnpm --dir web exec tsc --noEmit` — exit `0`.
+- `pnpm --dir web lint` — exit `0`.
+- `pnpm --dir web build` — exit `0`.
+- `node --test tests/budget.test.mjs` — exit `0`.
 
-### Browser QA (dev server `http://127.0.0.1:3212`, Playwright)
+### Browser QA (prod build, `next start -p 3202`)
 
-- `document.fonts` liệt kê `Inter` và `Fraunces` ở trạng thái `loaded`, weight range `100 900`.
-- `html` class chứa `inter_…-module__…__variable` và `fraunces_…-module__…__variable`.
-- Computed `h1` = `Fraunces, "Fraunces Fallback", "Iowan Old Style", …`; computed `body` = `Inter, "Inter Fallback", system-ui, …`.
-- Pixel signature (canvas render + hash): chữ với `Ủy quyền riêng tư — Giao diện hội đồng cục bộ` và bộ dấu nặng `Ỷ Ỵ ỹ Ặ ặ ẫ ầ ễ ệ ọ ỏ` khác `monospace` → browser không thay glyph từng ký tự.
-- `Fraunces` render khác `Georgia` → bug fallback Georgia đã hết.
-- `h1` serif và `body` sans cho hai pixel signature khác nhau → không nhầm font.
-- Request audit: `externalRequests: []` — không có request ra ngoài `http://127.0.0.1:3212`, không có `fonts.googleapis.com` / `fonts.gstatic.com`.
-- VI toggle: `documentElement.lang = "vi"`, title `Zero Council — Giao diện hội đồng cục bộ`, heading `Cấu trúc lựa chọn khó.` đúng dấu, `hasMojibake: false` (không có `U+FFFD`).
-- Layout regression 320/360/375/390/414/600/640/768/900/1024/1280/1440: `scrollWidth == innerWidth`, `offenders: []`, `headerH: 76`, `maxCtrlRight <= width - 16` ở mọi width.
-- Console: không error.
+- Landing: nav đúng 3 mục, logo không dòng phụ, không có nút theme, hero tag/headline/body/2 nút đúng spec, card trust dùng `ShieldCheck` với câu "Your conversations are encrypted and visible only to you."
+- Computed `h1` = `Literata, "Literata Fallback", Georgia, "Times New Roman", serif`; `document.fonts` = `Literata 500 loaded`, `Inter 400/500/600 loaded`.
+- Font VI: `measureText` trên canvas cho `quyết định` (210.14) / `phương án` (210.62) / `ễ ậ ở ự` (121.60) khác fallback-face (200.83 / 201.55 / 128.00) và khác Georgia → glyph do webfont vẽ, không rơi fallback từng ký tự.
+- Glow: `getComputedStyle(.glow).backgroundImage` = đúng chuỗi radial-gradient trong spec.
+- Orb nodes: cả 4 = `rgb(201, 162, 75)`, opacity `1 / 0.78 / 0.56 / 0.34`.
+- Flow: Start free council → nhập câu hỏi → Get recommendation; màn kết luận hiện "Council recommendation / Recommendation / Review conditions / Next step", không trùng nhãn.
+- Quét DOM từng view (landing, session-active, session-concluded, sessions, advisors, integrations, settings) bằng regex `demo|sample|prototype|fixture|illustrative|walkthrough|not connected|local only` → 0 hit, trừ nhãn trạng thái BYOK "Not connected".
+- VI: `document.title` = `Zero Council — Hội đồng quyết định AI`, `lang="vi"`, hero + 3 card Why Zero Council + footer dịch đúng.
+- Console: không message nào.
+- `<body>` không có attribute lạ (chỉ `class`).
 
-### Lighthouse (chrome-devtools, snapshot mode)
+## OPEN
 
-- Mobile: Accessibility `100`, Best Practices `100`, SEO `100`, Agentic Browsing `100`; `33` passed, `0` failed.
-
-## Git / PR
-
-- Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7`.
-- Không mở lại PR #4, #5, #6.
-- PR number, required checks và ruleset status: ghi sau khi push.
-- Self-merge PR mới chỉ sau khi xác nhận `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
+1. **Bảng giá thật** — chủ dự án nói sẽ gửi số; `PricingView` hiện chỉ có tiêu đề + câu "sẽ công bố tại đây". Không bịa số (rule 28.3).
+2. **Claim vượt code** — landing copy giờ mô tả AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council". Repo **không có** engine AI, không có provider call, không có auth, không có payment, không có persistence, không có mã hoá nào. Đây là quyết định của chủ dự án theo yêu cầu bỏ ngôn ngữ demo; nếu muốn thu hồi thì chỉ sửa `i18n.ts`.
+3. Mô tả "cyan/magenta + streak lines" trong yêu cầu không khớp code: không có class `glow` hay màu cyan/magenta nào trong repo trước khi sửa; nguồn màu đa sắc là 4 node persona của `CouncilOrb`. Đã hiện thực hoá theo ý định "chỉ còn 1 hào quang brass".
+4. `.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.
 
 ## Bàn giao
 
-1. ~~Stage source + governance docs.~~ — xong.
-2. ~~Commit final source/docs.~~ — xong.
-3. Push `vi-font-fix`, tạo PR mới vào `main`, kiểm tra checks rồi merge nếu sạch.
-4. Dừng QA server trước khi kết thúc.
-
-## ZeroVault
-
-- Đã refresh/search/load skill liên quan trong session.
-- Persist lesson về font fallback tiếng Việt và cách kiểm chứng bằng pixel signature: xem mục sau khi commit.
+1. ~~Sửa code + docs~~ — xong.
+2. Commit trên `product-voice-ui` — xong (chưa push).
+3. Push + PR vào `main` — **cần chủ dự án duyệt**.
+4. Dừng server tạm (3200/3201/3202) trước khi kết thúc.

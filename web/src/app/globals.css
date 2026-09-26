@@ -17,8 +17,8 @@
   /* Fonts are loaded by next/font in app/fonts.ts with the `vietnamese` subset.
      The fallbacks are fonts that cover Vietnamese diacritics, so an offline or
      blocked webfont still renders accents instead of per-glyph substitution. */
-  --font-serif: var(--font-fraunces), "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: var(--font-literata), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
 :root {
@@ -34,21 +34,6 @@
   --color-persona-sage: #7c9885;
   --color-persona-slate: #6e85a6;
   --color-persona-ochre: #c08a3e;
-}
-
-html.light {
-  --color-background: #f4f5f8;
-  --color-surface: #ffffff;
-  --color-border: #dde1e8;
-  --color-ink: #141722;
-  --color-ink-muted: #656e81;
-  --color-brass: #80601b;
-  --color-sage: #4e7665;
-  --color-terracotta: #9c5030;
-  --color-persona-rose: #9f5861;
-  --color-persona-sage: #4b6e57;
-  --color-persona-slate: #4e6788;
-  --color-persona-ochre: #a47029;
 }
 
 body {
@@ -688,8 +673,17 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   }
 }
 
+/* Single brass halo. One hue only — no second accent colour behind the hero. */
+.glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(201, 162, 75, 0.22) 0%, rgba(201, 162, 75, 0.06) 45%, rgba(201, 162, 75, 0) 70%);
+}
+
 .council-orb {
   --orb-size: clamp(11rem, 22vw, 15rem);
+  position: relative;
   display: grid;
   place-items: center;
   padding: 1rem;
@@ -730,9 +724,10 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   height: 22%;
   border-radius: 999px;
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--color-brass) 88%, white), var(--color-brass));
-  box-shadow: 0 0 2.5rem color-mix(in srgb, var(--color-brass) 55%, transparent);
 }
 
+/* Advisors sit on one brass hue with decreasing opacity — the hero must not
+   introduce a second accent colour next to the halo. */
 .council-orb__node {
   position: absolute;
   inset: 0;
@@ -740,8 +735,9 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   width: 12%;
   height: 12%;
   border-radius: 999px;
-  background: var(--node-color);
-  box-shadow: 0 0 1.1rem color-mix(in srgb, var(--node-color) 65%, transparent);
+  background: var(--color-brass);
+  opacity: var(--node-opacity, 0.9);
+  box-shadow: 0 0 1.1rem color-mix(in srgb, var(--color-brass) 45%, transparent);
   transform: rotateY(var(--node-angle)) translateZ(calc(var(--orb-size) * 0.42));
 }
 

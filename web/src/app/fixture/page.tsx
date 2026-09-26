@@ -8,27 +8,27 @@ type Language = 'en' | 'vi';
 
 const fixtureByLanguage = {
   en: {
-    label: 'ILLUSTRATIVE CONTENT',
+    label: 'CONTENT REFERENCE',
     title: 'Council content reference',
-    description: 'This route exposes the fixed illustrative text used by the council walkthrough. It makes no model, provider, account, or storage connection.',
+    description: 'The shape of a council: the question, the advisor viewpoints, and the synthesis the Chair returns.',
     open: 'Open the workspace',
-    intro: 'This route exposes the fixed illustrative text used by the council walkthrough. It makes no model, provider, account, or storage connection.',
+    intro: 'The shape of a council: the question, the advisor viewpoints, and the synthesis the Chair returns.',
     lenses: 'Viewpoint lenses',
-    fixed: 'fixed text',
-    output: 'Illustrative council output',
-    synthesis: 'Illustrative synthesis',
+    fixed: 'reference text',
+    output: 'Council output',
+    synthesis: 'Council synthesis',
     language: 'Language',
   },
   vi: {
-    label: 'NỘI DUNG MINH HỌA',
+    label: 'THAM CHIẾU NỘI DUNG',
     title: 'Nội dung hội đồng dùng chung',
-    description: 'Trang này hiển thị văn bản minh họa cố định dùng cho lộ trình hội đồng. Không có kết nối mô hình, nhà cung cấp, tài khoản hoặc lưu trữ.',
+    description: 'Hình dạng của một hội đồng: câu hỏi, các góc nhìn của cố vấn, và bản tổng hợp Ghế chủ tọa trả về.',
     open: 'Mở không gian làm việc',
-    intro: 'Trang này hiển thị văn bản minh họa cố định dùng cho lộ trình hội đồng. Không có kết nối mô hình, nhà cung cấp, tài khoản hoặc lưu trữ.',
+    intro: 'Hình dạng của một hội đồng: câu hỏi, các góc nhìn của cố vấn, và bản tổng hợp Ghế chủ tọa trả về.',
     lenses: 'Các góc nhìn',
-    fixed: 'văn bản cố định',
-    output: 'Kết quả hội đồng minh họa',
-    synthesis: 'Tổng hợp minh họa',
+    fixed: 'văn bản tham chiếu',
+    output: 'Kết quả hội đồng',
+    synthesis: 'Tổng hợp hội đồng',
     language: 'Ngôn ngữ',
   },
 } as const;
@@ -36,22 +36,22 @@ const fixtureByLanguage = {
 const translatedFixture = {
   en: COUNCIL_FIXTURE,
   vi: {
-    question: 'Câu hỏi minh họa cố định dùng cho lộ trình.',
+    question: 'Câu hỏi tham chiếu dùng để minh họa định dạng kết quả hội đồng.',
     advisors: [
       {
         name: 'Góc nhìn A',
-        text: 'Văn bản cố định nêu giả định, tiêu chí xem lại và bằng chứng còn thiếu để minh họa.',
+        text: 'Văn bản tham chiếu nêu giả định, tiêu chí xem lại và bằng chứng còn thiếu.',
       },
       {
         name: 'Góc nhìn B',
-        text: 'Văn bản cố định trình bày một góc nhìn khác mà không tính điểm hoặc kết quả.',
+        text: 'Văn bản tham chiếu mở ra một góc nhìn khác, với đánh đổi và phụ thuộc riêng.',
       },
       {
         name: 'Góc nhìn C',
-        text: 'Văn bản cố định hỏi bằng chứng nào sẽ thay đổi việc xem lại và khi nào cần dừng lại.',
+        text: 'Văn bản tham chiếu hỏi bằng chứng nào sẽ thay đổi việc xem lại, và khi nào cần dừng lại.',
       },
     ],
-    synthesis: 'Đây là văn bản minh họa cố định. Không phải khuyến nghị, dự báo hoặc câu trả lời cá nhân hóa.',
+    synthesis: 'Đây là tham chiếu để xem hình dạng một khuyến nghị của hội đồng. Bản thật do các cố vấn tạo ra trong phiên làm việc.',
   },
 } as const;
 
@@ -62,7 +62,7 @@ export default function FixturePage() {
 
   useEffect(() => {
     document.documentElement.lang = language;
-    document.title = language === 'vi' ? 'Zero Council — Nội dung minh họa' : 'Zero Council — Illustrative content';
+    document.title = language === 'vi' ? 'Zero Council — Tham chiếu nội dung' : 'Zero Council — Content reference';
     document.querySelector('meta[name="description"]')?.setAttribute('content', fixtureByLanguage[language].description);
   }, [language]);
 

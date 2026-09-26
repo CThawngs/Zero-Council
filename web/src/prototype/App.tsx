@@ -18,11 +18,12 @@ import { NewAdvisorView } from './components/NewAdvisorView';
 import { ApiKeysView } from './components/ApiKeysView';
 import { SettingsView } from './components/SettingsView';
 import { PrivacyView } from './components/PrivacyView';
+import { PricingView } from './components/PricingView';
 
 const ChamberContent: React.FC = () => {
   const { currentView, t } = useApp();
   const mainRef = useRef<HTMLElement>(null);
-  const isPublicPage = currentView === 'overview' || currentView === 'privacy';
+  const isPublicPage = currentView === 'overview' || currentView === 'privacy' || currentView === 'pricing';
 
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
@@ -44,6 +45,7 @@ const ChamberContent: React.FC = () => {
           {currentView === 'new-advisor' && <NewAdvisorView />}
           {currentView === 'api-keys' && <ApiKeysView />}
           {currentView === 'settings' && <SettingsView />}
+          {currentView === 'pricing' && <PricingView />}
           {currentView === 'privacy' && <PrivacyView />}
         </main>
       </div>

@@ -39,20 +39,26 @@ Giao diện sản phẩm song ngữ EN/VI cấu trúc quyết định khó: đ�
 - Clipboard copy chỉ chạy sau user action và chỉ báo success sau khi `navigator.clipboard.writeText()` resolve.
 - Native `<dialog>`: `showModal()`, `close()`, Escape, backdrop coordinate check, focus return; explicit close button có accessible name.
 - Tương tác dùng native hover/focus/cursor feedback; motion CSS-only và bị tắt qua `prefers-reduced-motion`.
-- Header responsive: dưới 40rem chỉ giữ language/theme/menu; 40–64rem thêm CTA (public) hoặc settings icon (workspace) và menu; từ 64rem hiện desktop nav và ẩn menu.
+- Header responsive: dưới 40rem chỉ giữ language/menu; 40–64rem thêm CTA (public) hoặc settings icon (workspace) và menu; từ 64rem hiện desktop nav và ẩn menu.
+- Header public chỉ có một chủ đề tối — không có nút bật/tắt theme và không có biến palette `html.light`. Một control trông như có tác dụng nhưng không có hành vi thật là bug.
 - Mobile navigation panel là disclosure panel `position:absolute` dưới header, `max-height: calc(100dvh - 76px)`, `overflow-y:auto`, `overscroll-behavior:contain`; focus trap giới hạn trong panel, Escape đóng và trả focus về menu button, pointerdown ngoài header đóng panel.
 - Layout chống overflow: `.content-shell width: min(100%, 72rem)`, modal dùng `calc(100% - gutter)` (không `100vw` vì scrollbar), mọi flex/grid con dài dùng `min-w-0` + `truncate`/`break-words`, icon dùng `shrink-0`.
 - Input/select/textarea giữ `font-size: 1rem` để iOS không zoom khi focus.
-- Font nạp qua `next/font/google` trong `web/src/app/fonts.ts`: `Inter` cho sans, `Fraunces` cho serif, cả hai với `subsets: ['latin', 'vietnamese']` và `display: 'swap'`. Font tự self-host ở build nên runtime không có request ra ngoài origin.
-- `@theme` trong `globals.css` trỏ `--font-sans`/`--font-serif` vào CSS variable của `next/font`; fallback là các font có dấu tiếng Việt (`system-ui`, `Segoe UI`, `Iowan Old Style`, `Palatino Linotype`, `Palatino`) để webfont bị chặn vẫn hiển thị dấu đúng thay vì thay glyph từng ký tự.
+- Font nạp qua `next/font/google` trong `web/src/app/fonts.ts`: `Inter` cho sans, `Literata` cho serif, cả hai với `subsets: ['latin', 'vietnamese']` và `display: 'swap'`. Font tự self-host ở build nên runtime không có request ra ngoài origin. Literata thay Fraunces vì Fraunces là serif "vintage" xử lý dấu tiếng Việt xếp chồng (ậ/ễ/ở) kém.
+- `@theme` trong `globals.css` trỏ `--font-sans`/`--font-serif` vào CSS variable của `next/font`; fallback là các font có dấu tiếng Việt (`ui-sans-serif`, `system-ui`, `Segoe UI` cho sans; `Georgia`, `Times New Roman` cho serif) để webfont bị chặn vẫn hiển thị dấu đúng thay vì thay glyph từng ký tự.
+- Hero chỉ có một hào quang: `.glow` dùng `radial-gradient(circle, rgba(201,162,75,0.22) 0%, rgba(201,162,75,0.06) 45%, rgba(201,162,75,0) 70%)`. Không accent màu thứ hai cạnh nó; node của `CouncilOrb` cùng hue brass, phân cấp bằng opacity.
 
 ## Tiêu chí chấp nhận
 
 - AC-01: Fresh load không console error/warning và không hydration mismatch.
 - AC-02: EN/VI copy hiển thị đúng; metadata đổi theo language; `/fixture` cũng đổi language.
 - AC-03: New deliberation flow chạy bằng input tùy ý nhưng output luôn fixed và được gắn nhãn minh họa.
-- AC-12: Không còn từ "demo / sample / fixture / prototype / local-only" trong bất kỳ chuỗi nào người dùng thấy ở `/`, `/fixture`, title hay meta description; chỉ còn nhãn "minh họa" hoặc "chưa có trong bản này".
+- AC-12: Không còn từ "demo / sample / fixture / prototype / illustrative / walkthrough / local-only / not connected" trong bất kỳ chuỗi nào người dùng thấy ở mọi view. Ngoại lệ đã duyệt: nhãn trạng thái BYOK "Not connected" và trang `/fixture` vốn là trang tham chiếu nội dung.
 - AC-13: Không thêm claim đo được (accuracy, confidence, ranking, ROI, ISO/compliance) vào bất kỳ view nào.
+- AC-14: Header không có nút bật/tắt theme; không còn palette `html.light`; `Theme`/`toggleTheme` không tồn tại trong `types.ts`/`AppContext`.
+- AC-15: Nav public đúng 3 mục — How it works (`#how-it-works`), Why Zero Council (`#why-zero-council`), Pricing (render `PricingView`). Footer chỉ có `© 2026 Zero Council.`
+- AC-16: Hero có đúng một hào quang brass theo `AC` mục font ở trên; mọi node `CouncilOrb` cùng hue brass.
+- AC-17: Serif là Literata; dấu tiếng Việt vẽ bằng glyph webfont (đo bề rộng khác cả fallback-face và Georgia).
 - AC-04: New advisor validation và valid submission hoạt động; persona mới localizes khi đổi language.
 - AC-05: Dialog mở/đóng bằng button, Escape và backdrop; focus trả về trigger.
 - AC-06: Clipboard success/failure không báo thành công giả.
@@ -68,19 +74,25 @@ Ghi command, URL, commit SHA và kết quả thật vào `.agent/HANDOFF.md` sau
 
 ## Ngoài scope
 
-Task này (giai đoạn 1) chỉ đổi copy và metadata. AI inference, provider adapters, real orchestration, web search, uploads, real calculations, Google/Supabase auth, BYOK, persistence, payments, subscriptions, analytics, deployment và production privacy/compliance claims để giai đoạn 2, mở task và PR riêng.
+Giai đoạn 2 vẫn mở: AI inference, provider adapters, real orchestration, web search, uploads, real calculations, auth, BYOK, persistence, payments, subscriptions, analytics, deployment và production privacy/compliance claims.
+
+Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự án yêu cầu bỏ hết ngôn ngữ demo, **kể cả các câu giải thích rằng tính năng chưa có**. Landing copy hiện mô tả hành vi chưa tồn tại trong code (AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council"). Giảm thiểu: giữ AC-01/AC-02/AC-06/AC-07 (không fetch, không báo thành công giả) và báo rõ trong HANDOFF để chủ dự án quyết định hoặc làm giai đoạn 2, hoặc thu hồi claim.
 
 ## Risk / recovery
 
-- Risk: bỏ nhãn demo nhưng engine chưa có — người dùng tưởng có phân tích thật. Giảm thiểu: mọi điểm kết quả vẫn gắn nhãn minh họa; mở nhóm copy ngữ cảnh vào điểm vào; FAQ nói rõ chưa có AI. Nếu cần giai đoạn 2, chỉ bỏ nhãn sau khi có bằng chứng chạy thật.
+- Risk: landing copy mô tả sản phẩm chưa tồn tại — người dùng hiểu là có AI thật. Giảm thiểu: ghi OPEN ở HANDOFF; nếu chủ dự án chọn thu hồi, chỉ sửa `i18n.ts` (không đụng component).
+- Risk: bảng giá là dữ liệu thương mại, không có nguồn chân lý trong repo. Giảm thiểu: `PricingView` chỉ có tiêu đề + câu công bố sắp tới, không số bịa; chờ số giá từ chủ dự án.
 - Risk: `Reveal` không còn fallback khi thiếu `IntersectionObserver`; trình duyệt không hỗ trợ sẽ giữ nội dung ở trạng thái trước khi hiện. Recovery: thêm CSS fallback trong `globals.css` khi cần.
 - Risk: copy làm giả production, localization stale, hydration mismatch, dialog focus regression, unsupported claims.
 - Risk responsive: unlayered component CSS (`.button-primary`, `.icon-button`) đè Tailwind layered utilities nên `hidden`/`sm:inline-flex` bị bỏ qua — dùng semantic class unlayered riêng (`.header-cta`, `.header-settings`, `.header-menu`) với `display` tường minh trong media query.
-- Risk font: khai báo tên font mà không nạp file thật khiến browser fallback từng ký tự; `Fraunces` không có sẵn nên heading rơi về `Georgia` với dấu tiếng Việt rất yếu. Recovery: dùng `next/font` với `subsets` chứa `vietnamese` và fallback có dấu.
+- Risk font: khai báo tên font mà không nạp file thật khiến browser fallback từng ký tự. Recovery: dùng `next/font` với `subsets` chứa `vietnamese` và fallback có dấu; đã đo bề rộng để xác nhận glyph VI do webfont vẽ.
 - Risk font: `next/font/google` cần mạng lúc build để tải và cache font. Nếu build offline không có cache, build fail — recovery: dùng `next/font/local` với file đặt sẵn trong repo, không thêm dependency.
+- Risk hydration: extension trình duyệt (Grammarly) chèn attribute vào `<body>` (`data-gr-ext-installed`, `cz-shortcut-listen`). Recovery: `suppressHydrationWarning` trên `<body>`; không được dùng nó để che lỗi render của app.
 - Recovery: revert PR/commit trên branch task; không reset/stash/xóa thay đổi worktree khác.
 
 ## OPEN / delegated
 
+- Bảng giá thật (tên plan, giới hạn, số tiền): chủ dự án cung cấp — rule 28.3 không đoán.
+- Landing copy mô tả AI/BYOK/mã hoá trong khi repo chưa có: chủ dự án quyết định làm giai đoạn 2 hay thu hồi claim.
 - Required GitHub checks và ruleset được xác nhận sau khi push PR mới.
 - Không deploy, cấu hình cloud, tạo account/provider hoặc dùng secret.

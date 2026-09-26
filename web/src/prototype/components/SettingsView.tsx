@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Check, Globe2, Moon, RotateCcw, Sun } from 'lucide-react';
+import { Check, Globe2, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
 
 export const SettingsView: React.FC = () => {
-  const { language, setLanguage, theme, toggleTheme, purgeSessions, revokeAllKeys, t } = useApp();
+  const { language, setLanguage, purgeSessions, revokeAllKeys, t } = useApp();
   const [isPurgeOpen, setIsPurgeOpen] = useState(false);
   const [isProviderOpen, setIsProviderOpen] = useState(false);
 
@@ -32,14 +32,6 @@ export const SettingsView: React.FC = () => {
               <span>Tiếng Việt</span>{language === 'vi' && <Check className="h-4 w-4" />}
             </button>
           </div>
-        </section>
-
-        <section className="panel p-5 sm:p-6" aria-labelledby="theme-title">
-          <div className="flex items-center gap-2"><Moon className="h-4 w-4 text-brass" /><h2 id="theme-title" className="panel-title">{t.theme}</h2></div>
-          <button type="button" onClick={toggleTheme} className="button-secondary mt-4 min-h-11 w-full justify-center">
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {theme === 'dark' ? t.light : t.dark}
-          </button>
         </section>
       </div>
 
