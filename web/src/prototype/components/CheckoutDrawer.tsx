@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Tag } from 'lucide-react';
+import { Loader2, Tag } from 'lucide-react';
 import { planAmountLine, type Plan } from '../data/plans';
 import { Modal } from './Modal';
 
@@ -10,13 +10,33 @@ interface CheckoutDrawerProps {
 }
 
 /**
- * PayOS checkout surface. No gateway call happens here (AC-07): the amount shown is the same
- * integer VND the gateway would charge, and the USD figure is labelled as reference only because
- * no gateway in this build takes a USD charge.
+ * PayOS checkout surface. The Amount block always states the integer VND the gateway charges;
+ * USD is reference only, because no gateway in this build takes a USD charge.
  */
 export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose }) => {
   const { t, language } = useApp();
   const [code, setCode] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const startPayment = async () => {
+    if (!plan || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/payos/create-payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ planId: plan.id, code: code.trim() || undefined }),
+      });
+      const result = (await response.json()) as { checkoutUrl?: string };
+      if (!response.ok || !result.checkoutUrl) throw new Error(t.checkoutError);
+      window.location.assign(result.checkoutUrl);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : t.checkoutError);
+      setPending(false);
+    }
+  };
 
   return (
     <Modal
@@ -61,6 +81,22 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
             </label>
             <p className="mt-2 text-xs leading-relaxed text-ink-muted">{t.discountNote}</p>
           </section>
+
+          <button
+            type="button"
+            onClick={startPayment}
+            disabled={pending || plan.priceVnd <= 0}
+            className="button-primary min-h-11 w-full justify-center disabled:opacity-60"
+          >
+            {pending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+            {plan.priceVnd <= 0 ? t.planCurrent : t.checkoutPay}
+          </button>
+
+          {error ? (
+            <p role="alert" className="text-xs leading-relaxed text-red-400">
+              {error}
+            </p>
+          ) : null}
         </div>
       ) : null}
     </Modal>

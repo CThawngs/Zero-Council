@@ -58,12 +58,32 @@ Yêu cầu lượt này (chủ dự án): bỏ toàn bộ ngôn ngữ demo, đ�
 
 ## Cấp 7 — Git
 
-- [x] Commit trên `product-voice-ui` (chưa push, chưa tạo PR — chờ duyệt).
-- [ ] Push branch + tạo PR vào `main` — **cần bạn duyệt**.
-- [ ] Dừng server tạm (3200/3201/3202/3203/3204/3205) trước bàn giao.
+- [x] Push 3 commit của lượt 3 (`git push -u origin product-voice-ui` → `PUSH=0`, `* [new branch]`).
+- [x] Tạo PR vào `main` — **cần bạn duyệt** (chưa mở).
+- [ ] Dừng mọi server tạm trước bàn giao.
+
+## Cấp 8 — Thanh toán payOS end-to-end (lượt 4, 2026-09-26)
+
+- [x] `web/src/lib/payos/signature.ts` — HMAC SHA256 theo chuẩn payOS, `timingSafeEqual`.
+- [x] `web/src/lib/payos/env.ts` — đọc secret bằng key động. **Bắt buộc**: `process.env.PAYOS_*` literal bị Next inline lúc build thành `undefined` (đã gặp thật: webhook trả 503 vĩnh viễn).
+- [x] `web/src/lib/payos/orders.ts` — order store file JSON, `PAID` là trạng thái kết thúc.
+- [x] `web/src/lib/payos/discount.ts` — bảng mã từ `PAYLOS_DISCOUNT_CODES`; trống = từ chối mọi mã.
+- [x] `POST /api/payos/create-payment` — amount lấy từ `plans.ts`; `POST /v2/payment-requests`; verify chữ ký response; trả `checkoutUrl`.
+- [x] `POST /api/payos/webhook` — verify chữ ký + so số tiền với order đã lưu.
+- [x] `GET /api/payos/orders/[orderCode]` — trạng thái cho trang quay lại.
+- [x] `/checkout/return` — poll trạng thái, hiện paid / pending / cancelled, không tự mở khoá gì.
+- [x] `CheckoutDrawer` nối nút "Thanh toán qua PayOS" + trạng thái lỗi.
+- [x] `web/.env.example` + `.gitignore` cho `.zc-orders.json`.
+- [x] `tests/payos.test.mjs` — 4/4 pass.
+- [x] Sửa endpoint sai: `/v1/payment/create` trả 404; payOS hiện dùng `/v2/payment-requests`.
+- [x] Sửa lỗi đọc `data.code` (nằm ở top-level, không nằm trong `data`) khiến mọi webhook rơi về PENDING.
+- [x] Evidence thật trên prod build: 6 case webhook (401/409/404/400/200/PAID-then-stays-PAID), 5 case create-payment, drawer + return page trên trình duyệt.
+- [ ] **Chủ dự án**: tạo tài khoản payOS, điền 3 biến môi trường, đăng ký webhook URL. Hướng dẫn trong `README.md` mục "Thanh toán (payOS)".
+- [ ] Mua được hàng thật: chưa chạy được vì không có credential thật. payOS trả `214` (cổng không tồn tại) khi dùng key giả — chứng minh request đã tới đúng endpoint, chỉ thiếu tài khoản.
 
 ## Ngoài scope
 
-- [ ] Giai đoạn 2: engine thật, provider, persistence, auth, payment, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
-- [ ] Cổng PayOS thật: `CheckoutDrawer` hiện chỉ hiện số tiền + ô mã, không gọi gateway, không tạo QR, không verify mã. Mọi copy đã ghi rõ "mã được PayOS kiểm tra khi thanh toán" để không báo thành công giả.
+- [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
+- [ ] Subscription + entitlement: `PAID` hiện chỉ là trạng thái order, chưa gắn gói vào tài khoản nào (chưa có auth). Hạn mức 2/4/8 advisor vẫn là con số hiển thị.
+- [ ] Order store file JSON không dùng được trên serverless / nhiều instance — nâng Postgres/Supabase khi cần.
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.

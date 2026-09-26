@@ -66,11 +66,18 @@ Giao diện sản phẩm song ngữ EN/VI cấu trúc quyết định khó: đ�
 - AC-04: New advisor validation và valid submission hoạt động; persona mới localizes khi đổi language.
 - AC-05: Dialog mở/đóng bằng button, Escape và backdrop; focus trả về trigger.
 - AC-06: Clipboard success/failure không báo thành công giả.
-- AC-07: Không có fetch/XHR/WebSocket/storage từ UI; `/api/council` không được gọi bởi prototype.
-- AC-08: Không có dữ liệu định danh, tài khoản, credential, invoice, renewal hoặc payment giả.
+- AC-07 (sửa ở lượt thanh toán): UI không tự gọi payOS. Nút "Thanh toán qua PayOS" chỉ POST tới route cùng origin `/api/payos/create-payment`; mọi secret và mọi lệnh gọi ra payOS nằm ở server route. `/api/council` vẫn không được prototype gọi.
+- AC-08: Không có dữ liệu định danh, tài khoản, credential, invoice, renewal hoặc payment giả. Lượt thanh toán chỉ thêm order thật do payOS xác nhận — không có dòng nào tự báo "đã thanh toán".
 - AC-09: Không overflow ở 320/360/375/390/414/600/640/768/900/1024/1280/1440; interactive targets ≥44px; reduced motion không còn transition/animation.
 - AC-10: Lint, TypeScript, production build, budget test, `git diff --check`, Lighthouse và browser evidence pass trên final commit.
 - AC-11: Dấu tiếng Việt render bằng glyph thật của webfont, không phải fallback từng ký tự; không có mojibake (`U+FFFD`) trong copy VI; runtime không có request tới `fonts.googleapis.com` hoặc `fonts.gstatic.com`.
+
+- AC-22: Số tiền thanh toán lấy từ `plans.ts` ở server, không bao giờ từ request của client. Client chỉ gửi `planId` (+ `code`).
+- AC-23: Webhook payOS chỉ đổi trạng thái order khi (a) `verifySignature` chạy qua `timingSafeEqual` với Checksum Key và (b) `data.amount` khớp đúng `amountVnd` đã lưu. Sai chữ ký → 401, sai số tiền → 409, không có order → 404, `code` lạ → 400. Không có đường nào tự báo PAID.
+- AC-24: `POST /v2/payment-requests` (payOS v2; `/v1/payment/create` đã 404). Response cũng phải verify signature trước khi trả `checkoutUrl` cho trình duyệt.
+- AC-25: Mọi secret đọc qua `payosEnv(key)` (dynamic). Không dùng `process.env.PAYOS_*` dạng literal — Next inline lúc build thành `undefined` và webhook trả 503 vĩnh viễn.
+- AC-26: Order `PAID` là trạng thái kết thúc. Webhook muộn (`01` failed) không được hạ một order đã trả.
+- AC-27: Trạng thái plan chưa được cấp cho tài khoản nào — không có auth. Trang `/checkout/return` chỉ báo trạng thái đơn, không mở khoá gì.
 
 ## Verify cuối
 
@@ -78,7 +85,7 @@ Ghi command, URL, commit SHA và kết quả thật vào `.agent/HANDOFF.md` sau
 
 ## Ngoài scope
 
-Giai đoạn 2 vẫn mở: AI inference, provider adapters, real orchestration, web search, uploads, real calculations, auth, BYOK, persistence, payments, subscriptions, analytics, deployment và production privacy/compliance claims.
+Giai đoạn 2 vẫn mở: AI inference, provider adapters, real orchestration, web search, uploads, real calculations, auth, BYOK, persistence, subscriptions (gia hạn), analytics, deployment và production privacy/compliance claims. Thanh toán một lần đã có; subscription, entitlements và hạn mức advisor (2/4/8) thì chưa.
 
 Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự án yêu cầu bỏ hết ngôn ngữ demo, **kể cả các câu giải thích rằng tính năng chưa có**. Landing copy hiện mô tả hành vi chưa tồn tại trong code (AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council"). Giảm thiểu: giữ AC-01/AC-02/AC-06/AC-07 (không fetch, không báo thành công giả) và báo rõ trong HANDOFF để chủ dự án quyết định hoặc làm giai đoạn 2, hoặc thu hồi claim.
 
@@ -88,6 +95,11 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 - Risk: bảng giá là dữ liệu thương mại, không có nguồn chân lý trong repo. Đã xử lý: giá do chủ dự án cung cấp và nằm trong `data/plans.ts`; cấu hình đổi giá = sửa đúng file đó, không sửa 6 chỗ hiển thị.
 - Risk: nhiều chỗ hiển thị giá dễ lệch số. Giảm thiểu: mọi màn đọc từ `PLANS`/`planPrice`/`planAmountLine`; không component nào hard-code con số.
 - Risk: `Reveal` không còn fallback khi thiếu `IntersectionObserver`; trình duyệt không hỗ trợ sẽ giữ nội dung ở trạng thái trước khi hiện. Recovery: thêm CSS fallback trong `globals.css` khi cần.
+- Risk: order store là một file JSON (`ponytail:`) — hỏng trên serverless (FS ephemerals), trên nhiều instance, và race khi ghi đồng thời. Recovery: nâng sang Postgres/Supabase; shape `readAll`/`markOrder` đã là đúng shape cho việc đó.
+- Risk: `PAID` chỉ là trạng thái order, chưa cấp quyền cho tài khoản nào. Người mua thấy "đã nhận thanh toán" nhưng chưa có gì mở — phải nói rõ với chủ dự án trước khi bán.
+- Risk: webhook cần URL HTTPS public. Localhost không nhận được webhook; test local phải dùng tunnel (cloudflared/ngrok).
+- Risk: nếu payOS đổi cách chuẩn hoá chữ ký response, `verifySignature` chặn người mua thật. Dấu hiệu nhận biết nằm trong log `[payos] create-payment rejected: response signature did not verify`; sửa `toSignaturePayload` theo tài liệu mới.
+- Risk: `PAYLOS_CHECKSUM_KEY` lộ ra trong client bundle là lộ toàn bộ. Đã chặn: secret chỉ đọc trong server route, không có `NEXT_PUBLIC_` nào.
 - Risk: copy làm giả production, localization stale, hydration mismatch, dialog focus regression, unsupported claims.
 - Risk responsive: unlayered component CSS (`.button-primary`, `.icon-button`) đè Tailwind layered utilities nên `hidden`/`sm:inline-flex` bị bỏ qua — dùng semantic class unlayered riêng (`.header-cta`, `.header-settings`, `.header-menu`) với `display` tường minh trong media query.
 - Risk font: khai báo tên font mà không nạp file thật khiến browser fallback từng ký tự. Recovery: dùng `next/font` với `subsets` chứa `vietnamese` và fallback có dấu; đã đo bề rộng để xác nhận glyph VI do webfont vẽ.
@@ -98,6 +110,8 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 ## OPEN / delegated
 
 - Bảng giá đã chốt (chủ dự án, 2026-09-26): Free 0₫/$0 · 2 advisor; Pro 139.000₫/$5.99 · 4 advisor; Ultra 379.000₫/$16.99 · 8 advisor. "Advisor" = số persona active cùng lúc trong 1 phiên, KHÔNG phải số model riêng.
+- Mã giảm giá: chưa có giá trị nào được duyệt. Bảng đọc từ `PAYLOS_DISCOUNT_CODES`; để trống = mọi mã bị từ chối. Chủ dự án tự điền sau.
+- payOS credential: cần `PAYLOS_CLIENT_ID` / `PAYLOS_API_KEY` / `PAYLOS_CHECKSUM_KEY` từ tài khoản thật của chủ dự án. Không tự tạo tài khoản, không tự đăng ký cổng thanh toán.
 - Landing copy mô tả AI/BYOK/mã hoá trong khi repo chưa có: chủ dự án quyết định làm giai đoạn 2 hay thu hồi claim.
 - Required GitHub checks và ruleset được xác nhận sau khi push PR mới.
-- Không deploy, cấu hình cloud, tạo account/provider hoặc dùng secret.
+- Không deploy, cấu hình cloud, tạo account/provider hoặc dùng secret. Lượt thanh toán: việc cần chủ dự án làm là tạo tài khoản payOS, điền 3 biến môi trường, và đăng ký webhook URL — không phải viết code.
