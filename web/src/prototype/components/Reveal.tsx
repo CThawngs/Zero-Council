@@ -24,11 +24,10 @@ export const Reveal: React.FC<RevealProps> = ({ children, className = '', delayM
     const node = ref.current;
     if (!node) return;
 
-    // Fallback: if the browser has no IntersectionObserver, just show it.
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisible(true);
-      return;
-    }
+    // ponytail: no IntersectionObserver fallback (browsers without it keep the pre-reveal state).
+    // Any fix has to render deterministically on server and client or hydration warns; add a
+    // no-JS-visible CSS path in globals.css when that ever matters.
+    if (typeof IntersectionObserver === 'undefined') return;
 
     const observer = new IntersectionObserver(
       (entries) => {
