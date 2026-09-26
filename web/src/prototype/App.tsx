@@ -17,6 +17,7 @@ import { PersonasView } from './components/PersonasView';
 import { NewAdvisorView } from './components/NewAdvisorView';
 import { ApiKeysView } from './components/ApiKeysView';
 import { SettingsView } from './components/SettingsView';
+import { BillingHistoryView } from './components/BillingHistoryView';
 import { PrivacyView } from './components/PrivacyView';
 import { PricingView } from './components/PricingView';
 
@@ -45,6 +46,7 @@ const ChamberContent: React.FC = () => {
           {currentView === 'new-advisor' && <NewAdvisorView />}
           {currentView === 'api-keys' && <ApiKeysView />}
           {currentView === 'settings' && <SettingsView />}
+          {currentView === 'billing' && <BillingHistoryView />}
           {currentView === 'pricing' && <PricingView />}
           {currentView === 'privacy' && <PrivacyView />}
         </main>

@@ -2,6 +2,7 @@ import React from 'react';
 import { useApp } from '../context/AppContext';
 import { CouncilOrb } from './CouncilOrb';
 import { Reveal } from './Reveal';
+import { PLANS, planPrice } from '../data/plans';
 import {
   ArrowRight,
   FileQuestion,
@@ -16,7 +17,7 @@ import {
 } from 'lucide-react';
 
 export const OverviewView: React.FC = () => {
-  const { setCurrentView, t } = useApp();
+  const { setCurrentView, t, language } = useApp();
 
   const flow = [
     { icon: MessageSquareText, title: t.flow1Title, body: t.flow1Body },
@@ -159,6 +160,44 @@ export const OverviewView: React.FC = () => {
             </Reveal>
           ))}
         </div>
+      </section>
+
+      <section id="pricing" className="scroll-mt-24 space-y-6" aria-labelledby="pricing-teaser-title">
+        <Reveal>
+          <header className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
+              {t.pricingTeaserEyebrow}
+            </p>
+            <h2 id="pricing-teaser-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
+              {t.pricingTitle}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-ink-muted">{t.pricingTeaserBody}</p>
+          </header>
+        </Reveal>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {PLANS.map((plan, index) => (
+            <Reveal key={plan.id} delayMs={index * 90}>
+              <article
+                className={`flex h-full flex-col gap-2 rounded-2xl border bg-surface p-5 ${
+                  plan.popular ? 'border-brass/60' : 'border-border'
+                }`}
+              >
+                <h3 className="text-sm font-semibold text-ink">{plan.name}</h3>
+                <p className="font-serif text-xl text-ink">{planPrice(plan, language)}</p>
+                <p className="text-xs leading-relaxed text-ink-muted">
+                  {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))}
+                </p>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setCurrentView('pricing')}
+          className="button-primary"
+        >
+          {t.pricingTitle}
+        </button>
       </section>
     </div>
   );

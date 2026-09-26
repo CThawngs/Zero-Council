@@ -59,6 +59,10 @@ Giao diện sản phẩm song ngữ EN/VI cấu trúc quyết định khó: đ�
 - AC-15: Nav public đúng 3 mục — How it works (`#how-it-works`), Why Zero Council (`#why-zero-council`), Pricing (render `PricingView`). Footer chỉ có `© 2026 Zero Council.`
 - AC-16: Hero có đúng một hào quang brass theo `AC` mục font ở trên; mọi node `CouncilOrb` cùng hue brass.
 - AC-17: Serif là Literata; dấu tiếng Việt vẽ bằng glyph webfont (đo bề rộng khác cả fallback-face và Georgia).
+- AC-18: Giá chỉ tồn tại ở một chỗ: `web/src/prototype/data/plans.ts` (`priceVnd` số nguyên là nguồn gốc, `priceUsd` là chuỗi tĩnh từ bảng quy đổi đã duyệt). Không component nào tự chứa số tiền; không gọi API tỷ giá.
+- AC-19: `locale=vi` → `139.000₫/tháng`; `locale=en` → `$5.99/mo`. Đổi ngôn ngữ chỉ đổi cách viết, không sinh hệ giá thứ hai.
+- AC-20: Màn thanh toán luôn hiện `₫139,000 (~$5.99)` (VNĐ là số chính) và dòng EN-only "Charged in Vietnamese Đồng (VNĐ) via PayOS. USD shown for reference only." Dòng đó không hiện ở locale vi.
+- AC-21: Mọi nơi có giá dùng cùng con số: Pricing 3 card, teaser landing `#pricing`, Settings > Plan, Billing history, khối Amount, dòng giá gốc của Discount code. Không còn `149.000`/`299.000` hay "3/6 advisors" ở bất kỳ đâu.
 - AC-04: New advisor validation và valid submission hoạt động; persona mới localizes khi đổi language.
 - AC-05: Dialog mở/đóng bằng button, Escape và backdrop; focus trả về trigger.
 - AC-06: Clipboard success/failure không báo thành công giả.
@@ -81,7 +85,8 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 ## Risk / recovery
 
 - Risk: landing copy mô tả sản phẩm chưa tồn tại — người dùng hiểu là có AI thật. Giảm thiểu: ghi OPEN ở HANDOFF; nếu chủ dự án chọn thu hồi, chỉ sửa `i18n.ts` (không đụng component).
-- Risk: bảng giá là dữ liệu thương mại, không có nguồn chân lý trong repo. Giảm thiểu: `PricingView` chỉ có tiêu đề + câu công bố sắp tới, không số bịa; chờ số giá từ chủ dự án.
+- Risk: bảng giá là dữ liệu thương mại, không có nguồn chân lý trong repo. Đã xử lý: giá do chủ dự án cung cấp và nằm trong `data/plans.ts`; cấu hình đổi giá = sửa đúng file đó, không sửa 6 chỗ hiển thị.
+- Risk: nhiều chỗ hiển thị giá dễ lệch số. Giảm thiểu: mọi màn đọc từ `PLANS`/`planPrice`/`planAmountLine`; không component nào hard-code con số.
 - Risk: `Reveal` không còn fallback khi thiếu `IntersectionObserver`; trình duyệt không hỗ trợ sẽ giữ nội dung ở trạng thái trước khi hiện. Recovery: thêm CSS fallback trong `globals.css` khi cần.
 - Risk: copy làm giả production, localization stale, hydration mismatch, dialog focus regression, unsupported claims.
 - Risk responsive: unlayered component CSS (`.button-primary`, `.icon-button`) đè Tailwind layered utilities nên `hidden`/`sm:inline-flex` bị bỏ qua — dùng semantic class unlayered riêng (`.header-cta`, `.header-settings`, `.header-menu`) với `display` tường minh trong media query.
@@ -92,7 +97,7 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 
 ## OPEN / delegated
 
-- Bảng giá thật (tên plan, giới hạn, số tiền): chủ dự án cung cấp — rule 28.3 không đoán.
+- Bảng giá đã chốt (chủ dự án, 2026-09-26): Free 0₫/$0 · 2 advisor; Pro 139.000₫/$5.99 · 4 advisor; Ultra 379.000₫/$16.99 · 8 advisor. "Advisor" = số persona active cùng lúc trong 1 phiên, KHÔNG phải số model riêng.
 - Landing copy mô tả AI/BYOK/mã hoá trong khi repo chưa có: chủ dự án quyết định làm giai đoạn 2 hay thu hồi claim.
 - Required GitHub checks và ruleset được xác nhận sau khi push PR mới.
 - Không deploy, cấu hình cloud, tạo account/provider hoặc dùng secret.

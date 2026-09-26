@@ -8,6 +8,7 @@ export type ViewType =
   | 'new-advisor'
   | 'api-keys'
   | 'settings'
+  | 'billing'
   | 'pricing'
   | 'privacy';
 

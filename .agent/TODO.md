@@ -42,14 +42,28 @@ Yêu cầu lượt này (chủ dự án): bỏ toàn bộ ngôn ngữ demo, đ�
 - [x] Quét DOM từng màn hình (landing / session / concluded / sessions / advisors / integrations / settings) bằng regex cấm → 0 hit (trừ nhãn BYOK "Not connected" và trang `/fixture` mang chữ "reference").
 - [x] VI: title, `lang`, hero, 3 card Why Zero Council, footer đều dịch đúng.
 
-## Cấp 6 — Git
+## Cấp 6 — Hệ thống pricing (lượt 3, 2026-09-26)
+
+- [x] `web/src/prototype/data/plans.ts` (mới): `PLANS` là nguồn giá duy nhất — `priceVnd` số nguyên + `priceUsd` chuỗi tĩnh + `maxActiveAdvisors`; `planPrice()` và `planAmountLine()` là 2 hàm format.
+- [x] Free 0₫/$0 · 2; Pro 139.000₫/$5.99 · 4; Ultra 379.000₫/$16.99 · 8. "Advisor" = persona active cùng lúc, không phải số model.
+- [x] Pricing: 3 card dùng `planPrice`; bỏ nhân đôi "/mo" + "per month".
+- [x] Landing: thêm section `#pricing` teaser 3 card + nút mở Pricing.
+- [x] Settings > Plan: 3 card, gói Free gắn nhãn "Current plan", link sang Billing history.
+- [x] Billing history: view mới được route (`billing`), hiện gói hiện tại + link sang Pricing; danh sách hoá đơn vẫn rỗng vì chưa có billing backend.
+- [x] Checkout (`CheckoutDrawer` từ stub `null` → dùng `Modal`): khối Amount luôn `₫139,000 (~$5.99)`, dòng EN-only "Charged in Vietnamese Đồng (VNĐ) via PayOS…", panel Discount code in giá gốc từ `planAmountLine`.
+- [x] i18n EN + VI thêm 15 key pricing; parity giữ nguyên.
+- [x] Sweep repo: 0 match `149.000|149000|149,000|299.000|299000|149k|299k|3 advisors|6 advisors|2/3/6`.
+- [x] `tsc` / `lint` / `build` / `budget test` / `git diff --check` → exit 0.
+- [x] Prod `-p 3205`: teaser/giá/Settings/Billing/checkout EN+VI đều đúng số; console sạch; không overflow.
+
+## Cấp 7 — Git
 
 - [x] Commit trên `product-voice-ui` (chưa push, chưa tạo PR — chờ duyệt).
 - [ ] Push branch + tạo PR vào `main` — **cần bạn duyệt**.
-- [ ] Dừng server tạm (3200/3201/3202) trước bàn giao.
+- [ ] Dừng server tạm (3200/3201/3202/3203/3204/3205) trước bàn giao.
 
 ## Ngoài scope
 
-- [ ] Bảng giá thật — chờ số giá từ chủ dự án (rule 28.3, không bịa).
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, payment, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
+- [ ] Cổng PayOS thật: `CheckoutDrawer` hiện chỉ hiện số tiền + ô mã, không gọi gateway, không tạo QR, không verify mã. Mọi copy đã ghi rõ "mã được PayOS kiểm tra khi thanh toán" để không báo thành công giả.
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
