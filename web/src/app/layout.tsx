@@ -4,8 +4,8 @@ import { sans, serif } from './fonts';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Zero Council — Local council interface',
-  description: 'A local bilingual interface demo using fixed sample content. No production service is connected.',
+  title: 'Zero Council — Deliberation workspace',
+  description: 'A bilingual deliberation workspace that structures hard decisions and keeps judgment with the people making them.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -1,20 +1,28 @@
-# Zero Council — UI/UX local mock spec
+# Zero Council — UI/UX spec (in-browser release)
 
-Cập nhật: 2026-09-25. Governance khi soạn: v7.1. Repo đã lên v7.4 ngày 2026-09-26 (PR #8); spec này chưa rà lại dưới v7.4.
-Trạng thái: IMPLEMENTED / FINAL_QA_PASS.
-Worktree task: `.worktrees/vi-font-fix`; branch: `vi-font-fix`; base `49ec347` (`origin/main` tại task start, sau khi PR #6 merge).
+Cập nhật: 2026-09-26. Governance khi soạn: v7.4. Worktree task: `.worktrees/product-voice-ui`; branch: `product-voice-ui`; base `83ee993` (`origin/main` sau PR #9 merge).
+Trạng thái: IMPLEMENTED (chờ PR).
+
+## Quyết định định vị — 2026-09-26 (chủ dự án)
+
+- CONFIRMED: copy người dùng thấy phải dùng giọng sản phẩm, không dùng "demo / sample / fixture / prototype / local-only".
+- CONFIRMED: giai đoạn này chỉ đổi lớp vỏ và copy. Engine thật (model, provider, orchestration, persistence) để giai đoạn sau, mở task riêng.
+- CONFIRMED: người dùng vẫn được nhập câu hỏi tự do; kết quả luôn gắn nhãn là nội dung minh họa, không phải khuyến nghị được tính ra.
+- CONFIRMED: không được hiện claim về độ chính xác, confidence, ranking, ROI, ISO/compliance. Ranh giới tính năng chưa có (auth, payment, provider, AI, server storage) vẫn phải nói rõ là "chưa có trong bản này".
+- OPEN: tên gọi, giá và chính sách thương mại thật — chưa có nguồn chân lý, chưa được phép bịa.
+- Rủ lý do: bỏ nhãn demo mà engine vẫn trả dữ liệu cố định sẽ là copy làm giả production. Vì vậy nhãn "minh họa" được giữ ở mọi điểm kết quả.
 
 ## Mục tiêu
 
-Giao diện trình diễn cấu trúc hội đồng đa góc nhìn bằng dữ liệu cố định, song ngữ EN/VI, responsive và accessible. Đây là local UI concept, không phải sản phẩm AI, tư vấn chuyên môn, dịch vụ tài chính/y tế/pháp lý, auth, payment hoặc production system.
+Giao diện sản phẩm song ngữ EN/VI cấu trúc quyết định khó: định khung câu hỏi, đối chiếu nhiều góc nhìn, kết thúc bằng tiêu chí xem lại và bước tiếp theo. Nội dung hội đồng là văn bản minh họa cố định đi kèm ứng dụng. Không phải dịch vụ tư vấn chuyên môn, tài chính/y tế/pháp lý, và chưa phải sản phẩm AI, auth, payment hay hệ thống production.
 
 ## Ranh giới runtime
 
 - `/` render `web/src/prototype/App.tsx` bằng deterministic initial React state để tránh hydration mismatch.
-- Sample sessions/personas tồn tại trong React/browser memory; refresh đặt lại state.
+- Session/persona tồn tại trong React/browser memory; refresh đặt lại state.
 - Câu hỏi tùy ý không được phân tích; flow dùng fixed generic illustrative text.
-- `/fixture` chỉ hiển thị fixed bilingual sample content.
-- `/api/council` trả fixed English fixture; prototype `/` không gọi endpoint này.
+- `/fixture` chỉ hiển thị fixed bilingual illustrative content.
+- `/api/council` trả fixed English content; prototype `/` không gọi endpoint này.
 - Không có model/provider call, credentials, auth, payment, analytics, server storage, transcript persistence hoặc deployment.
 - Provider/model names chỉ là internal fixture IDs được render thành nhãn địa phương hóa.
 - Paid/auth surfaces không provision; không có checkout, billing, sign-in, account, invoice hoặc dữ liệu định danh giả.
@@ -41,8 +49,10 @@ Giao diện trình diễn cấu trúc hội đồng đa góc nhìn bằng dữ l
 ## Tiêu chí chấp nhận
 
 - AC-01: Fresh load không console error/warning và không hydration mismatch.
-- AC-02: EN/VI copy hiển thị đúng; metadata đổi theo language; fixture route cũng đổi language.
-- AC-03: New sample flow chạy bằng input tùy ý nhưng output luôn fixed/local và được gắn nhãn rõ.
+- AC-02: EN/VI copy hiển thị đúng; metadata đổi theo language; `/fixture` cũng đổi language.
+- AC-03: New deliberation flow chạy bằng input tùy ý nhưng output luôn fixed và được gắn nhãn minh họa.
+- AC-12: Không còn từ "demo / sample / fixture / prototype / local-only" trong bất kỳ chuỗi nào người dùng thấy ở `/`, `/fixture`, title hay meta description; chỉ còn nhãn "minh họa" hoặc "chưa có trong bản này".
+- AC-13: Không thêm claim đo được (accuracy, confidence, ranking, ROI, ISO/compliance) vào bất kỳ view nào.
 - AC-04: New advisor validation và valid submission hoạt động; persona mới localizes khi đổi language.
 - AC-05: Dialog mở/đóng bằng button, Escape và backdrop; focus trả về trigger.
 - AC-06: Clipboard success/failure không báo thành công giả.
@@ -58,10 +68,12 @@ Ghi command, URL, commit SHA và kết quả thật vào `.agent/HANDOFF.md` sau
 
 ## Ngoài scope
 
-AI inference, provider adapters, real orchestration, web search, uploads, real calculations, Google/Supabase auth, BYOK, persistence, payments, subscriptions, analytics, deployment và production privacy/compliance claims.
+Task này (giai đoạn 1) chỉ đổi copy và metadata. AI inference, provider adapters, real orchestration, web search, uploads, real calculations, Google/Supabase auth, BYOK, persistence, payments, subscriptions, analytics, deployment và production privacy/compliance claims để giai đoạn 2, mở task và PR riêng.
 
 ## Risk / recovery
 
+- Risk: bỏ nhãn demo nhưng engine chưa có — người dùng tưởng có phân tích thật. Giảm thiểu: mọi điểm kết quả vẫn gắn nhãn minh họa; mở nhóm copy ngữ cảnh vào điểm vào; FAQ nói rõ chưa có AI. Nếu cần giai đoạn 2, chỉ bỏ nhãn sau khi có bằng chứng chạy thật.
+- Risk: `Reveal` không còn fallback khi thiếu `IntersectionObserver`; trình duyệt không hỗ trợ sẽ giữ nội dung ở trạng thái trước khi hiện. Recovery: thêm CSS fallback trong `globals.css` khi cần.
 - Risk: copy làm giả production, localization stale, hydration mismatch, dialog focus regression, unsupported claims.
 - Risk responsive: unlayered component CSS (`.button-primary`, `.icon-button`) đè Tailwind layered utilities nên `hidden`/`sm:inline-flex` bị bỏ qua — dùng semantic class unlayered riêng (`.header-cta`, `.header-settings`, `.header-menu`) với `display` tường minh trong media query.
 - Risk font: khai báo tên font mà không nạp file thật khiến browser fallback từng ký tự; `Fraunces` không có sẵn nên heading rơi về `Georgia` với dấu tiếng Việt rất yếu. Recovery: dùng `next/font` với `subsets` chứa `vietnamese` và fallback có dấu.

@@ -1,12 +1,12 @@
 # Zero Council
 
-Giao diện local song ngữ để trình diễn cấu trúc hội đồng đa góc nhìn bằng nội dung mẫu cố định. Đây là UI concept, không phải sản phẩm AI hay dịch vụ tư vấn.
+Giao diện song ngữ cấu trúc quyết định khó: định khung câu hỏi, đối chiếu nhiều góc nhìn, kết thúc bằng tiêu chí xem lại và bước tiếp theo. Nội dung hội đồng là văn bản minh họa cố định đi kèm ứng dụng, không phải khuyến nghị được tính ra.
 
 ## Trạng thái
 
 Next.js 16.3.5 / React 19.2.8 / TypeScript / Tailwind 4 tại `web/`.
-Luồng `/` dùng React/browser memory; refresh đặt lại state. Không gọi model/provider, không lưu transcript, không có auth, payment, credential, analytics hoặc deploy.
-`/fixture` hiển thị fixture song ngữ cố định. `/api/council` là route fixture riêng và giao diện `/` không gọi route này.
+Luồng `/` dùng React/browser memory; refresh đặt lại state. Chưa có model/provider, lưu transcript, auth, payment, credential, analytics hoặc deploy — UI ghi rõ những phần này "chưa có trong bản này".
+`/fixture` hiển thị nội dung minh họa song ngữ cố định. `/api/council` là route nội dung cố định riêng và giao diện `/` không gọi route này.
 
 ## Chạy
 

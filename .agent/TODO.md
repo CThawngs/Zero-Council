@@ -1,48 +1,39 @@
-# TODO — Zero Council Vietnamese font fix
+# TODO — Zero Council product voice (giai đoạn 1)
 
-Cập nhật: 2026-09-25. Governance khi lập: v7.1. Repo đã lên v7.4 ngày 2026-09-26 (PR #8); checklist này chưa rà lại dưới v7.4.
-Worktree: `.worktrees/vi-font-fix`; branch: `vi-font-fix`; base `49ec347` (`origin/main` sau PR #6 merge).
+Cập nhật: 2026-09-26. Governance: v7.4. Worktree: `.worktrees/product-voice-ui`; branch: `product-voice-ui`; base `83ee993` (`origin/main` sau PR #9 merge).
 
 ## Cấp 1 — Mục tiêu
 
-- [x] Xác định nguyên nhân thật: font khai báo trong CSS nhưng không được nạp, nên browser fallback.
-- [x] Nạp font thật qua `next/font` (built-in Next, không thêm dependency).
-- [x] Bảo đảm dấu tiếng Việt render bằng glyph thật, không phải fallback từng ký tự.
-- [x] Giữ nguyên localization EN/VI, accessibility, truth boundary local mock, không thêm persistence/analytics/payment.
+- [x] Chốt với chủ dự án: bỏ framing demo, giữ nhãn minh họa, không thêm claim, engine để giai đoạn 2.
+- [x] Viết lại toàn bộ copy EN/VI trong `web/src/prototype/i18n.ts` sang giọng sản phẩm.
+- [x] `layout.tsx` + `/fixture` + `council-fixture.ts` + 2 comment component: bỏ chữ demo.
+- [x] Fix lint `Reveal.tsx` (`react-hooks/set-state-in-effect`) đang đỏ từ PR #9.
 
-## Cấp 2 — Thành phần
+## Cấp 2 — Ràng buộc giữ nguyên
 
-- [x] `web/src/app/fonts.ts` mới: `Inter` + `Fraunces`, `subsets: ['latin','vietnamese']`, `display: 'swap'`, expose `--font-inter` / `--font-fraunces`.
-- [x] `layout.tsx` gắn `sans.variable` + `serif.variable` vào `<html>`.
-- [x] `globals.css`: `--font-sans` / `--font-serif` trỏ vào biến `next/font`; fallback dùng font có dấu tiếng Việt.
-- [x] Bỏ `, Georgia, serif` thừa ở `.page-header h1` và `.panel-title` (đã có trong fallback chain).
-- [x] Không thêm dependency mới; `lucide-react` vẫn là dependency icon duy nhất.
+- [x] Không đổi tên key i18n (nội bộ) — 544 key EN, 544 key VI, không mất/thêm key.
+- [x] Không thêm dependency, không đổi layout, không đổi hành vi flow.
+- [x] Không claim accuracy / confidence / ranking / ROI / ISO.
+- [x] Mọi điểm kết quả vẫn gắn nhãn minh họa.
 
-## Cấp 3 — Kiểm chứng
+## Cấp 3 — Kiểm chứng (commit trên branch này)
 
-- [x] `pnpm lint` exit `0`.
-- [x] `pnpm exec tsc --noEmit` exit `0`.
-- [x] `pnpm build` exit `0`; 10 file `.woff2` self-host trong `.next/static/media/`.
-- [x] `node --test tests/budget.test.mjs` → `2 pass, 0 fail`; `git diff --check` sạch.
-- [x] Browser: `document.fonts` có `Inter` và `Fraunces` ở trạng thái `loaded`; CSS variable resolve đúng tên font.
-- [x] Browser: pixel signature chứng minh glyph tiếng Việt được vẽ bởi chính family, khác `monospace`; `Fraunces` khác `Georgia` (bug cũ đã hết).
-- [x] Browser: không có external request; không có request tới `fonts.googleapis.com` / `fonts.gstatic.com`.
-- [x] Browser: VI toggle → `lang="vi"`, không mojibake `U+FFFD`, heading đọc đúng dấu.
-- [x] Browser: 12 width 320–1440 không overflow, header giữ 76px, control nằm trong viewport.
-- [x] Lighthouse mobile: Accessibility / Best Practices / SEO / Agentic Browsing đều `100`, `0` failed.
-- [x] Console không error.
+- [x] `pnpm --dir web exec tsc --noEmit` → exit 0.
+- [x] `pnpm --dir web lint` → exit 0 (trước đó exit 1).
+- [x] `pnpm --dir web build` → exit 0.
+- [x] `node --test tests/budget.test.mjs` → 2 pass, 0 fail.
+- [x] Prod server `next start -p 3200`: lái tới bước synthesis bằng câu hỏi tự do, không console error/warning.
+- [x] Đổi EN→VI: title, copy và `lang` đổi đúng; không mojibake.
+- [x] Scroll reveal của PR #9 vẫn chạy: 11 `.reveal`, 7 chuyển sang `.reveal--visible` sau khi cuộn.
 
 ## Cấp 4 — Git
 
-- [x] Commit source + governance docs trên `vi-font-fix`.
-- [x] Push branch và tạo PR mới vào `main`.
-- [x] Inspect required checks/ruleset; self-merge khi final status clean.
-- [ ] Dừng QA server trước bàn giao.
+- [x] Commit trên `product-voice-ui` (chưa push, chưa tạo PR — chờ duyệt).
+- [ ] Push branch + tạo PR vào `main`.
+- [ ] Dừng dev/prod server trước bàn giao.
 
 ## Ngoài scope
 
-- [ ] AI inference, provider adapters, web search, uploads, real framework calculations.
-- [ ] Google/Supabase auth, session, persistence, BYOK runtime.
-- [ ] Payments, subscriptions, checkout, billing, analytics, deployment.
-
-Không mở hạng mục ngoài scope trong PR font này.
+- [ ] Giai đoạn 2: engine thật, provider, persistence, auth, payment, deploy.
+- [ ] Tên thương hiệu/giá thật — cần nguồn chân lý, chưa được bịa.
+- [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
