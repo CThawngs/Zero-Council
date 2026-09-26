@@ -1,5 +1,7 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { CouncilOrb } from './CouncilOrb';
+import { Reveal } from './Reveal';
 import {
   ArrowRight,
   CheckCircle2,
@@ -63,103 +65,123 @@ export const OverviewView: React.FC = () => {
           </div>
         </div>
 
-        <aside
-          className="rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6"
-          aria-label={t.scopeTitle}
-        >
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-brass/30 bg-brass/10 text-brass">
-            <LockKeyhole className="h-5 w-5" aria-hidden="true" />
-          </div>
-          <h2 className="mt-5 font-serif text-xl text-ink">{t.localBadge}</h2>
-          <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.boundaryShort}</p>
-          <p className="mt-4 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs font-medium text-sage">
-            {t.noAi}
-          </p>
-        </aside>
+        <div className="flex flex-col items-center gap-6">
+          <CouncilOrb />
+          <aside
+            className="w-full rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-6"
+            aria-label={t.scopeTitle}
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-brass/30 bg-brass/10 text-brass">
+              <LockKeyhole className="h-5 w-5" aria-hidden="true" />
+            </div>
+            <h2 className="mt-5 font-serif text-xl text-ink">{t.localBadge}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.boundaryShort}</p>
+            <p className="mt-4 rounded-lg border border-border bg-background/70 px-3 py-2 text-xs font-medium text-sage">
+              {t.noAi}
+            </p>
+          </aside>
+        </div>
       </section>
 
       <section className="space-y-7" aria-labelledby="flow-title">
-        <header className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
-            {t.flowEyebrow}
-          </p>
-          <h2 id="flow-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
-            {t.flowTitle}
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-ink-muted">{t.flowBody}</p>
-        </header>
+        <Reveal>
+          <header className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
+              {t.flowEyebrow}
+            </p>
+            <h2 id="flow-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
+              {t.flowTitle}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-ink-muted">{t.flowBody}</p>
+          </header>
+        </Reveal>
         <ol className="grid gap-4 md:grid-cols-3">
-          {flow.map(({ icon: Icon, title, body }) => (
-            <li key={title} className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+          {flow.map(({ icon: Icon, title, body }, index) => (
+            <Reveal
+              key={title}
+              as="li"
+              delayMs={index * 90}
+              className="rounded-2xl border border-border bg-surface p-5 sm:p-6"
+            >
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-background text-brass">
                 <Icon className="h-5 w-5" aria-hidden="true" />
               </div>
               <h3 className="mt-5 font-serif text-xl text-ink">{title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-ink-muted">{body}</p>
-            </li>
+            </Reveal>
           ))}
         </ol>
       </section>
 
       <section className="space-y-7" aria-labelledby="framework-title">
-        <header className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
-            {t.frameworkEyebrow}
-          </p>
-          <h2 id="framework-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
-            {t.frameworkTitle}
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-ink-muted">{t.frameworkBody}</p>
-        </header>
+        <Reveal>
+          <header className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
+              {t.frameworkEyebrow}
+            </p>
+            <h2 id="framework-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
+              {t.frameworkTitle}
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-ink-muted">{t.frameworkBody}</p>
+          </header>
+        </Reveal>
         <div className="grid gap-4 lg:grid-cols-3">
-          {frameworks.map(({ icon: Icon, title, body }) => (
-            <article key={title} className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
-              <Icon className="h-5 w-5 text-brass" aria-hidden="true" />
-              <h3 className="mt-4 font-serif text-xl text-ink">{title}</h3>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">{body}</p>
-            </article>
+          {frameworks.map(({ icon: Icon, title, body }, index) => (
+            <Reveal key={title} delayMs={index * 90}>
+              <article className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+                <Icon className="h-5 w-5 text-brass" aria-hidden="true" />
+                <h3 className="mt-4 font-serif text-xl text-ink">{title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-ink-muted">{body}</p>
+              </article>
+            </Reveal>
           ))}
         </div>
       </section>
 
       <section className="space-y-6" aria-labelledby="scope-title">
-        <header className="max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
-            {t.accessTitle}
-          </p>
-          <h2 id="scope-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
-            {t.directTitle}
-          </h2>
-        </header>
+        <Reveal>
+          <header className="max-w-3xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
+              {t.accessTitle}
+            </p>
+            <h2 id="scope-title" className="mt-2 font-serif text-3xl text-ink sm:text-4xl">
+              {t.directTitle}
+            </h2>
+          </header>
+        </Reveal>
         <div className="grid gap-4 md:grid-cols-2">
-          <article className="rounded-2xl border border-sage/40 bg-surface p-5 sm:p-6">
-            <h3 className="flex items-center gap-2 font-serif text-xl text-ink">
-              <CheckCircle2 className="h-5 w-5 text-sage" aria-hidden="true" />
-              {t.availableTitle}
-            </h3>
-            <ul className="mt-4 space-y-3">
-              {available.map((item) => (
-                <li key={item} className="flex gap-2 text-sm leading-relaxed text-ink-muted">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
-          <article className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
-            <h3 className="flex items-center gap-2 font-serif text-xl text-ink">
-              <CircleDashed className="h-5 w-5 text-terracotta" aria-hidden="true" />
-              {t.unavailableTitle}
-            </h3>
-            <ul className="mt-4 space-y-3">
-              {unavailable.map((item) => (
-                <li key={item} className="flex gap-2 text-sm leading-relaxed text-ink-muted">
-                  <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-terracotta" aria-hidden="true" />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </article>
+          <Reveal>
+            <article className="rounded-2xl border border-sage/40 bg-surface p-5 sm:p-6">
+              <h3 className="flex items-center gap-2 font-serif text-xl text-ink">
+                <CheckCircle2 className="h-5 w-5 text-sage" aria-hidden="true" />
+                {t.availableTitle}
+              </h3>
+              <ul className="mt-4 space-y-3">
+                {available.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm leading-relaxed text-ink-muted">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </Reveal>
+          <Reveal delayMs={90}>
+            <article className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
+              <h3 className="flex items-center gap-2 font-serif text-xl text-ink">
+                <CircleDashed className="h-5 w-5 text-terracotta" aria-hidden="true" />
+                {t.unavailableTitle}
+              </h3>
+              <ul className="mt-4 space-y-3">
+                {unavailable.map((item) => (
+                  <li key={item} className="flex gap-2 text-sm leading-relaxed text-ink-muted">
+                    <CircleDashed className="mt-0.5 h-4 w-4 shrink-0 text-terracotta" aria-hidden="true" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          </Reveal>
         </div>
       </section>
     </div>
