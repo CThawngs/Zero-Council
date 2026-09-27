@@ -132,7 +132,9 @@ Test lộ ra một điều: `effectivePlan` đọc đồng hồ hệ thống bê
 1. **Chưa mua được hàng thật.** Toàn bộ đường đi đã kiểm chứng bằng credential giả; payOS từ chối ở tầng cổng thanh toán (`214`). Cần tài khoản + 3 biến môi trường + webhook URL public của chủ dự án. Hướng dẫn: `README.md` → "Thanh toán (payOS)".
 2. **Webhook → PAID vẫn chưa từng quan sát được.** Cần URL public của Vercel. 2 link payOS thật đã tạo trong lúc test, đều **chưa trả tiền**.
 3. **Nhánh PostgREST chưa từng chạy với Supabase thật.** Mới có stub trong test — chứng minh request đúng và mapping đúng, không chứng minh Supabase đã cấu hình. Phải chạy lại sau khi đồng nghiệp apply migration. Lỗi lệch cột sẽ ra `SUPABASE_400:<body>`.
-4. **Migration + env chưa ai apply** (lượt 7): `web/supabase/migrations/0001_zc_orders.sql` chưa chạy lên project nào; `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` chưa có ở đâu cả. Đây là việc của đồng nghiệp, không phải của lượt này.
+4. **Migration + env chưa ai apply.** `0001_zc_orders.sql` **và `0002_zc_coupons.sql`** chưa chạy lên project nào; `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` chưa có ở đâu cả. Đây là việc của đồng nghiệp, không phải của lượt này.
+
+   **Hệ quả phải biết trước khi deploy:** `putOrder` nay gửi `user_email` / `coupon_code` / `coupon_percent` trong mọi lần ghi đơn. PostgREST **từ chối cột lạ** (`PGRST204`), nên **thiếu `0002` thì thanh toán hỏng luôn**, chứ không chỉ mất coupon. Lỗi sẽ hiện dạng `SUPABASE_400:<body>`. Phải apply đủ hai migration rồi mới deploy.
 5. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.
 6. **Claim vượt code** — landing copy giờ mô tả AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council". Repo **không có** engine AI, không có provider call, không có auth, không có persistence, không có mã hoá nào. Đây là quyết định của chủ dự án theo yêu cầu bỏ ngôn ngữ demo; nếu muốn thu hồi thì chỉ sửa `i18n.ts`.
 7. Tỷ giá USD là chuỗi tĩnh trong `plans.ts`, **không phải** hằng số env. Khi cần đổi, sửa `plans.ts` (rule 28.3: giá lấy từ nguồn chân lý do chủ dự án cung cấp).
