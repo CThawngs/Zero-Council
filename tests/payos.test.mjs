@@ -5,12 +5,26 @@ import { discountFor } from '../web/src/lib/payos/discount.ts';
 
 const KEY = 'checksum-key-for-tests';
 
-test('payload is key-sorted and skips empty values', () => {
+test('payload is key-sorted and keeps empty values as key=', () => {
   assert.equal(
     toSignaturePayload({ returnUrl: 'https://x/return', amount: 139000, description: 'ZC Pro', orderCode: 7, cancelUrl: 'https://x/cancel' }),
     'amount=139000&cancelUrl=https://x/cancel&description=ZC Pro&orderCode=7&returnUrl=https://x/return'
   );
-  assert.equal(toSignaturePayload({ b: 2, a: 1, c: null, d: '' }), 'a=1&b=2');
+  assert.equal(toSignaturePayload({ b: 2, a: 1, c: null, d: '' }), 'a=1&b=2&c=&d=');
+});
+
+test('stripping a null field breaks the signature (live v2 finding)', () => {
+  // The live API returned `expiredAt: null`. If empty fields were skipped when signing,
+  // `expiredAt` could be removed from the payload without the signature breaking.
+  const withEmpty = { orderCode: 7, amount: 139000, expiredAt: null };
+  const signature = signData(withEmpty, KEY);
+  assert.ok(verifySignature(withEmpty, signature, KEY));
+  assert.equal(
+    verifySignature({ orderCode: 7, amount: 139000 }, signature, KEY),
+    false,
+    'a payload missing the empty field must not verify'
+  );
+  assert.equal(verifySignature({ ...withEmpty, expiredAt: '2026-10-01' }, signature, KEY), false);
 });
 
 test('signature verifies against the same checksum key only', () => {
