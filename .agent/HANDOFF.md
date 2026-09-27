@@ -26,7 +26,7 @@ Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các work
 12. **Order store lên Supabase** (lượt 7): migration `public.zc_orders`, `orders.ts` đọc/ghi qua PostgREST bằng `fetch`, `serverEnv` tách khỏi `payos/`, 7 test với stub PostgREST.
 13. **Workflow `sync-vercel-env.yml`** (lượt 7): bấm tay trong GitHub Actions để đẩy 5 secret sang Vercel — dành cho người không có quyền vào Vercel dashboard. Deploy vẫn tự động bằng push.
 
-## Evidence (trên working tree này, chưa commit lúc ghi)
+## Evidence (lượt 7, đã commit 7f39fbe)
 
 Tất cả lệnh chạy tại `web/`, budget test ở root.
 
@@ -109,7 +109,7 @@ Tất cả lệnh chạy tại `web/`, budget test ở root.
 ## Bàn giao
 
 1. ~~Sửa code + docs~~ — xong.
-2. **Commit lượt 7 chưa làm**: logo 24px, 4 màu persona, fix scroll, order store Supabase đang nằm chưa commit trên `product-voice-ui` sau `f748243`.
+2. **Lượt 7 đã commit và push** lên `product-voice-ui` sau `f748243` (7f39fbe). PR #10 vẫn OPEN, chờ thanh toán thật.
 3. Push lên PR #10 (đang mở) — **cần chủ dự án duyệt**. PR #10 vẫn chờ verify thanh toán thật mới merge.
 4. **Đồng nghiệp**: apply `web/supabase/migrations/0001_zc_orders.sql`, đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env, đăng ký webhook URL payOS.
 5. **Chủ dự án**: tạo tài khoản payOS + điền 3 credential — theo hướng dẫn trong `README.md`.
