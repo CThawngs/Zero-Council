@@ -65,8 +65,8 @@ Yêu cầu lượt này (chủ dự án): bỏ toàn bộ ngôn ngữ demo, đ�
 ## Cấp 8 — Thanh toán payOS end-to-end (lượt 4, 2026-09-26)
 
 - [x] `web/src/lib/payos/signature.ts` — HMAC SHA256 theo chuẩn payOS, `timingSafeEqual`.
-- [x] `web/src/lib/payos/env.ts` — đọc secret bằng key động. **Bắt buộc**: `process.env.PAYOS_*` literal bị Next inline lúc build thành `undefined` (đã gặp thật: webhook trả 503 vĩnh viễn).
-- [x] `web/src/lib/payos/orders.ts` — order store file JSON, `PAID` là trạng thái kết thúc.
+- [x] `web/src/lib/serverEnv.ts` — đọc secret bằng key động. **Bắt buộc**: `process.env.PAYOS_*` literal bị Next inline lúc build thành `undefined` (đã gặp thật: webhook trả 503 vĩnh viễn). Tách khỏi `payos/` vì Supabase cũng dùng.
+- [x] `web/src/lib/payos/orders.ts` — order store Postgres (Supabase) qua PostgREST; `PAID` là trạng thái kết thúc.
 - [x] `web/src/lib/payos/discount.ts` — bảng mã từ `PAYLOS_DISCOUNT_CODES`; trống = từ chối mọi mã.
 - [x] `POST /api/payos/create-payment` — amount lấy từ `plans.ts`; `POST /v2/payment-requests`; verify chữ ký response; trả `checkoutUrl`.
 - [x] `POST /api/payos/webhook` — verify chữ ký + so số tiền với order đã lưu.
@@ -81,9 +81,26 @@ Yêu cầu lượt này (chủ dự án): bỏ toàn bộ ngôn ngữ demo, đ�
 - [ ] **Chủ dự án**: tạo tài khoản payOS, điền 3 biến môi trường, đăng ký webhook URL. Hướng dẫn trong `README.md` mục "Thanh toán (payOS)".
 - [ ] Mua được hàng thật: chưa chạy được vì không có credential thật. payOS trả `214` (cổng không tồn tại) khi dùng key giả — chứng minh request đã tới đúng endpoint, chỉ thiếu tài khoản.
 
+## Cấp 9 — Order store lên Supabase + chuẩn bị xoá project local (lượt 7, 2026-09-27)
+
+Yêu cầu: khi xoá sạch folder ở máy, app + secret vẫn phải chạy. Deploy + auth + tạo project
+Supabase là của đồng nghiệp, không thuộc phạm vi task này.
+
+- [x] `web/supabase/migrations/0001_zc_orders.sql` — hợp đồng bảng `public.zc_orders`. Nằm trong repo để review được, không nằm trong máy ai. DDL **không** chạy được qua PostgREST, phải qua CLI / SQL Editor / Management API.
+- [x] `orders.ts` chuyển sang Postgres qua PostgREST bằng `fetch` — **không thêm dependency** (vẫn 4 gói runtime).
+- [x] `PAID` là kết thúc nằm **trong chính câu lệnh ghi** (`status.neq.PAID`), không chỉ ở caller.
+- [x] Host có đĩa tạm (Vercel) mà thiếu DB thì **fail loudly**, không rơi về file. Guard dùng `VERCEL=1` chứ không dùng `NODE_ENV` — `next start` cũng là production build và là cách verify local, dùng `NODE_ENV` sẽ chặn nhầm.
+- [x] Fallback file JSON chỉ để chạy local trước khi có Supabase.
+- [x] `tests/order-store.test.mjs` — 7/7 pass với stub PostgREST (URL, method, mapping 2 chiều, PAID terminal, lỗi schema, guard đĩa tạm, fallback local).
+- [x] `.env.example` ghi rõ `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` và chỗ đặt secret ở host.
+- [x] Evidence thật trên `next start -p 3200`: create-payment 503 khi thiếu env, order không tồn tại 404, đọc đơn gieo sẵn 200 rồi 404 sau khi xoá file.
+- [ ] **Đồng nghiệp**: apply `web/supabase/migrations/0001_zc_orders.sql` lên project Supabase.
+- [ ] **Đồng nghiệp**: đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env.
+- [ ] **Chưa verify**: nhánh PostgREST mới chỉ chạy với stub, chưa chạy với Supabase thật. Phải test lại sau khi project tồn tại.
+- [ ] **Chưa chạm**: `SUPABASE_ACCESS_TOKEN` (`sbp_`) để apply migration không tự động, vì tạo gì đó trong project của người khác cần đồng nghiệp tự chạy.
+
 ## Ngoài scope
 
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
 - [ ] Subscription + entitlement: `PAID` hiện chỉ là trạng thái order, chưa gắn gói vào tài khoản nào (chưa có auth). Hạn mức 2/4/8 advisor vẫn là con số hiển thị.
-- [ ] Order store file JSON không dùng được trên serverless / nhiều instance — nâng Postgres/Supabase khi cần.
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.

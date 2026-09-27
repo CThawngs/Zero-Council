@@ -13,7 +13,7 @@ Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các work
 ## Đã làm
 
 1. Font: `Fraunces` → `Literata` (`web/src/app/fonts.ts`, weight 500/600, subset `latin` + `vietnamese`), Inter giữ nguyên; `globals.css` đổi `--font-serif` và bỏ fallback chain cũ.
-2. Hero glow: thêm đúng một `.glow` brass theo spec; `CouncilOrb` 4 node chuyển sang cùng hue brass, phân cấp bằng opacity; bỏ `--node-color`.
+2. Hero glow: thêm đúng một `.glow` brass theo spec. ~~`CouncilOrb` 4 node chuyển sang cùng hue brass, phân cấp bằng opacity; bỏ `--node-color`~~ — **đã hoàn tác lượt 7**, xem mục 10.
 3. Theme toggle: xoá hẳn khỏi `Header`, `SettingsView`, `AppContext` (`Theme`/`toggleTheme`), `types.ts`, và bỏ khối palette `html.light` trong `globals.css`.
 4. Copy: viết lại toàn bộ EN + VI trong `i18n.ts`; xoá key chết; header không còn dòng phụ dưới logo; nav public = How it works / Why Zero Council / Pricing; hero, 3 card How-it-works, 3 card framework, section mới "Why Zero Council" (thay cho access map), footer `© 2026 Zero Council.`
 5. `PricingView` được render thật (`App.tsx`, view `pricing` là public page).
@@ -21,6 +21,10 @@ Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các work
 7. `/fixture` + `council-fixture.ts` chuyển từ "illustrative" sang "reference".
 8. **Hệ thống pricing** (lượt 3, giá chủ dự án chốt 2026-09-26): `data/plans.ts` là nguồn giá duy nhất; 6 màn hiển thị giá đọc từ đó; checkout luôn nêu VNĐ là số thật.
 9. **Thanh toán payOS end-to-end** (lượt 4): 3 route server (`create-payment`, `webhook`, `orders/[orderCode]`), trang `/checkout/return`, nút "Thanh toán qua PayOS" trong drawer, bảng mã giảm giá server-side, `.env.example`, 4 test HMAC.
+10. **Logo header + khôi phục màu persona** (lượt 7): dùng lại `CouncilOrb` ở kích thước mark 24px trong header; 4 node màu persona quay lại sau khi lượt 2 đã xoá nhầm.
+11. **Sửa bug chuyển view không về đầu trang** (lượt 7): `navigate()` thiếu `window.scrollTo(0, 0)`.
+12. **Order store lên Supabase** (lượt 7): migration `public.zc_orders`, `orders.ts` đọc/ghi qua PostgREST bằng `fetch`, `serverEnv` tách khỏi `payos/`, 7 test với stub PostgREST.
+13. **Workflow `sync-vercel-env.yml`** (lượt 7): bấm tay trong GitHub Actions để đẩy 5 secret sang Vercel — dành cho người không có quyền vào Vercel dashboard. Deploy vẫn tự động bằng push.
 
 ## Evidence (trên working tree này, chưa commit lúc ghi)
 
@@ -89,17 +93,24 @@ Tất cả lệnh chạy tại `web/`, budget test ở root.
 
 1. **Chưa mua được hàng thật.** Toàn bộ đường đi đã kiểm chứng bằng credential giả; payOS từ chối ở tầng cổng thanh toán (`214`). Cần tài khoản + 3 biến môi trường + webhook URL public của chủ dự án. Hướng dẫn: `README.md` → "Thanh toán (payOS)".
 2. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.
-3. **Order store là một file JSON** (`ponytail:`): một tiến trình Node + ổ đĩa bền. Hỏng trên serverless, trên nhiều instance, và race khi ghi đồng thời.
-4. **Claim vượt code** — landing copy giờ mô tả AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council". Repo **không có** engine AI, không có provider call, không có auth, không có persistence, không có mã hoá nào. Đây là quyết định của chủ dự án theo yêu cầu bỏ ngôn ngữ demo; nếu muốn thu hồi thì chỉ sửa `i18n.ts`.
-5. Mô tả "cyan/magenta + streak lines" trong yêu cầu không khớp code: không có class `glow` hay màu cyan/magenta nào trong repo trước khi sửa; nguồn màu đa sắc là 4 node persona của `CouncilOrb`. Đã hiện thực hoá theo ý định "chỉ còn 1 hào quang brass".
-6. Tỷ giá USD là chuỗi tĩnh trong `plans.ts`, **không phải** hằng số env. Khi cần đổi, sửa `plans.ts` (rule 28.3: giá lấy từ nguồn chân lý do chủ dự án cung cấp).
-7. Mã giảm giá chưa có giá trị nào được duyệt — bảng đọc từ `PAYLOS_DISCOUNT_CODES`, để trống là từ chối mọi mã.
-8. `.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.
+3. **Nhánh PostgREST chưa từng chạy với Supabase thật.** Mới có stub trong test — chứng minh request đúng và mapping đúng, không chứng minh Supabase đã cấu hình. Phải chạy lại sau khi đồng nghiệp apply migration. Lỗi lệch cột sẽ ra `SUPABASE_400:<body>`.
+4. **Migration + env chưa ai apply** (lượt 7): `web/supabase/migrations/0001_zc_orders.sql` chưa chạy lên project nào; `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` chưa có ở đâu cả. Đây là việc của đồng nghiệp, không phải của lượt này.
+5. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.
+6. **Claim vượt code** — landing copy giờ mô tả AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council". Repo **không có** engine AI, không có provider call, không có auth, không có persistence, không có mã hoá nào. Đây là quyết định của chủ dự án theo yêu cầu bỏ ngôn ngữ demo; nếu muốn thu hồi thì chỉ sửa `i18n.ts`.
+7. Tỷ giá USD là chuỗi tĩnh trong `plans.ts`, **không phải** hằng số env. Khi cần đổi, sửa `plans.ts` (rule 28.3: giá lấy từ nguồn chân lý do chủ dự án cung cấp).
+8. Mã giảm giá chưa có giá trị nào được duyệt — bảng đọc từ `PAYLOS_DISCOUNT_CODES`, để trống là từ chối mọi mã.
+9. **`colorToken` trong `types.ts` vẫn chưa component nào dùng.** 4 màu persona đã quay lại orb, nhưng thẻ advisor trong app vẫn chưa dùng trường này.
+10. Logo 24px đọc ra **3 chấm nằm ngang, không phải 4 chấm trên vòng** — vì logo không xoay nên scene phẳng, node 0°/180° chiếu về chung tâm. Đã ghi trong comment CSS. Muốn đúng 4 thì phải bật lại spin hoặc dùng SVG phẳng.
+11. `.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.
+12. **Workflow chưa từng gọi Vercel thật.** 5/5 test pass với HTTP stub — chứng minh URL, method, header, payload, xử lý 403 và dọn file tạm. Không chứng minh Vercel nhận token hay body đúng schema. Chạy một lần sau khi có `VERCEL_TOKEN`.
+13. **`actions/checkout` đang ghim tag `@v4`, chưa phải SHA** (rule 20). Chưa "dùng thật" nên chấp nhận được, nhưng phải đổi trước lần chạy thật đầu tiên.
+14. **Còn phụ thuộc đồng nghiệp ở 3 chỗ**, không giảm được bằng workflow: (a) deploy, (b) apply migration, (c) **redeploy sau mỗi lần đổi secret** — Vercel chụp biến theo từng deployment. Muốn bỏ hẳn (c) thì cách duy nhất là thêm chủ dự án vào Vercel project.
 
 ## Bàn giao
 
 1. ~~Sửa code + docs~~ — xong.
-2. ~~Commit trên `product-voice-ui`~~ — xong, đã push.
-3. Push + PR vào `main` — **cần chủ dự án duyệt** (commit thanh toán chưa push).
-4. Chủ dự án làm phần PayOS: tài khoản, credential, webhook URL — theo hướng dẫn trong `README.md`.
-5. Dừng server tạm trước khi kết thúc.
+2. **Commit lượt 7 chưa làm**: logo 24px, 4 màu persona, fix scroll, order store Supabase đang nằm chưa commit trên `product-voice-ui` sau `f748243`.
+3. Push lên PR #10 (đang mở) — **cần chủ dự án duyệt**. PR #10 vẫn chờ verify thanh toán thật mới merge.
+4. **Đồng nghiệp**: apply `web/supabase/migrations/0001_zc_orders.sql`, đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env, đăng ký webhook URL payOS.
+5. **Chủ dự án**: tạo tài khoản payOS + điền 3 credential — theo hướng dẫn trong `README.md`.
+6. Dừng server tạm trước khi kết thúc.

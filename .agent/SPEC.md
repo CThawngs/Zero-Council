@@ -75,9 +75,12 @@ Giao diện sản phẩm song ngữ EN/VI cấu trúc quyết định khó: đ�
 - AC-22: Số tiền thanh toán lấy từ `plans.ts` ở server, không bao giờ từ request của client. Client chỉ gửi `planId` (+ `code`).
 - AC-23: Webhook payOS chỉ đổi trạng thái order khi (a) `verifySignature` chạy qua `timingSafeEqual` với Checksum Key và (b) `data.amount` khớp đúng `amountVnd` đã lưu. Sai chữ ký → 401, sai số tiền → 409, không có order → 404, `code` lạ → 400. Không có đường nào tự báo PAID.
 - AC-24: `POST /v2/payment-requests` (payOS v2; `/v1/payment/create` đã 404). Response cũng phải verify signature trước khi trả `checkoutUrl` cho trình duyệt.
-- AC-25: Mọi secret đọc qua `payosEnv(key)` (dynamic). Không dùng `process.env.PAYOS_*` dạng literal — Next inline lúc build thành `undefined` và webhook trả 503 vĩnh viễn.
+- AC-25: Mọi secret đọc qua `serverEnv(key)` (dynamic). Không dùng `process.env.PAYOS_*` dạng literal — Next inline lúc build thành `undefined` và webhook trả 503 vĩnh viễn.
 - AC-26: Order `PAID` là trạng thái kết thúc. Webhook muộn (`01` failed) không được hạ một order đã trả.
 - AC-27: Trạng thái plan chưa được cấp cho tài khoản nào — không có auth. Trang `/checkout/return` chỉ báo trạng thái đơn, không mở khoá gì.
+- AC-28: Order store đọc/ghi Postgres (`public.zc_orders`) qua PostgREST bằng `fetch`; không thêm dependency. Hợp đồng bảng nằm trong `web/supabase/migrations/0001_zc_orders.sql`.
+- AC-29: Không có `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` thì chỉ được rơi về file JSON khi **đĩa bền**. Guard theo `VERCEL=1` (đĩa tạm), KHÔNG theo `NODE_ENV` — `next start` là production build và là cách verify local, dùng `NODE_ENV` sẽ chặn nhầm. Host đĩa tạm mà thiếu DB thì throw, không ghi file.
+- AC-30: Xoá sạch project local không được làm app hoặc secret mất. Secret nằm ở env của host; code nằm ở GitHub. Order store phải theo, nếu không thì deploy xong là mất đơn.
 
 ## Verify cuối
 
@@ -95,7 +98,8 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 - Risk: bảng giá là dữ liệu thương mại, không có nguồn chân lý trong repo. Đã xử lý: giá do chủ dự án cung cấp và nằm trong `data/plans.ts`; cấu hình đổi giá = sửa đúng file đó, không sửa 6 chỗ hiển thị.
 - Risk: nhiều chỗ hiển thị giá dễ lệch số. Giảm thiểu: mọi màn đọc từ `PLANS`/`planPrice`/`planAmountLine`; không component nào hard-code con số.
 - Risk: `Reveal` không còn fallback khi thiếu `IntersectionObserver`; trình duyệt không hỗ trợ sẽ giữ nội dung ở trạng thái trước khi hiện. Recovery: thêm CSS fallback trong `globals.css` khi cần.
-- Risk: order store là một file JSON (`ponytail:`) — hỏng trên serverless (FS ephemerals), trên nhiều instance, và race khi ghi đồng thời. Recovery: nâng sang Postgres/Supabase; shape `readAll`/`markOrder` đã là đúng shape cho việc đó.
+- Risk: order store đã nâng sang Postgres/Supabase. Còn lại: race khi hai webhook cùng lúc ghi một order (đã giảm nhờ `status.neq.PAID` nằm trong chính câu ghi, nhưng chưa có transaction). Nếu đổi sang nhiều instance mà vẫn để fallback file thì phải set DB, nếu không guard chỉ bắt được Vercel.
+- Risk: nhánh PostgREST **chưa từng chạy với Supabase thật**, mới chỉ có stub. Nếu tên cột lệch migration sẽ ra `SUPABASE_400:<body>` — body có trong message để tìm ra cột nào sai. Bắt buộc test lại sau khi project tồn tại, trước khi nhận tiền thật.
 - Risk: `PAID` chỉ là trạng thái order, chưa cấp quyền cho tài khoản nào. Người mua thấy "đã nhận thanh toán" nhưng chưa có gì mở — phải nói rõ với chủ dự án trước khi bán.
 - Risk: webhook cần URL HTTPS public. Localhost không nhận được webhook; test local phải dùng tunnel (cloudflared/ngrok).
 - Risk: nếu payOS đổi cách chuẩn hoá chữ ký response, `verifySignature` chặn người mua thật. Dấu hiệu nhận biết nằm trong log `[payos] create-payment rejected: response signature did not verify`; sửa `toSignaturePayload` theo tài liệu mới.
@@ -115,3 +119,5 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 - Landing copy mô tả AI/BYOK/mã hoá trong khi repo chưa có: chủ dự án quyết định làm giai đoạn 2 hay thu hồi claim.
 - Required GitHub checks và ruleset được xác nhận sau khi push PR mới.
 - Không deploy, cấu hình cloud, tạo account/provider hoặc dùng secret. Lượt thanh toán: việc cần chủ dự án làm là tạo tài khoản payOS, điền 3 biến môi trường, và đăng ký webhook URL — không phải viết code.
+- **DELEGATED (lượt 7, 2026-09-27)**: deploy, auth và tạo project Supabase là của đồng nghiệp chủ dự án, ngoài phạm vi. Việc chờ đồng nghiệp: apply `web/supabase/migrations/0001_zc_orders.sql`, đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env. Không tự tạo gì trong project của người khác.
+- Xoá local (rule 12): **mốc 70–80% không phải quyền xoá**. Folder local hiện 628 MB, trong đó `node_modules` 438 MB + `.next` 189 MB; pnpm store 5.4 GB nằm ngoài folder. Dữ liệu nặng không phải `.env.local` (vài trăm byte).
