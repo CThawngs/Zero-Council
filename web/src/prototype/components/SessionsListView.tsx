@@ -109,7 +109,7 @@ export const SessionsListView: React.FC = () => {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="rounded-md border border-border bg-background px-2 py-1 text-[10px] font-medium text-brass">
-                        {t.fixture}
+                        {t.notImplemented}
                       </span>
                       <span className="rounded-md border border-border bg-background px-2 py-1 text-[10px] text-ink-muted">
                         {frameworkLabel(session.framework)}

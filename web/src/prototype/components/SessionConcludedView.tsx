@@ -103,13 +103,13 @@ export const SessionConcludedView: React.FC = () => {
               <h2 className="mt-2 font-serif text-2xl text-ink">{t.concludedTitle}</h2>
             </div>
             <span className="self-start rounded-md border border-brass/35 bg-background px-2.5 py-1 text-xs text-brass">
-              {t.fixtureOutput}
+              {t.fixtureNotConsensus}
             </span>
           </div>
 
           <div className="mt-6 space-y-6">
             <div>
-              <h3 className="text-sm font-semibold text-ink">{t.sampleOutputLabel}</h3>
+              <h3 className="text-sm font-semibold text-ink">{t.recommendation}</h3>
               <p className="mt-2 font-serif text-xl leading-relaxed text-ink">
                 {currentSession.synthesis.coreOutput}
               </p>
@@ -175,7 +175,7 @@ export const SessionConcludedView: React.FC = () => {
             { scenario: currentSession.scenarios.bad, accent: 'text-terracotta' },
           ].map(({ scenario, accent }) => (
             <article key={scenario.title} className="rounded-2xl border border-border bg-surface p-5">
-              <span className={`text-xs font-semibold ${accent}`}>{t.fixture}</span>
+              <span className={`text-xs font-semibold ${accent}`}>{t.illustrativeOnly}</span>
               <h3 className="mt-3 font-serif text-xl text-ink">{scenario.title}</h3>
               <p className="mt-2 text-sm leading-relaxed text-ink-muted">{scenario.description}</p>
               <ul className="mt-4 space-y-2 border-t border-border pt-4">
@@ -206,7 +206,7 @@ export const SessionConcludedView: React.FC = () => {
                 <div className="border-b border-border pb-3">
                   <h3 className="font-medium text-ink">{testimony.heading}</h3>
                   <p className="mt-1 text-[11px] text-ink-muted">
-                    {t.modelLabel}: {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.fixture}
+                    {t.modelLabel}: {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.notImplemented}
                   </p>
                 </div>
                 <p className="mt-4 text-sm leading-relaxed text-ink">{testimony.primaryText}</p>

@@ -1,0 +1,59 @@
+# Đẩy 5 biến lên Vercel, chạy 1 lần tay, không trigger tự động.
+#
+# Vì sao cần: Vercel Git integration lấy biến lúc build TỪ DASHBOARD của Vercel, không
+# đọc từ GitHub. Secret đặt trong GitHub mà không có workflow này thì build vẫn ra app
+# không có secret — Next inline `process.env.X` literal thành `undefined`, build vẫn xanh,
+# webhook trả 503 vĩnh viễn. Đã gặp đúng lỗi đó ở lượt trước.
+#
+# Đây là đường LƯU GIÁ TRỊ, không phải đường deploy. Deploy đã tự động: push vào GitHub là
+# Vercel build. Logic nằm ở .github/scripts/sync-vercel-env.sh, test ở
+# tests/sync-vercel-env.test.mjs.
+#
+# Nguyên tắc an toàn — đổi một trong số thì phải nghĩ:
+#   1. `workflow_dispatch` là trigger DUY NHẤT. Không thêm `push`, không thêm
+#      `pull_request`. Một push bất kỳ không bao giờ tự mang secret production đi nơi khác.
+#   2. Chỉ dùng `actions/checkout` (của chính GitHub) để lấy script trong repo — không dùng
+#      action bên thứ ba nào, nên không có action nào tự cập nhật được vào job đang cầm
+#      secret. `checkout` đang ghim theo tag `@v4`: PHẢI đổi sang SHA trước lần chạy thật
+#      đầu tiên (rule 20). Tag trên action bên thứ ba là đường vào của việc đọc secret.
+#   3. `environment: production` — có thể bắt buộc người duyệt trước khi chạy.
+#
+# Cần tạo 7 GitHub secrets (Settings → Secrets and variables → Actions). 5 cái đầu là
+# credential; 3 cái sau cần đồng nghiệp cấp:
+#   VERCEL_TOKEN              — token có quyền ghi lên project
+#   VERCEL_PROJECT_ID_OR_NAME — tên hoặc id project trên Vercel
+#   VERCEL_TEAM_ID            — bắt buộc nếu project thuộc team; bỏ trống nếu cá nhân
+#   PAYLOS_CLIENT_ID / PAYOS_API_KEY / PAYLOS_CHECKSUM_KEY
+#   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+
+name: Sync Vercel env
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    # Đặt required reviewer ở Settings → Environments → production nếu muốn chặn người khác.
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Đẩy biến
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT: ${{ secrets.VERCEL_PROJECT_ID_OR_NAME }}
+          VERCEL_TEAM: ${{ secrets.VERCEL_TEAM_ID }}
+          PAYLOS_CLIENT_ID: ${{ secrets.PAYOS_CLIENT_ID }}
+          PAYLOS_API_KEY: ${{ secrets.PAYOS_API_KEY }}
+          PAYLOS_CHECKSUM_KEY: ${{ secrets.PAYOS_CHECKSUM_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: .github/scripts/sync-vercel-env.sh

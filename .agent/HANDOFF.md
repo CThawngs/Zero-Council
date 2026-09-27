@@ -1,88 +1,116 @@
-# HANDOFF — Zero Council Vietnamese font fix
+# HANDOFF — Zero Council product voice, Literata, brass-only hero
 
-Cập nhật: 2026-09-25. Governance khi thu evidence: v7.1. Repo đã nâng lên v7.4 ngày 2026-09-26 (PR #8) — evidence dưới đây thu dưới v7.1, không tự động hợp lệ dưới v7.4. Xem `.agent/00_INDEX.md`.
+Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các worktree khác không đụng tới; handoff cũ của `vi-font-fix` giữ nguyên lịch sử ở commit trước.
 
 ## Git và phạm vi
 
-- Worktree: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council\.worktrees\vi-font-fix`
-- Branch: `vi-font-fix`
-- Base: `49ec347` (`origin/main` tại task start, sau khi PR #6 merge)
+- Worktree: `C:\Users\nguye\OneDrive\Documents\Projects\Zero-Council\.worktrees\product-voice-ui`
+- Branch: `product-voice-ui`
+- Base: `83ee993` (`origin/main` sau PR #9 merge)
 - Remote: `https://github.com/CThawngs/Zero-Council.git`
-- Main checkout và các worktree khác (`responsive-polish`, `ui-ux-local-mock`, `feature-prototype-ui-integration`) unchanged.
-- Không mở lại PR #4, #5 hoặc #6.
+- **Đã push** `product-voice-ui` (4 commit: `ce05457`, `c2f0dc4`, `2234875`, `8d951f8`). **PR chưa mở** — chờ chủ dự án duyệt.
 
-## Nguyên nhân (đã kiểm chứng, không phải giả định)
+## Đã làm
 
-`globals.css` khai báo `--font-sans: "Inter"` và `--font-serif: "Fraunces"`, nhưng repo **không có** `next/font`, `@font-face` hay file `.woff2` nào. Tên font chỉ là chuỗi trong stack nên browser luôn fallback.
+1. Font: `Fraunces` → `Literata` (`web/src/app/fonts.ts`, weight 500/600, subset `latin` + `vietnamese`), Inter giữ nguyên; `globals.css` đổi `--font-serif` và bỏ fallback chain cũ.
+2. Hero glow: thêm đúng một `.glow` brass theo spec. ~~`CouncilOrb` 4 node chuyển sang cùng hue brass, phân cấp bằng opacity; bỏ `--node-color`~~ — **đã hoàn tác lượt 7**, xem mục 10.
+3. Theme toggle: xoá hẳn khỏi `Header`, `SettingsView`, `AppContext` (`Theme`/`toggleTheme`), `types.ts`, và bỏ khối palette `html.light` trong `globals.css`.
+4. Copy: viết lại toàn bộ EN + VI trong `i18n.ts`; xoá key chết; header không còn dòng phụ dưới logo; nav public = How it works / Why Zero Council / Pricing; hero, 3 card How-it-works, 3 card framework, section mới "Why Zero Council" (thay cho access map), footer `© 2026 Zero Council.`
+5. `PricingView` được render thật (`App.tsx`, view `pricing` là public page).
+6. Hydration mismatch: `<body suppressHydrationWarning>` tại `layout.tsx` — do extension (Grammarly) chèn `data-gr-ext-installed` / `cz-shortcut-listen` vào `<body>`, không phải code app.
+7. `/fixture` + `council-fixture.ts` chuyển từ "illustrative" sang "reference".
+8. **Hệ thống pricing** (lượt 3, giá chủ dự án chốt 2026-09-26): `data/plans.ts` là nguồn giá duy nhất; 6 màn hiển thị giá đọc từ đó; checkout luôn nêu VNĐ là số thật.
+9. **Thanh toán payOS end-to-end** (lượt 4): 3 route server (`create-payment`, `webhook`, `orders/[orderCode]`), trang `/checkout/return`, nút "Thanh toán qua PayOS" trong drawer, bảng mã giảm giá server-side, `.env.example`, 4 test HMAC.
+10. **Logo header + khôi phục màu persona** (lượt 7): dùng lại `CouncilOrb` ở kích thước mark 24px trong header; 4 node màu persona quay lại sau khi lượt 2 đã xoá nhầm.
+11. **Sửa bug chuyển view không về đầu trang** (lượt 7): `navigate()` thiếu `window.scrollTo(0, 0)`.
+12. **Order store lên Supabase** (lượt 7): migration `public.zc_orders`, `orders.ts` đọc/ghi qua PostgREST bằng `fetch`, `serverEnv` tách khỏi `payos/`, 7 test với stub PostgREST.
+13. **Workflow `sync-vercel-env.yml`** (lượt 7): bấm tay trong GitHub Actions để đẩy 5 secret sang Vercel — dành cho người không có quyền vào Vercel dashboard. Deploy vẫn tự động bằng push.
 
-Đo bằng canvas `measureText` với tên font giả (`__zzz__`) làm mốc:
+## Evidence (lượt 7, đã commit 7f39fbe)
 
-- `Fraunces` cho width giống hệt tên font giả → **không được cài**. Mọi heading serif vì thế rơi về `Georgia`.
-- `Georgia` có dấu tiếng Việt nhưng thiết kế dấu rất yếu, khớp với ảnh báo lỗi của bạn.
-- `Inter` tình cờ có sẵn trên máy này, nên phần sans nhìn ổn và che mất vấn đề.
-
-## Đã triển khai (task này)
-
-- `web/src/app/fonts.ts` (mới): `Inter` + `Fraunces` qua `next/font/google`, `subsets: ['latin', 'vietnamese']`, `display: 'swap'`, expose `--font-inter` / `--font-fraunces`.
-- `web/src/app/layout.tsx`: gắn `sans.variable` + `serif.variable` vào `<html>`.
-- `web/src/app/globals.css`: `--font-sans` / `--font-serif` trỏ vào biến trên; fallback dùng font có dấu tiếng Việt tốt (`system-ui`, `Segoe UI`, `Iowan Old Style`, `Palatino Linotype`, `Palatino`).
-- `globals.css`: bỏ `, Georgia, serif` thừa ở `.page-header h1` và `.panel-title` (đã nằm trong fallback chain).
-- Không thêm dependency; không đổi nội dung copy, không đổi layout, không đổi truth boundary.
-
-## Ranh giới runtime (không đổi)
-
-- Không có fetch/XHR/WebSocket từ UI, không có storage API, không có provider call, auth, payment, analytics.
-- `next/font` tải và self-host font ở **build time**; runtime không có request ra ngoài origin.
-- Build cần mạng lần đầu để tải font. Nếu build offline không có cache sẽ fail; recovery là `next/font/local` với file đặt sẵn.
-
-## Evidence
-
-Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7` (`fix(web): load Inter and Fraunces with the Vietnamese subset`, branch `vi-font-fix`).
-
-Evidence dưới đây chạy trên đúng source commit này. Commit kế tiếp chỉ cập nhật dòng SHA trong chính file handoff này và không đổi runtime source. Tất cả lệnh chạy tại worktree `vi-font-fix`, `web/` trừ budget/diff ở root.
+Tất cả lệnh chạy tại `web/`, budget test ở root.
 
 ### Static
 
-- `pnpm install --frozen-lockfile` — exit `0`, không thêm dependency.
-- `pnpm lint` — exit `0`.
-- `pnpm exec tsc --noEmit` — exit `0`.
-- `pnpm build` — exit `0`; compiled successfully, static pages generated.
-- 10 file `.woff2` trong `.next/static/media/` → font được self-host, không phải link ngoài.
-- `node --test tests/budget.test.mjs` — `2 pass, 0 fail`.
-- `git diff --check` — sạch.
+- `pnpm --dir web exec tsc --noEmit` — exit `0`.
+- `pnpm --dir web lint` — exit `0`.
+- `pnpm --dir web build` — exit `0`.
+- `node --test tests/budget.test.mjs` — exit `0`.
 
-### Browser QA (dev server `http://127.0.0.1:3212`, Playwright)
+### Browser QA (prod build, `next start -p 3202`)
 
-- `document.fonts` liệt kê `Inter` và `Fraunces` ở trạng thái `loaded`, weight range `100 900`.
-- `html` class chứa `inter_…-module__…__variable` và `fraunces_…-module__…__variable`.
-- Computed `h1` = `Fraunces, "Fraunces Fallback", "Iowan Old Style", …`; computed `body` = `Inter, "Inter Fallback", system-ui, …`.
-- Pixel signature (canvas render + hash): chữ với `Ủy quyền riêng tư — Giao diện hội đồng cục bộ` và bộ dấu nặng `Ỷ Ỵ ỹ Ặ ặ ẫ ầ ễ ệ ọ ỏ` khác `monospace` → browser không thay glyph từng ký tự.
-- `Fraunces` render khác `Georgia` → bug fallback Georgia đã hết.
-- `h1` serif và `body` sans cho hai pixel signature khác nhau → không nhầm font.
-- Request audit: `externalRequests: []` — không có request ra ngoài `http://127.0.0.1:3212`, không có `fonts.googleapis.com` / `fonts.gstatic.com`.
-- VI toggle: `documentElement.lang = "vi"`, title `Zero Council — Giao diện hội đồng cục bộ`, heading `Cấu trúc lựa chọn khó.` đúng dấu, `hasMojibake: false` (không có `U+FFFD`).
-- Layout regression 320/360/375/390/414/600/640/768/900/1024/1280/1440: `scrollWidth == innerWidth`, `offenders: []`, `headerH: 76`, `maxCtrlRight <= width - 16` ở mọi width.
-- Console: không error.
+- Landing: nav đúng 3 mục, logo không dòng phụ, không có nút theme, hero tag/headline/body/2 nút đúng spec, card trust dùng `ShieldCheck` với câu "Your conversations are encrypted and visible only to you."
+- Computed `h1` = `Literata, "Literata Fallback", Georgia, "Times New Roman", serif`; `document.fonts` = `Literata 500 loaded`, `Inter 400/500/600 loaded`.
+- Font VI: `measureText` trên canvas cho `quyết định` (210.14) / `phương án` (210.62) / `ễ ậ ở ự` (121.60) khác fallback-face (200.83 / 201.55 / 128.00) và khác Georgia → glyph do webfont vẽ, không rơi fallback từng ký tự.
+- Glow: `getComputedStyle(.glow).backgroundImage` = đúng chuỗi radial-gradient trong spec.
+- Orb nodes: cả 4 = `rgb(201, 162, 75)`, opacity `1 / 0.78 / 0.56 / 0.34`.
+- Flow: Start free council → nhập câu hỏi → Get recommendation; màn kết luận hiện "Council recommendation / Recommendation / Review conditions / Next step", không trùng nhãn.
+- Quét DOM từng view (landing, session-active, session-concluded, sessions, advisors, integrations, settings) bằng regex `demo|sample|prototype|fixture|illustrative|walkthrough|not connected|local only` → 0 hit, trừ nhãn trạng thái BYOK "Not connected".
+- VI: `document.title` = `Zero Council — Hội đồng quyết định AI`, `lang="vi"`, hero + 3 card Why Zero Council + footer dịch đúng.
+- Console: không message nào.
+- `<body>` không có attribute lạ (chỉ `class`).
 
-### Lighthouse (chrome-devtools, snapshot mode)
+### Pricing (prod `-p 3205`)
 
-- Mobile: Accessibility `100`, Best Practices `100`, SEO `100`, Agentic Browsing `100`; `33` passed, `0` failed.
+- EN landing teaser: `Free $0/mo · Up to 2`, `Pro $5.99/mo · Up to 4`, `Ultra $16.99/mo · Up to 8`.
+- Pricing 3 card EN: `$0/mo` / `$5.99/mo` / `$16.99/mo`; VI: `0₫/tháng` / `139.000₫/tháng` / `379.000₫/tháng`.
+- Checkout EN: Amount = `₫139,000 (~$5.99)`; dòng "Charged in Vietnamese Đồng (VNĐ) via PayOS. USD shown for reference only." **có**; Discount "Base price before any code: ₫139,000 (~$5.99)".
+- Checkout VI: Amount = `₫139,000 (~$5.99)`, dòng USD **không** hiện; Discount "Giá gốc trước khi áp mã: ₫139,000 (~$5.99)".
+- Checkout Free = `₫0 (~$0)`, Ultra = `₫379,000 (~$16.99)`.
+- Settings > Plan EN: `Free · Current plan · $0/mo`, `Pro $5.99/mo`, `Ultra $16.99/mo`.
+- Billing history EN `Free $0/mo`; VI `Free 0₫/tháng`; danh sách hoá đơn rỗng (chưa có billing backend).
+- Console sạch; `scrollWidth == clientWidth` (không overflow).
+- Sweep repo: 0 match `149.000|149000|149,000|299.000|299000|149k|299k|3 advisors|6 advisors|2/3/6`.
 
-## Git / PR
+### Thanh toán payOS (prod `-p 3210` → `-p 3212`, credential giả)
 
-- Source commit: `eec591be938d8cf1108bd6de4b8e600f16f9bdd7`.
-- Không mở lại PR #4, #5, #6.
-- PR number, required checks và ruleset status: ghi sau khi push.
-- Self-merge PR mới chỉ sau khi xác nhận `mergeable=MERGEABLE`, `mergeStateStatus=CLEAN`, không có required check pending và ruleset cho phép.
+- `node --test tests/payos.test.mjs` — 4 pass / 0 fail. Payload sort đúng thứ tự alphabet, bỏ giá trị rỗng; chữ ký 64 hex; đổi 1 field là vỡ chữ ký; chữ ký rác / thiếu / cắt cụt đều `false` chứ không throw; bảng mã rỗng thì từ chối mọi mã, entry rác bị bỏ qua.
+- `create-payment` (curl, thân JSON viết ra file vì PowerShell nuốt dấu nháy):
+  - `{"planId":"free"}` → `400 FREE_PLAN_NOT_BILLABLE`
+  - `{"planId":"enterprise"}` → `400 UNKNOWN_PLAN`
+  - `{"planId":"pro","code":"FAKE"}` → `400 UNKNOWN_DISCOUNT_CODE`
+  - `{"planId":"pro","code":"welcome"}` → `502 PAYLOS_REJECTED`
+  - `{"planId":"ultra"}` → `502 PAYOS_REJECTED`
+  - Server log: `create-payment rejected: HTTP 200 code=214 body={"code":"214","desc":"Cổng thanh toán không tồn tại hoặc đã tạm dừng…"}` → request đã tới đúng endpoint payOS v2, chỉ thiếu cổng thật.
+- `webhook` (ký bằng chính `signature.ts` của repo, secret `test-checksum-key`):
+  - không có signature → `401 invalid signature`
+  - signature ký trên amount khác → `401`
+  - amount bị đổi (1000 vs 139000) → `409 amount mismatch`
+  - orderCode lạ → `404 unknown order`
+  - `code: "99"` → `400 unknown code`
+  - hợp lệ → `200 {"ok":true}`, store chuyển `PENDING` → `PAID` kèm `paidAt` + `reference` + `bankAccount`
+  - webhook `01` (failed) đến sau → `200` nhưng order **vẫn `PAID`**
+- Trình duyệt (prod build, port 3212): Pricing → Choose Pro → drawer hiện `AMOUNT ₫139,000 (~$5.99)` + dòng EN-only PayOS + nút "Pay with PayOS". Bấm nút → hiện lỗi, **không** rời trang (đúng hành vi khi chưa cấu hình).
+- `/checkout/return?orderCode=…` cho order `PAID` → heading `Đã nhận thanh toán`, số tiền `₫129,000 (~$5.99)`.
+
+### Ba lỗi thật đã bắt được (đáng đọc)
+
+1. **`process.env.PAYOS_CHECKSUM_KEY` bị Next inline lúc build** → biến thành `undefined` → webhook trả `503 not configured` mãi mãi. Sửa bằng cách đọc dynamic qua `payosEnv(key)`. Đây là loại lỗi im lặng: test type và lint đều xanh.
+2. **Endpoint sai**: `/v1/payment/create` (docs cũ) trả `404 Endpoint not found`. payOS hiện dùng `POST /v2/payment-requests`. Chỉ phát hiện được vì log đã in HTTP status + body thay vì chỉ `code`/`desc`.
+3. **`data.code` không tồn tại**: payOS đặt `code` ở top-level envelope, không phải trong `data`. Đọc sai → mọi webhook rơi về `PENDING`, kể cả thanh toán thật. Test bắt được vì trang quay lại báo trung thực `PENDING` thay vì `PAID` giả.
+
+## OPEN
+
+1. **Chưa mua được hàng thật.** Toàn bộ đường đi đã kiểm chứng bằng credential giả; payOS từ chối ở tầng cổng thanh toán (`214`). Cần tài khoản + 3 biến môi trường + webhook URL public của chủ dự án. Hướng dẫn: `README.md` → "Thanh toán (payOS)".
+2. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.
+3. **Nhánh PostgREST chưa từng chạy với Supabase thật.** Mới có stub trong test — chứng minh request đúng và mapping đúng, không chứng minh Supabase đã cấu hình. Phải chạy lại sau khi đồng nghiệp apply migration. Lỗi lệch cột sẽ ra `SUPABASE_400:<body>`.
+4. **Migration + env chưa ai apply** (lượt 7): `web/supabase/migrations/0001_zc_orders.sql` chưa chạy lên project nào; `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` chưa có ở đâu cả. Đây là việc của đồng nghiệp, không phải của lượt này.
+5. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.
+6. **Claim vượt code** — landing copy giờ mô tả AI advisors, AES-256 BYOK, mã hoá hội thoại, "Start free council". Repo **không có** engine AI, không có provider call, không có auth, không có persistence, không có mã hoá nào. Đây là quyết định của chủ dự án theo yêu cầu bỏ ngôn ngữ demo; nếu muốn thu hồi thì chỉ sửa `i18n.ts`.
+7. Tỷ giá USD là chuỗi tĩnh trong `plans.ts`, **không phải** hằng số env. Khi cần đổi, sửa `plans.ts` (rule 28.3: giá lấy từ nguồn chân lý do chủ dự án cung cấp).
+8. Mã giảm giá chưa có giá trị nào được duyệt — bảng đọc từ `PAYLOS_DISCOUNT_CODES`, để trống là từ chối mọi mã.
+9. **`colorToken` trong `types.ts` vẫn chưa component nào dùng.** 4 màu persona đã quay lại orb, nhưng thẻ advisor trong app vẫn chưa dùng trường này.
+10. Logo 24px đọc ra **3 chấm nằm ngang, không phải 4 chấm trên vòng** — vì logo không xoay nên scene phẳng, node 0°/180° chiếu về chung tâm. Đã ghi trong comment CSS. Muốn đúng 4 thì phải bật lại spin hoặc dùng SVG phẳng.
+11. `.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.
+12. **Workflow chưa từng gọi Vercel thật.** 5/5 test pass với HTTP stub — chứng minh URL, method, header, payload, xử lý 403 và dọn file tạm. Không chứng minh Vercel nhận token hay body đúng schema. Chạy một lần sau khi có `VERCEL_TOKEN`.
+13. **`actions/checkout` đang ghim tag `@v4`, chưa phải SHA** (rule 20). Chưa "dùng thật" nên chấp nhận được, nhưng phải đổi trước lần chạy thật đầu tiên.
+14. **Còn phụ thuộc đồng nghiệp ở 3 chỗ**, không giảm được bằng workflow: (a) deploy, (b) apply migration, (c) **redeploy sau mỗi lần đổi secret** — Vercel chụp biến theo từng deployment. Muốn bỏ hẳn (c) thì cách duy nhất là thêm chủ dự án vào Vercel project.
 
 ## Bàn giao
 
-1. ~~Stage source + governance docs.~~ — xong.
-2. ~~Commit final source/docs.~~ — xong.
-3. Push `vi-font-fix`, tạo PR mới vào `main`, kiểm tra checks rồi merge nếu sạch.
-4. Dừng QA server trước khi kết thúc.
-
-## ZeroVault
-
-- Đã refresh/search/load skill liên quan trong session.
-- Persist lesson về font fallback tiếng Việt và cách kiểm chứng bằng pixel signature: xem mục sau khi commit.
+1. ~~Sửa code + docs~~ — xong.
+2. **Lượt 7 đã commit và push** lên `product-voice-ui` sau `f748243` (7f39fbe). PR #10 vẫn OPEN, chờ thanh toán thật.
+3. Push lên PR #10 (đang mở) — **cần chủ dự án duyệt**. PR #10 vẫn chờ verify thanh toán thật mới merge.
+4. **Đồng nghiệp**: apply `web/supabase/migrations/0001_zc_orders.sql`, đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env, đăng ký webhook URL payOS.
+5. **Chủ dự án**: tạo tài khoản payOS + điền 3 credential — theo hướng dẫn trong `README.md`.
+6. Dừng server tạm trước khi kết thúc.

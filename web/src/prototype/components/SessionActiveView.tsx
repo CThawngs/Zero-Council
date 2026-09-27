@@ -99,7 +99,7 @@ export const SessionActiveView: React.FC = () => {
                     </p>
                   </div>
                   <span className="shrink-0 rounded-md border border-border bg-background px-2 py-1 text-[10px] text-brass">
-                    {t.fixture}
+                    {t.notImplemented}
                   </span>
                 </div>
                 <p className="mt-4 text-sm leading-relaxed text-ink">{testimony.primaryText}</p>

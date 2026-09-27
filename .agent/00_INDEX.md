@@ -4,11 +4,11 @@ Governance: v7.4. Cập nhật: 2026-09-26.
 
 ## Workspace hiện tại
 
-- Task worktree: `.worktrees/vi-font-fix`
-- Branch: `vi-font-fix`
-- Base: `origin/main` tại `49ec347` (PR #6 đã merge làm base)
+- Task worktree: `.worktrees/product-voice-ui`
+- Branch: `product-voice-ui`
+- Base: `83ee993` (`origin/main` sau PR #9 merge)
 - Remote: `https://github.com/CThawngs/Zero-Council.git`
-- Main checkout và các worktree khác (`responsive-polish`, `ui-ux-local-mock`, `feature-prototype-ui-integration`) không sửa/xóa.
+- Main checkout và các worktree khác (`responsive-polish`, `ui-ux-local-mock`, `feature-prototype-ui-integration`, `vi-font-fix`, `governance-v74`) không sửa/xóa.
 
 ## File agent
 
@@ -20,12 +20,12 @@ Governance: v7.4. Cập nhật: 2026-09-26.
 
 ## Hiện trạng
 
-- `/` là giao diện song ngữ local mock, dùng React/browser memory.
+- `/` là giao diện sản phẩm song ngữ chạy trong browser, state ở React/browser memory. Copy dùng giọng sản phẩm; kết quả hội đồng vẫn gắn nhãn minh họa.
 - `/fixture` chỉ hiển thị văn bản minh họa cố định.
-- `/api/council` là fixed fixture route; giao diện `/` không gọi route này.
-- Không có AI, provider request, auth, credential, payment, analytics, persistence hoặc deploy.
+- `/api/council` là fixed content route; giao diện `/` không gọi route này.
+- Không có AI, provider request, auth, credential, payment, analytics, persistence hoặc deploy — UI nói rõ là "chưa có trong bản này".
 - Provider/model chỉ là nhãn giao diện; paid/auth surfaces không được provision.
-- Copy người dùng không được phân tích; mọi walkthrough dùng fixture cố định.
+- Copy người dùng không được phân tích; mọi walkthrough dùng nội dung minh họa cố định.
 - Không thêm dependency mới; `lucide-react` là dependency icon duy nhất.
 - Responsive hiện tại: header CTA/settings từ 40rem, menu panel dưới 64rem, desktop nav từ 64rem; content shell dùng `min(100%, 72rem)`; modal dùng `calc(100% - gutter)` thay `100vw`.
 - Font: `Inter` (sans) + `Fraunces` (serif) nạp qua `next/font/google` trong `web/src/app/fonts.ts` với subset `latin` + `vietnamese`, tự self-host ở build. Không có request tới Google khi chạy.
