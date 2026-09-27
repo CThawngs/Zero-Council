@@ -726,8 +726,8 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--color-brass) 88%, white), var(--color-brass));
 }
 
-/* Advisors sit on one brass hue with decreasing opacity — the hero must not
-   introduce a second accent colour next to the halo. */
+/* Each advisor keeps its own persona hue, so the ring, core and halo stay in
+   brass — those are the scene, not the people. */
 .council-orb__node {
   position: absolute;
   inset: 0;
@@ -735,9 +735,8 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   width: 12%;
   height: 12%;
   border-radius: 999px;
-  background: var(--color-brass);
-  opacity: var(--node-opacity, 0.9);
-  box-shadow: 0 0 1.1rem color-mix(in srgb, var(--color-brass) 45%, transparent);
+  background: var(--node-color);
+  box-shadow: 0 0 1.1rem color-mix(in srgb, var(--node-color) 65%, transparent);
   transform: rotateY(var(--node-angle)) translateZ(calc(var(--orb-size) * 0.42));
 }
 
@@ -754,6 +753,35 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   .council-orb__scene {
     animation: none;
   }
+}
+
+/* Header brand mark: the hero orb at mark size, driven by the same --orb-size.
+   A logo must not spin, and a 1.1rem node glow smears across a 24px mark, so
+   both are overridden here instead of forking the component. */
+.brand-mark {
+  flex: none;
+}
+
+/* The override must land on .council-orb itself: that element re-declares
+   --orb-size, so a value set on the wrapper would lose the cascade. */
+.brand-mark .council-orb {
+  --orb-size: 1.5rem;
+  padding: 0;
+}
+
+.brand-mark .council-orb__scene {
+  animation: none;
+}
+
+.brand-mark .council-orb__node {
+  box-shadow: 0 0 0.25rem color-mix(in srgb, var(--node-color) 55%, transparent);
+  /* Mark only: cancel the orbit rotation so no node collapses to zero width at
+     24px. The hero keeps the un-billboarded transform — counter-rotating there
+     does not cancel the scene rotation, so the nodes came out stretched 8x29
+     instead of round. Consequence accepted in the mark: with the spin off and
+     the scene flat, the 0° and 180° nodes both project to the centre, so it
+     reads as three dots in a row rather than four on an orbit. */
+  transform: rotateY(var(--node-angle)) translateZ(calc(var(--orb-size) * 0.42)) rotateY(calc(-1 * var(--node-angle)));
 }
 
 .reveal {

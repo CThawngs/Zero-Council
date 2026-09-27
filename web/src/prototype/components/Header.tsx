@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
 import { Globe2, Menu, Settings, X } from 'lucide-react';
+import { CouncilOrb } from './CouncilOrb';
 
 const navItems = [
   { view: 'sessions', label: 'sessions' },
@@ -67,6 +68,11 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   const navigate = (view: ViewType) => {
     setCurrentView(view);
     setMenuOpen(false);
+    // Without this the scroll offset of the view being left is inherited by the
+    // view being entered — arriving half-way down the page — and clicking the
+    // brand while already on the target view is a no-op, because setCurrentView
+    // to the same value never re-renders.
+    window.scrollTo(0, 0);
   };
   const changeLanguage = () => {
     setLanguage(language === 'en' ? 'vi' : 'en');
@@ -92,7 +98,10 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
     <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border/80 bg-background/92 backdrop-blur-xl">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brass/70 to-transparent" />
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <button type="button" onClick={() => navigate('overview')} className="group min-h-11 min-w-0 shrink-0 text-left">
+        <button type="button" onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
+          <span className="brand-mark">
+            <CouncilOrb />
+          </span>
           <span className="block whitespace-nowrap font-serif text-xl tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
         </button>
 

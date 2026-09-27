@@ -1,8 +1,14 @@
 import React from 'react';
 
-// Four advisors, one hue. The brass halo behind the scene is the only glow in
-// the hero, so the nodes must not reintroduce a second accent colour.
-const NODE_OPACITIES = [1, 0.78, 0.56, 0.34] as const;
+// One node per advisor, each in that persona's colour. The brass halo behind
+// the scene is the only *glow*; the node hues are identity, not decoration, and
+// they stay muted so they read as one palette next to the brass.
+const NODE_COLORS = [
+  'var(--color-persona-rose)',
+  'var(--color-persona-sage)',
+  'var(--color-persona-slate)',
+  'var(--color-persona-ochre)',
+] as const;
 
 /**
  * Decorative 3D "council orbit" for the landing page hero.
@@ -17,13 +23,13 @@ export const CouncilOrb: React.FC = () => {
         <div className="council-orb__ring council-orb__ring--x" />
         <div className="council-orb__ring council-orb__ring--y" />
         <div className="council-orb__core" />
-        {NODE_OPACITIES.map((nodeOpacity, index) => (
+        {NODE_COLORS.map((color, index) => (
           <div
-            key={nodeOpacity}
+            key={color}
             className="council-orb__node"
             style={
               {
-                '--node-opacity': nodeOpacity,
+                '--node-color': color,
                 '--node-angle': `${index * 90}deg`,
               } as React.CSSProperties
             }
