@@ -7,10 +7,10 @@
  * expiry, single-use limits and per-plan scopes need a real table; move this into the order
  * store when the first one of those is actually needed.
  */
-import { payosEnv } from './env.ts';
+import { serverEnv } from '../serverEnv.ts';
 
 export const discountFor = (code: string): number | null => {
-  const raw = payosEnv('PAYLOS_DISCOUNT_CODES') ?? '';
+  const raw = serverEnv('PAYLOS_DISCOUNT_CODES') ?? '';
   for (const pair of raw.split(',')) {
     const separator = pair.indexOf('=');
     if (separator < 0) continue;

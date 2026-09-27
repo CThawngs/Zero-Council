@@ -1,6 +1,6 @@
 import { PLANS } from '@/prototype/data/plans';
 import { discountFor } from '@/lib/payos/discount';
-import { payosEnv } from '@/lib/payos/env';
+import { serverEnv } from '@/lib/serverEnv';
 import { signData, verifySignature } from '@/lib/payos/signature';
 import { putOrder } from '@/lib/payos/orders';
 
@@ -8,7 +8,7 @@ import { putOrder } from '@/lib/payos/orders';
 const PAYOS_API = 'https://api-merchant.payos.vn/v2/payment-requests';
 
 const env = (key: string): string => {
-  const value = payosEnv(key);
+  const value = serverEnv(key);
   if (!value) throw new Error(`MISSING_ENV:${key}`);
   return value;
 };

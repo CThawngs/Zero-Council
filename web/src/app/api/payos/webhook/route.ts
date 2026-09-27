@@ -1,4 +1,4 @@
-import { payosEnv } from '@/lib/payos/env';
+import { serverEnv } from '@/lib/serverEnv';
 import { getOrder, markOrder, type OrderStatus } from '@/lib/payos/orders';
 import { verifySignature } from '@/lib/payos/signature';
 
@@ -10,7 +10,7 @@ const STATUS_BY_CODE: Record<string, OrderStatus> = {
 };
 
 export async function POST(request: Request) {
-  const checksumKey = payosEnv('PAYLOS_CHECKSUM_KEY');
+  const checksumKey = serverEnv('PAYLOS_CHECKSUM_KEY');
   if (!checksumKey) {
     console.error('[payos] webhook rejected: PAYOS_CHECKSUM_KEY missing');
     return new Response('not configured', { status: 503 });
