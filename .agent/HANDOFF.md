@@ -89,10 +89,48 @@ Tất cả lệnh chạy tại `web/`, budget test ở root.
 2. **Endpoint sai**: `/v1/payment/create` (docs cũ) trả `404 Endpoint not found`. payOS hiện dùng `POST /v2/payment-requests`. Chỉ phát hiện được vì log đã in HTTP status + body thay vì chỉ `code`/`desc`.
 3. **`data.code` không tồn tại**: payOS đặt `code` ở top-level envelope, không phải trong `data`. Đọc sai → mọi webhook rơi về `PENDING`, kể cả thanh toán thật. Test bắt được vì trang quay lại báo trung thực `PENDING` thay vì `PAID` giả.
 
+## Coupon + subscription + admin (lượt 9)
+
+**Đồng nghiệp làm phần này.** Toàn bộ việc còn lại đã dựng xong quanh hợp đồng `currentUser()`, nên khi auth có mặt chỉ cần điền đúng một chỗ.
+
+**Quyết định đã chốt (theo trả lời của bạn):**
+
+| Câu hỏi | Chốt |
+|---|---|
+| Coupon giảm gì | **chỉ %**, áp dụng cho **một lần mua**, không cấp gói |
+| Thời hạn | **1 tháng**, khớp bảng giá `plans.ts`. Không bịa giá 2/3 tháng |
+| Hạn dùng | **tính lúc đọc**, không cron |
+| Ai xem trang admin | tài khoản có `role='admin'`. Admin là **thẻ vai trò**, nên nhiều người cùng làm |
+| Admin đầu tiên | **SQL seed thủ công** trong migration. Không có đường tự phong admin |
+| Trang admin đồng bộ | **poll 5s** |
+
+**Hai ô trong ảnh:** `expires_at` (null = không bao giờ hết hạn) và `max_total_redemptions` (null = không giới hạn). Trang admin đặt tên là "Never expires" và "Unlimited" cho đúng hai giá trị null đó.
+
+**Điều quan trọng nhất:** `zc_coupon_redemptions` có khóa chính `(coupon_code, user_email)`. "Một mã, một lần mỗi tài khoản" do **database** chặn, không phải bằng đọc-rồi-ghi (đọc-rồi-ghi thì hai lần đổi mã chạy song song đều lọt).
+
+**Coupon 100% không đi qua payOS** — payOS thu phí mỗi giao dịch và không biết "0 đồng" nghĩa là gì. Giao dịch này chốt ngay trong hệ thống: ghi đơn PAID, ghi redemption, cấp 1 tháng. Coupon dưới 100% thì **chưa** tiêu mã lúc checkout — chờ webhook xác nhận mới tiêu, nên bỏ checkout không mất lượt dùng.
+
+## Evidence (lượt 9)
+
+Chạy thật trên `next start -p 3200`, HTTP thật, 20 kịch bản:
+
+```
+18/20 pass
+```
+
+**2 fail là kỳ vọng của tôi trong test sai, không phải bug.** Đã verify riêng từng cái:
+
+- `ALREADY_USED` trả **400** chứ không phải 409 — vì `checkCoupon` chặn trước; 409 là nhánh *thua race* giữa check và redeem. File store xác nhận đúng **1** redemption `FULLFREE`. Cả hai đường đều chặn đúng.
+- `LAST_ADMIN` không nổ vì lúc đó còn **2** admin nên hạ 1 cái là hợp lệ. Chạy lại: hạ admin cuối → **409 LAST_ADMIN**, admin API vẫn truy cập được, phong lại → 200.
+
+Cổng chất lượng: test **28/28** (budget 2 · payos 5 · order-store 7 · sync 5 · coupon-store 9), `TSC=0`, `LINT=0`, `BUILD=0`.
+
+Test lộ ra một điều: `effectivePlan` đọc đồng hồ hệ thống bên trong hàm, không có tham số `now`. Test phải đóng băng `Date` toàn cục — và `new Date()` **không** đi qua `Date.now`, nên bịt `Date.now` một mình là test rỗng.
+
 ## OPEN
 
 1. **Chưa mua được hàng thật.** Toàn bộ đường đi đã kiểm chứng bằng credential giả; payOS từ chối ở tầng cổng thanh toán (`214`). Cần tài khoản + 3 biến môi trường + webhook URL public của chủ dự án. Hướng dẫn: `README.md` → "Thanh toán (payOS)".
-2. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.
+2. **Webhook → PAID vẫn chưa từng quan sát được.** Cần URL public của Vercel. 2 link payOS thật đã tạo trong lúc test, đều **chưa trả tiền**.
 3. **Nhánh PostgREST chưa từng chạy với Supabase thật.** Mới có stub trong test — chứng minh request đúng và mapping đúng, không chứng minh Supabase đã cấu hình. Phải chạy lại sau khi đồng nghiệp apply migration. Lỗi lệch cột sẽ ra `SUPABASE_400:<body>`.
 4. **Migration + env chưa ai apply** (lượt 7): `web/supabase/migrations/0001_zc_orders.sql` chưa chạy lên project nào; `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` chưa có ở đâu cả. Đây là việc của đồng nghiệp, không phải của lượt này.
 5. **`PAID` chưa cấp quyền gì cho tài khoản** vì chưa có auth. Người mua thấy "Đã nhận thanh toán" nhưng chưa có gói nào mở. Phải xử lý trước khi bán thật.

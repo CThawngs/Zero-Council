@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { toSignaturePayload, signData, verifySignature } from '../web/src/lib/payos/signature.ts';
-import { discountFor } from '../web/src/lib/payos/discount.ts';
+import { amountAfterCoupon } from '../web/src/lib/coupons.ts';
 
 const KEY = 'checksum-key-for-tests';
 
@@ -43,16 +43,12 @@ test('a forged or malformed signature is rejected, not thrown on', () => {
   }
 });
 
-test('discount table is opt-in, case-insensitive, and rejects junk entries', () => {
-  // Empty string, never `delete`: a deleted env var does not survive reassignment in the test runner.
-  process.env.PAYLOS_DISCOUNT_CODES = '';
-  assert.equal(discountFor('WELCOME'), null, 'unset table must reject every code');
-
-  process.env.PAYLOS_DISCOUNT_CODES = 'WELCOME=10000, partner=25000 ,BROKEN,NOAMOUNT=abc,NEARLY=1.5';
-  assert.equal(discountFor('welcome'), 10000);
-  assert.equal(discountFor(' PARTNER '), 25000);
-  for (const code of ['BROKEN', 'NOAMOUNT', 'NEARLY', 'MISSING']) {
-    assert.equal(discountFor(code), null, `${code} must not resolve`);
-  }
-  process.env.PAYLOS_DISCOUNT_CODES = '';
+test('a percentage coupon discounts to whole dong and never goes negative', () => {
+  assert.equal(amountAfterCoupon(139000, 20), 111200);
+  assert.equal(amountAfterCoupon(379000, 100), 0, 'a 100% coupon is the skip-payOS case');
+  assert.equal(amountAfterCoupon(1000, 100), 0);
+  assert.equal(amountAfterCoupon(1000, 0), 1000);
+  assert.equal(amountAfterCoupon(139000, 100), 0);
+  // Rounds, never truncates toward the customer in a way that loses a dong twice.
+  assert.equal(amountAfterCoupon(139, 50), 70);
 });
