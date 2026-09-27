@@ -1,5 +1,7 @@
 import { PLANS } from '@/prototype/data/plans';
-import { discountFor } from '@/lib/payos/discount';
+import { currentAccount } from '@/lib/currentUser';
+import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
+import { addGrant, redeemCoupon } from '@/lib/store/account';
 import { serverEnv } from '@/lib/serverEnv';
 import { signData, verifySignature } from '@/lib/payos/signature';
 import { putOrder } from '@/lib/payos/orders';
@@ -12,6 +14,8 @@ const env = (key: string): string => {
   if (!value) throw new Error(`MISSING_ENV:${key}`);
   return value;
 };
+
+const normaliseCouponCode = (code: string) => code.trim().toUpperCase();
 
 /**
  * The browser only ever names a plan. The amount is read from plans.ts on the server, so a
@@ -30,14 +34,66 @@ export async function POST(request: Request) {
   if (!plan) return Response.json({ error: 'UNKNOWN_PLAN' }, { status: 400 });
   if (plan.priceVnd <= 0) return Response.json({ error: 'FREE_PLAN_NOT_BILLABLE' }, { status: 400 });
 
-  const code = (body as { code?: unknown } | null)?.code;
-  let discount = 0;
-  if (typeof code === 'string' && code.trim() !== '') {
-    discount = discountFor(code) ?? -1;
-    if (discount < 0) return Response.json({ error: 'UNKNOWN_DISCOUNT_CODE' }, { status: 400 });
+  // A payment has to know who to grant the plan to, and a coupon has to know which account is
+  // spending its one use. Both come from the account, so an anonymous checkout is refused rather
+  // than allowed to create a paid order that grants nothing.
+  const account = await currentAccount();
+  if (!account) {
+    return Response.json({ error: 'NEED_LOGIN' }, { status: 401 });
   }
-  const amount = plan.priceVnd - discount;
-  if (amount <= 0) return Response.json({ error: 'DISCOUNT_TOO_LARGE' }, { status: 400 });
+
+  const code = (body as { code?: unknown } | null)?.code;
+  let percent = 0;
+  if (typeof code === 'string' && code.trim() !== '') {
+    const check = await checkCoupon(code, account.email);
+    if (!check.ok) {
+      return Response.json({ error: 'COUPON_REJECTED', reason: check.reason }, { status: 400 });
+    }
+    percent = check.percent;
+  }
+
+  const amount = amountAfterCoupon(plan.priceVnd, percent);
+  const orderCode = Date.now();
+
+  // A 100% coupon settles inside the system. payOS charges a fee per transaction and has no way
+  // to express "zero", so creating a payment request here would cost the merchant money to grant
+  // something that is already free. The redemption is taken first: it is the step that can lose a
+  // race, and losing it must not leave an order behind.
+  if (amount === 0) {
+    const redeemed = await redeemCoupon(code as string, account.email, percent, orderCode);
+    if (!redeemed) {
+      return Response.json({ error: 'COUPON_REJECTED', reason: 'ALREADY_USED' }, { status: 409 });
+    }
+    const now = new Date().toISOString();
+    await putOrder({
+      orderCode,
+      planId: plan.id,
+      amountVnd: 0,
+      amountUsd: '0.00',
+      status: 'PAID',
+      createdAt: now,
+      paidAt: now,
+      userEmail: account.email,
+      couponCode: normaliseCouponCode(code as string),
+      couponPercent: percent,
+    });
+    const grant = await addGrant({
+      userEmail: account.email,
+      planId: plan.id,
+      source: 'COUPON',
+      orderCode,
+      percent,
+    });
+    return Response.json({
+      orderCode,
+      planId: plan.id,
+      couponPercent: percent,
+      amountVnd: 0,
+      amountUsd: '0.00',
+      checkoutUrl: null,
+      grantedUntil: grant.expiresAt,
+    });
+  }
 
   let clientId: string;
   let apiKey: string;
@@ -52,7 +108,6 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
-  const orderCode = Date.now();
   const payload = {
     orderCode,
     amount,
@@ -94,6 +149,8 @@ export async function POST(request: Request) {
     return Response.json({ error: 'PAYLOS_RESPONSE_INVALID' }, { status: 502 });
   }
 
+  // The coupon is not consumed here. A redemption is recorded when the payment is confirmed, so
+  // an abandoned checkout does not burn the account's single use of the code.
   await putOrder({
     orderCode,
     planId: plan.id,
@@ -101,12 +158,14 @@ export async function POST(request: Request) {
     amountUsd: plan.priceUsd,
     status: 'PENDING',
     createdAt: new Date().toISOString(),
+    userEmail: account.email,
+    ...(percent > 0 ? { couponCode: normaliseCouponCode(code as string), couponPercent: percent } : {}),
   });
 
   return Response.json({
     orderCode,
     planId: plan.id,
-    discountVnd: discount,
+    couponPercent: percent,
     amountVnd: amount,
     amountUsd: plan.priceUsd,
     checkoutUrl: result.data.checkoutUrl,

@@ -2,40 +2,28 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 type SignableRecord = Record<string, unknown>;
 
-const EMPTY = new Set([undefined, null, 'null', 'NULL', '']);
-
 /**
  * payOS signs an object as a query string whose keys are sorted alphabetically
- * (https://payos.vn/docs/api/). Nested objects and arrays are JSON-encoded with
- * their own keys sorted, matching the reference implementation in payOS docs.
+ * (https://payos.vn/docs/api/).
+ *
+ * Null and empty values are KEPT, as `key=`. Proved against the live v2 API on
+ * 2026-09-27: a create-payment response carrying `expiredAt: null` verified only when the
+ * empty field stayed in the string, so skipping it rejected every real response.
+ *
+ * Keeping them is also the stricter of the two choices. Dropping empty values would make
+ * `null` and "field absent" produce the same signature, so a field could be stripped from
+ * the payload without the signature breaking.
  */
 const normalize = (value: unknown): string => {
-  if (Array.isArray(value)) {
-    return JSON.stringify(value.map((item) => sortByKey(item as Record<string, unknown>)));
-  }
-  if (value !== null && typeof value === 'object') {
-    return JSON.stringify(sortByKey(value as Record<string, unknown>));
-  }
   if (value === undefined || value === null) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
   return String(value);
 };
-
-const sortByKey = (record: Record<string, unknown>): Record<string, unknown> =>
-  Object.keys(record)
-    .sort()
-    .reduce<Record<string, unknown>>((sorted, key) => {
-      sorted[key] = record[key];
-      return sorted;
-    }, {});
 
 export const toSignaturePayload = (data: SignableRecord): string =>
   Object.keys(data)
     .sort()
-    .map((key) => {
-      const value = normalize(data[key]);
-      return EMPTY.has(value) ? '' : `${key}=${value}`;
-    })
-    .filter(Boolean)
+    .map((key) => `${key}=${normalize(data[key])}`)
     .join('&');
 
 export const signData = (data: SignableRecord, checksumKey: string): string =>

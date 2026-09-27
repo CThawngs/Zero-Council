@@ -34,8 +34,9 @@ yarn-error.log*
 .env*
 !.env.example
 
-# payOS order store (created at runtime, never committed)
+# runtime stores (created at runtime, never committed — they hold order and account emails)
 .zc-orders.json
+.zc-account.json
 
 # vercel
 .vercel

@@ -78,12 +78,13 @@ ZC_ORDER_STORE=/đường/dẫn/orders.json                  # chỉ khi CHƯA c
 >
 > Nếu bạn không có quyền vào Vercel project, xem mục **2c** bên dưới.
 
-### 2b. Bảng order (chỉ cần cho deploy)
+### 2b. Bảng order, coupon, subscription (chỉ cần cho deploy)
 
-Order lưu ở Postgres qua PostgREST. Trước tiên apply migration:
+Order lưu ở Postgres qua PostgREST. Apply **hai** migration, theo thứ tự:
 
 ```sh
 web/supabase/migrations/0001_zc_orders.sql
+web/supabase/migrations/0002_zc_coupons.sql
 ```
 
 Bằng một trong ba cách — Supabase CLI (`supabase db push`), SQL Editor trong dashboard, hoặc Management API `POST https://api.supabase.com/v1/projects/{ref}/database/query` với token `sbp_`. **DDL không chạy được qua PostgREST**, nên đừng thử POST file SQL vào `/rest/v1/`.
@@ -91,6 +92,35 @@ Bằng một trong ba cách — Supabase CLI (`supabase db push`), SQL Editor tr
 Tên bảng là `public.zc_orders`; các call REST dùng tên `zc_orders` (không có `public.`).
 
 Chưa apply thì app vẫn chạy local — rơi về file JSON. Nhưng trên Vercel (đĩa tạm) mà thiếu DB thì server **từ chối ghi order** thay vì âm thầm mất đơn.
+
+**Cần seed admin đầu tiên** sau khi apply `0002`. Chạy đúng một câu, một lần, bằng tay — đây là gốc tin cậy, nên không có đường nào tự phong admin được:
+
+```sql
+insert into zc_users (email, role) values ('email-cua-ban@example.com', 'admin')
+on conflict (email) do nothing;
+```
+
+Từ đó chính admin đó phong user khác lên `admin` trong trang `/admin`. Không có admin thì trang đó trả 403 cho mọi người.
+
+### 2b-bis. Chạy trang admin ở local
+
+Chưa có auth thì cần một đường đăng nhập giả, **chỉ ở máy bạn**. Thêm vào `web/.env.local`:
+
+```
+ZC_DEV_LOGIN_EMAIL=email-cua-ban@example.com
+```
+
+Rồi phong nó làm admin (tương đương câu SQL trên, nhưng áp cho file store local):
+
+```sh
+cd web
+node --experimental-strip-types scripts/promote.mjs email-cua-ban@example.com
+pnpm dev            # hoặc pnpm build && pnpm start
+```
+
+Mở `/admin`. Trang đồng bộ giữa các admin bằng cách poll mỗi 5 giây.
+
+`ZC_DEV_LOGIN_EMAIL` **tuyệt đối không được** đặt trên Vercel — biến đó khiến mọi khách truy cập đều đăng nhập thành tài khoản đó, và nếu tài khoản đó là admin thì cả trang quản lý coupon mở công khai. Code đã tự từ chối biến này khi phát hiện mình đang chạy trên Vercel.
 
 ### 2c. Không có quyền vào Vercel? Đẩy giá trị từ GitHub
 

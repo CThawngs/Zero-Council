@@ -16,6 +16,16 @@ export interface Order {
   paidAt?: string;
   reference?: string;
   bankAccount?: string;
+  /**
+   * Who bought it. Server-side only: the webhook has no session, so this is the sole link from a
+   * confirmed payment to the account that gets the plan. Deliberately absent from the public
+   * order route — order codes are timestamps and therefore walkable, and an email must not be
+   * readable by anyone who guesses one.
+   */
+  userEmail?: string;
+  /** The coupon this order was priced with. Not consumed until the webhook confirms payment. */
+  couponCode?: string;
+  couponPercent?: number;
 }
 
 const TABLE = 'zc_orders';
@@ -31,6 +41,9 @@ interface OrderRow {
   paid_at: string | null;
   reference: string | null;
   bank_account: string | null;
+  user_email: string | null;
+  coupon_code: string | null;
+  coupon_percent: number | null;
 }
 
 const toOrder = (row: OrderRow): Order => ({
@@ -43,6 +56,9 @@ const toOrder = (row: OrderRow): Order => ({
   ...(row.paid_at ? { paidAt: row.paid_at } : {}),
   ...(row.reference ? { reference: row.reference } : {}),
   ...(row.bank_account ? { bankAccount: row.bank_account } : {}),
+  ...(row.user_email ? { userEmail: row.user_email } : {}),
+  ...(row.coupon_code ? { couponCode: row.coupon_code } : {}),
+  ...(row.coupon_percent != null ? { couponPercent: row.coupon_percent } : {}),
 });
 
 const toRow = (order: Order): OrderRow => ({
@@ -55,6 +71,9 @@ const toRow = (order: Order): OrderRow => ({
   paid_at: order.paidAt ?? null,
   reference: order.reference ?? null,
   bank_account: order.bankAccount ?? null,
+  user_email: order.userEmail ?? null,
+  coupon_code: order.couponCode ?? null,
+  coupon_percent: order.couponPercent ?? null,
 });
 
 /**

@@ -99,8 +99,27 @@ Supabase là của đồng nghiệp, không thuộc phạm vi task này.
 - [ ] **Chưa verify**: nhánh PostgREST mới chỉ chạy với stub, chưa chạy với Supabase thật. Phải test lại sau khi project tồn tại.
 - [ ] **Chưa chạm**: `SUPABASE_ACCESS_TOKEN` (`sbp_`) để apply migration không tự động, vì tạo gì đó trong project của người khác cần đồng nghiệp tự chạy.
 
+## Coupon + subscription + trang admin
+
+- [x] Migration `0002_zc_coupons.sql`: `zc_users` (role), `zc_coupons`, `zc_coupon_redemptions` (khóa chính `(coupon_code, user_email)`), `zc_grants`; `ALTER zc_orders` thêm `user_email` / `coupon_code` / `coupon_percent`.
+- [x] `currentUser.ts` — **hợp đồng auth là 1 hàm**. `authenticateFromSession` để trống cho đồng nghiệp. `ZC_DEV_LOGIN_EMAIL` chỉ chạy local, **từ chối cứng** khi `VERCEL=1`.
+- [x] `lib/store/account.ts` — PostgREST + fallback file, 4 bảng, không thêm dependency.
+- [x] `lib/coupons.ts` — coupon **chỉ giảm %**, áp dụng cho **một lần mua**, không cấp gói.
+- [x] Coupon 100% **không gọi payOS**: ghi đơn PAID + redemption + grant 1 tháng ngay trong hàm.
+- [x] Coupon < 100%: **không tiêu mã lúc checkout**, chờ webhook xác nhận rồi mới tiêu + cấp quyền. Bỏ checkout không mất lượt dùng.
+- [x] Hạn dùng **tính lúc đọc**, không cron. Grant mới **cộng dồn** (`starts_at = max(now, expires_at hiện tại)`), mua sớm không mất ngày.
+- [x] `addMonth` kẹp ngày theo cuối tháng ngắn (31/01 → 28/02), không tràn sang tháng 3.
+- [x] API admin: CRUD coupon + đổi role, chặn server-side qua `adminOnly()`.
+- [x] Chặn bỏ admin cuối cùng (`LAST_ADMIN`) — không có đường quay lại.
+- [x] Trang `/admin`: CRUD + đổi role + **poll 5s** để các admin thấy nhau. Song ngữ en/vi.
+- [x] `web/scripts/promote.mjs` — đường local tương đương câu SQL seed admin đầu tiên.
+- [x] Test: `tests/coupon-store.test.mjs` 9/9; toàn bộ 28/28.
+- [x] Evidence app thật (`next start -p 3200`): 18/20 kịch bản, 2 fail là **kỳ vọng test sai**, đã verify riêng (xem HANDOFF).
+- [x] `.gitignore` chặn `.zc-account.json` — file store chứa email thật, gần như lọt vào commit.
+
 ## Ngoài scope
 
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
-- [ ] Subscription + entitlement: `PAID` hiện chỉ là trạng thái order, chưa gắn gói vào tài khoản nào (chưa có auth). Hạn mức 2/4/8 advisor vẫn là con số hiển thị.
+- [ ] **Auth (đồng nghiệp)**: chỉ cần làm `authenticateFromSession` trong `web/src/lib/currentUser.ts`. Mọi thứ còn lại đã dựng sẵn quanh nó.
+- [ ] Hạn mức 2/4/8 advisor vẫn là con số hiển thị, chưa có chỗ nào chặn.
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
