@@ -175,9 +175,18 @@ Webhook chỉ chuyển trạng thái đơn sang `PAID` khi chữ ký HMAC hợp 
 
 - Order lưu ở **Postgres** (`public.zc_orders`, xem mục 2b). Chưa cấu hình Supabase thì local rơi về file JSON (`ponytail:`: một tiến trình, ổ đĩa bền, có race khi ghi đồng thời). Trên host đĩa tạm mà thiếu DB, app **fail** chứ không rơi về file.
 - Nhánh Postgres **chưa từng chạy với Supabase thật** — mới chỉ có stub trong test. Chạy lại một đơn thật sau khi apply migration, trước khi nhận tiền.
-- Trạng thái `PAID` **không cấp quyền gì cho tài khoản** vì chưa có auth. Trang quay lại chỉ báo trạng thái đơn.
+- Coupon, subscription và trang admin `/admin` xem `BAN-GIAO-DONG-NGHIEP.md`. Phần auth là của đồng nghiệp, app chỉ chờ một hàm.
+- Đơn `PAID` **có** cấp gói cho tài khoản (1 tháng) — nhưng đi qua webhook, mà webhook chưa từng chạy thật. Cần đăng ký webhook URL public rồi thử một lượt thanh toán thật trước khi nhận tiền.
 - Chỉ thanh toán **một lần**, chưa có gia hạn định kỳ. Hạn mức 2/4/8 advisor là con số hiển thị, chưa có engine nào ép áp.
 - Cần kiểm tra lại tên trường `x-partner-code` nếu tài khoản payOS của bạn bật partner code (hiện route không gửi header này).
+
+## Tài khoản và Supabase do ai phụ trách
+
+Auth và Supabase là phần của **đồng nghiệp**, không phải phần này. Phần app chỉ chờ đúng một hàm: `authenticateFromSession` trong `web/src/lib/currentUser.ts`.
+
+Toàn bộ việc phía đồng nghiệp gom trong một file:
+
+**[BAN-GIAO-DONG-NGHIEP.md](BAN-GIAO-DONG-NGHIEP.md)** — apply migration, seed admin, đặt biến môi trường, điền hàm auth, bật webhook payOS, và thứ tự làm (sai thứ tự sẽ làm hỏng thanh toán).
 
 ## Tài liệu
 
