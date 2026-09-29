@@ -1,5 +1,6 @@
 import { serverEnv } from './serverEnv.ts';
 import { ensureUser, type AccountUser } from './store/account.ts';
+import { createClient } from './supabase/server.ts';
 
 export interface SessionUser {
   id: string;
@@ -24,8 +25,22 @@ export interface SessionUser {
  * Left for the colleague. Returning null means "no session", which is the correct answer for
  * every anonymous visitor and keeps the admin surface closed until real auth lands.
  */
+
+// Colleague: should be done nơw
 const authenticateFromSession = async (): Promise<SessionUser | null> => {
-  return null;
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  /**
+   * getUser lấy từ bên Server
+   * đã qua xử lý và kiểm tra từ bên Browser
+   */
+
+  if (!user?.email) return null;
+
+  return { id: user.id, email: user.email.trim().toLowerCase() };
 };
 
 const devEmail = (): string | null => {
