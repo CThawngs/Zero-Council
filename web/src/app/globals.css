@@ -222,10 +222,18 @@ body :is(button, [role="button"], a, summary):active:not(:disabled):not([aria-di
   padding-block: 1.5rem 2.5rem;
 }
 
-.page-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+@layer base {
+  .page-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: left;
+  }
+}
+
+.page-header h1,
+.page-header > p {
+  text-align: left;
 }
 
 .page-header h1 {
