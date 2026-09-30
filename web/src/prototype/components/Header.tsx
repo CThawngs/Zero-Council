@@ -130,6 +130,10 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
             <Globe2 className="h-4 w-4" aria-hidden="true" />
             <span className="text-[10px] font-semibold uppercase">{language}</span>
           </button>
+
+          {/* TEMP */}
+          <a href="/auth" className="nav-link whitespace-nowrap">{labels.nav.signIn}</a>
+
           {isWorkspace && (
             <button type="button" onClick={() => navigate('settings')} className="icon-button header-settings min-w-11" aria-label={labels.nav.settings}>
               <Settings className="h-4 w-4" />

@@ -10,7 +10,9 @@ export type ViewType =
   | 'settings'
   | 'billing'
   | 'pricing'
-  | 'privacy';
+  | 'privacy'
+  | 'sign-up'
+  | 'sign-in';
 
 export type Language = 'en' | 'vi';
 
