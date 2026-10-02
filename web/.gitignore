@@ -32,6 +32,11 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
+
+# runtime stores (created at runtime, never committed — they hold order and account emails)
+.zc-orders.json
+.zc-account.json
 
 # vercel
 .vercel

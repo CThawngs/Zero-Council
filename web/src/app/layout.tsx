@@ -4,14 +4,20 @@ import { sans, serif } from './fonts';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Zero Council — Local council interface',
-  description: 'A local bilingual interface demo using fixed sample content. No production service is connected.',
+  title: 'Zero Council — AI decision council',
+  description:
+    'Convene multiple AI advisors — each with a distinct model and perspective — to think through your decision before you commit.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
+    // suppressHydrationWarning on <body> as well: browser extensions (Grammarly,
+    // read-aloud helpers) inject attributes into <body> before React hydrates,
+    // which React reports as a mismatch it cannot patch.
     <html lang="en" className={`${sans.variable} ${serif.variable} h-full dark antialiased`} suppressHydrationWarning>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

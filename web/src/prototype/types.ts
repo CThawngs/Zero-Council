@@ -8,10 +8,13 @@ export type ViewType =
   | 'new-advisor'
   | 'api-keys'
   | 'settings'
-  | 'privacy';
+  | 'billing'
+  | 'pricing'
+  | 'privacy'
+  | 'sign-up'
+  | 'sign-in';
 
 export type Language = 'en' | 'vi';
-export type Theme = 'dark' | 'light';
 
 export type DecisionFramework =
   | 'Good / Normal / Bad Scenarios'

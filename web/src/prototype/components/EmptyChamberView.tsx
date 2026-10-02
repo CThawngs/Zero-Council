@@ -141,7 +141,7 @@ export const EmptyChamberView: React.FC = () => {
                   </div>
                 </div>
                 <span className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-ink-muted">
-                  {t.fixture}
+                  {t.notImplemented}
                 </span>
               </li>
             ))}

@@ -1,0 +1,6 @@
+# Script chạy trên Linux runner của GitHub Actions: CRLF làm bash chết
+# với `$'\r': command not found`. Khoang trống khoa chung thi de mac dinh.
+*.sh text eol=lf
+*.bash text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
