@@ -6,9 +6,16 @@ import {
   Language,
   ModelProvider,
   ViewType,
+  frameworkIdOf,
 } from '../types';
+import {
+  DeliberationCancelled,
+  runDeliberation,
+  type CommunicationMode,
+  type Round,
+} from '@/lib/deliberation/engine';
 import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
-import { copy, translations } from '../i18n';
+import { copy, modeLabel, translations, type Copy } from '../i18n';
 
 type ToastKey = keyof (typeof copy)['en'];
 type ToastValues = Record<string, string>;
@@ -26,6 +33,12 @@ interface AppContextType {
   currentSession: DeliberationSession;
   startNewSession: (question?: string, framework?: DeliberationSession['framework']) => void;
   setCurrentFramework: (framework: DeliberationSession['framework']) => void;
+  setCurrentMode: (mode: CommunicationMode) => void;
+  runRound: (prompt: string) => Promise<void>;
+  cancelRound: () => void;
+  isDeliberating: boolean;
+  selectedRoundIndex: number;
+  selectRound: (index: number) => void;
   purgeSessions: () => void;
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
@@ -46,43 +59,47 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 const nextSessionId = () => `session-${crypto.randomUUID()}`;
 
-const createSession = (
+const scenarioFixture = (t: Copy) => ({
+  good: { title: t.favorableTitle, subtitle: t.illustrativeOnly, description: t.favorableDescription, actions: [t.favorableActionOne, t.favorableActionTwo] },
+  normal: { title: t.baselineTitle, subtitle: t.illustrativeOnly, description: t.baselineDescription, actions: [t.baselineActionOne, t.baselineActionTwo] },
+  bad: { title: t.difficultTitle, subtitle: t.illustrativeOnly, description: t.difficultDescription, actions: [t.difficultActionOne, t.difficultActionTwo] },
+});
+
+const stancesOf = (personas: AdvisorPersona[]) =>
+  personas.reduce<Record<string, string>>((map, persona) => {
+    map[persona.id] = persona.stance;
+    return map;
+  }, {});
+
+const createSession = async (
   question: string,
   framework: DeliberationSession['framework'],
+  mode: CommunicationMode,
   personas: AdvisorPersona[],
   language: Language
-): DeliberationSession => {
+): Promise<DeliberationSession> => {
   const t = copy[language];
+  const round = await runDeliberation({
+    mode,
+    framework: frameworkIdOf(framework),
+    prompt: question,
+    language,
+    advisorIds: personas.map((persona) => persona.id),
+    advisorStances: stancesOf(personas),
+    roundIndex: 1,
+  });
   return {
     id: nextSessionId(),
     title: question,
     summary: t.sampleSessionSummary,
     framework,
+    mode,
     timestamp: new Date().toISOString(),
     relativeTime: t.sampleNow,
     status: 'Deliberating',
     advisors: personas,
-    testimonies: personas.slice(0, 3).map((persona) => ({
-      advisorId: persona.id,
-      heading: persona.name,
-      stanceBadge: persona.stance,
-      primaryText: persona.sampleQuote,
-      secondaryText: persona.instructions,
-    })),
-    synthesis: {
-      chairTitle: t.sampleChair,
-      chairRole: t.sampleNarrator,
-      statusBadge: t.fixtureNotConsensus,
-      coreOutput: t.sampleTakeaway,
-      stipulations: [t.sampleStipulationOne, t.sampleStipulationTwo],
-      nextAction: t.sampleNextAction,
-      quote: t.sampleQuote,
-    },
-    scenarios: {
-      good: { title: t.favorableTitle, subtitle: t.illustrativeOnly, description: t.favorableDescription, actions: [t.favorableActionOne, t.favorableActionTwo] },
-      normal: { title: t.baselineTitle, subtitle: t.illustrativeOnly, description: t.baselineDescription, actions: [t.baselineActionOne, t.baselineActionTwo] },
-      bad: { title: t.difficultTitle, subtitle: t.illustrativeOnly, description: t.difficultDescription, actions: [t.difficultActionOne, t.difficultActionTwo] },
-    },
+    rounds: [round],
+    scenarios: scenarioFixture(t),
   };
 };
 
@@ -94,33 +111,17 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
     'process-change': t.initialProcessTitle,
   };
   const localizedAdvisors = session.advisors.map((persona) => localizePersona(persona, language));
+  // Rounds are historical content, not chrome. They keep the language they were
+  // produced in — a real engine would answer in whatever language it was asked
+  // in, and replaying the transcript must not rewrite history. The UI flags a
+  // round whose language differs from the interface.
   return {
     ...session,
     title: localizedTitles[session.id] ?? session.title,
     summary: t.sampleSessionSummary,
     relativeTime: t.sample,
     advisors: localizedAdvisors,
-    testimonies: localizedAdvisors.map((persona) => ({
-      advisorId: persona.id,
-      heading: persona.name,
-      stanceBadge: persona.stance,
-      primaryText: persona.sampleQuote,
-      secondaryText: persona.instructions,
-    })),
-    synthesis: {
-      chairTitle: t.sampleChair,
-      chairRole: t.sampleNarrator,
-      statusBadge: t.fixtureNotConsensus,
-      coreOutput: t.sampleTakeaway,
-      stipulations: [t.sampleStipulationOne, t.sampleStipulationTwo],
-      nextAction: t.sampleNextAction,
-      quote: t.sampleQuote,
-    },
-    scenarios: {
-      good: { title: t.favorableTitle, subtitle: t.illustrativeOnly, description: t.favorableDescription, actions: [t.favorableActionOne, t.favorableActionTwo] },
-      normal: { title: t.baselineTitle, subtitle: t.illustrativeOnly, description: t.baselineDescription, actions: [t.baselineActionOne, t.baselineActionTwo] },
-      bad: { title: t.difficultTitle, subtitle: t.illustrativeOnly, description: t.difficultDescription, actions: [t.difficultActionOne, t.difficultActionTwo] },
-    },
+    scenarios: scenarioFixture(t),
   };
 };
 
@@ -133,6 +134,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
+  const [isDeliberating, setIsDeliberating] = useState(false);
+  const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
+  const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
+  const abortRef = useRef<AbortController | null>(null);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -175,13 +180,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     if (existing) {
       setCurrentSessionId(existing.id);
+      setSelectedRoundIndex(existing.rounds.length);
       setCurrentView('session-active');
       return;
     }
-    const session = createSession(question.trim(), framework, localizedPersonas, language);
-    setSessions((value) => [session, ...value]);
-    setCurrentSessionId(session.id);
-    setCurrentView('session-active');
+    void (async () => {
+      setIsDeliberating(true);
+      try {
+        const session = await createSession(
+          question.trim(),
+          framework,
+          currentMode,
+          localizedPersonas,
+          language
+        );
+        setSessions((value) => [session, ...value]);
+        setCurrentSessionId(session.id);
+        setSelectedRoundIndex(1);
+        setCurrentView('session-active');
+      } finally {
+        setIsDeliberating(false);
+      }
+    })();
   };
 
   const setCurrentFramework = (framework: DeliberationSession['framework']) => {
@@ -191,6 +211,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
   };
+
+  const setCurrentMode = (mode: CommunicationMode) => {
+    setCurrentModeState(mode);
+    setSessions((value) =>
+      value.map((session) => (session.id === currentSessionId ? { ...session, mode } : session))
+    );
+    showToast('toastModeChanged', { mode: modeLabel(mode, language) });
+  };
+
+  const cancelRound = () => {
+    abortRef.current?.abort();
+  };
+
+  const runRound = async (prompt: string) => {
+    const question = prompt.trim();
+    if (!question || isDeliberating) return;
+    const session = sessions.find((item) => item.id === currentSessionId);
+    if (!session) return;
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setIsDeliberating(true);
+    try {
+      const round: Round = await runDeliberation({
+        mode: session.mode,
+        framework: frameworkIdOf(session.framework),
+        prompt: question,
+        language,
+        advisorIds: session.advisors.map((persona) => persona.id),
+        advisorStances: stancesOf(session.advisors),
+        roundIndex: session.rounds.length + 1,
+        signal: controller.signal,
+      });
+      setSessions((value) =>
+        value.map((item) =>
+          item.id === currentSessionId ? { ...item, rounds: [...item.rounds, round] } : item
+        )
+      );
+      setSelectedRoundIndex(round.index);
+      showToast('toastRoundAdded', { round: String(round.index) });
+    } catch (error) {
+      if (error instanceof DeliberationCancelled) showToast('toastRoundCancelled');
+      else throw error;
+    } finally {
+      abortRef.current = null;
+      setIsDeliberating(false);
+    }
+  };
+
+  const selectRound = (index: number) => setSelectedRoundIndex(index);
 
   const purgeSessions = () => {
     setSessions([]);
@@ -241,6 +311,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentSession,
         startNewSession,
         setCurrentFramework,
+        setCurrentMode,
+        runRound,
+        cancelRound,
+        isDeliberating,
+        selectedRoundIndex,
+        selectRound,
         purgeSessions,
         personas: localizedPersonas,
         addPersona,

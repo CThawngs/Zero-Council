@@ -123,3 +123,50 @@ Supabase là của đồng nghiệp, không thuộc phạm vi task này.
 - [ ] **Auth (đồng nghiệp)**: chỉ cần làm `authenticateFromSession` trong `web/src/lib/currentUser.ts`. Mọi thứ còn lại đã dựng sẵn quanh nó.
 - [ ] Hạn mức 2/4/8 advisor vẫn là con số hiển thị, chưa có chỗ nào chặn.
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
+
+---
+
+# TODO — Deliberation loop (2026-09-27)
+
+Worktree `.worktrees/deliberation-loop`; branch `deliberation-loop`; base `cb4bee8` (`origin/main`).
+Yêu cầu lượt này (chủ dự án): nhìn được nhiều AI tranh luận với nhau; phương thức giao tiếp phải chọn được, không gói gọn một kiểu; data ảo trước, engine thật nối sau; không thiết kế lại layout.
+
+## Cấp 1 — Seam engine
+
+- [x] `web/src/lib/deliberation/plan.ts`: logic thuần, không phụ thuộc i18n — `clampScale`, `HAT_ORDER`, `MATRIX_*_IDS`, `MAX_WEIGHT`, `MAX_SCORE`, `planContributions`, `scoreMatrix`.
+- [x] `web/src/lib/deliberation/engine.ts`: `runDeliberation` là **một** hàm duy nhất mà UI gọi; `buildFixtureRound` đồng bộ để seed session mà không await. `FIXTURE_DELAY_MS = 900`.
+- [x] Engine trả **id** cho ma trận, UI map sang nhãn — giữ `plan.ts` test được bằng `node --test` không bundler.
+- [x] Không thêm dependency. Runtime vẫn đúng 4: `next`, `react`, `react-dom`, `lucide-react`.
+
+## Cấp 2 — Ba phương thức, người dùng chọn
+
+- [x] `independent` (không tham chiếu chéo) / `debate` (`rebuts`) / `chain` (`buildsOn`) — phân biệt được **bằng dữ liệu**, không bằng tên.
+- [x] Segmented control `role="group"` + `aria-pressed` trong `SessionActiveView`, khoá khi đang chờ.
+- [x] Đổi giữa phiên: áp cho vòng sau, vòng cũ giữ nguyên phương thức đã chạy. Có dòng "Applies from the next round".
+- [x] `vote` cố tình **không** làm: trùng Decision Matrix.
+
+## Cấp 3 — Mặt phằng tranh luận
+
+- [x] `RoundThread`: rail chọn vòng, câu hỏi, các đóng góp có badge tham chiếu chéo, phần Chair (đồng ý / bất đồng / đề xuất).
+- [x] `FrameworkPanel`: dispatch theo `round.frameworkOutput.kind` → 3 nhánh kịch bản / 6 khối Six Thinking Hats / bảng ma trận có trọng số.
+- [x] Ma trận: kéo weight chấm lại tổng ngay, đổi người dẫn đầu, weight 0 bị bỏ qua (không chia), tất cả tổng bằng 0 → `winnerId = null` thay vì bịa thắng.
+- [x] `SessionConcludedView` đọc vòng cuối, dùng chung `FrameworkPanel`, thay 3 bản sao `ScenarioBranch` trước đó.
+- [x] Bảngnghi ngôn ngữ ở cả `RoundThread` lẫn màn kết luận khi `round.language` khác ngôn ngữ đang xem.
+
+## Cấp 4 — Bất biến lịch sử
+
+- [x] Thêm bảngnghi `frameworkAppliesNext` khi `session.framework` khác `round.framework` — trước đó đổi framework **không hiện gì**, tưởng nút hỏng.
+- [x] Weight ma trận là view state, `key={index-framework}` reset theo vòng/framework; vòng đã xong không bị viết đè.
+
+## Cấp 5 — Kiểm chứng
+
+- [x] `npx tsc --noEmit` → 0. `npx eslint` → 0, không warning. `npx next build` → 0.
+- [x] `node --test tests/*.test.mjs` → **44/44** (28 cũ + 16 mới trong `tests/deliberation.test.mjs`).
+- [x] Test mới khoá 3 hợp đồng: 3 mode phân biệt được bằng `JSON.stringify`; kéo một weight không kéo theo các khoản khác; "không có người thắng" là câu trả lời hợp lệ.
+- [x] Test mới khoá parity i18n hai chiều + placeholder `{...}` khớp giữa en và vi.
+- [x] App thật (`next start -p 8793`): mode switch đổi loại badge; vòng 2 tạo được còn vòng 1 xem lại được; Hats = 6 khối, Matrix = bảng có weight, Scenarios = 3 nhánh; Cancel dừng vòng đang chờ; chuyển VI không vỡ.
+
+## Ngoài scope
+
+- [ ] Engine thật: thay thân `runDeliberation`. Cần thêm `onContribution` để stream từng cố vấn thay vì chờ trọn vòng.
+- [ ] Bảngnghi này viết sau khi đã lái app, không phải trước. `features/` + `FEATURE_MAP.md` (28.2) vẫn chưa sinh.

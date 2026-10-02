@@ -1,5 +1,6 @@
-import { AdvisorPersona, ApiKeyConfig, DeliberationSession, Language, ModelProvider, SupportedModel } from '../types';
+import { AdvisorPersona, ApiKeyConfig, DeliberationSession, Language, ModelProvider, SupportedModel, frameworkIdOf } from '../types';
 import { copy } from '../i18n';
+import { buildFixtureRound, type CommunicationMode } from '@/lib/deliberation/engine';
 
 const sessionFixture = (
   id: string,
@@ -8,29 +9,34 @@ const sessionFixture = (
   language: Language = 'en'
 ): DeliberationSession => {
   const t = copy[language];
+  const advisors = initialPersonas.map((persona) => localizePersona(persona, language));
+  // Seeded sessions get one round each, and each a different communication mode
+  // so the sessions list already shows that the mode is a real, visible choice.
+  const mode: CommunicationMode = id === 'team-priority' ? 'debate' : id === 'process-change' ? 'chain' : 'independent';
   return {
     id,
     title,
     summary: t.sampleSessionSummary,
     framework,
+    mode,
     timestamp: '2026-01-01T00:00:00Z',
     relativeTime: t.sample,
     status: 'Concluded',
-    advisors: initialPersonas.map((persona) => localizePersona(persona, language)),
-    testimonies: [
-      { advisorId: 'pragmatist', heading: t.pragmatistName, stanceBadge: t.pragmatistStance, primaryText: t.pragmatistQuote, secondaryText: t.pragmatistInstructions },
-      { advisorId: 'dreamer', heading: t.dreamerName, stanceBadge: t.dreamerStance, primaryText: t.dreamerQuote, secondaryText: t.dreamerInstructions },
-      { advisorId: 'skeptic', heading: t.skepticName, stanceBadge: t.skepticStance, primaryText: t.skepticQuote, secondaryText: t.skepticInstructions },
+    advisors,
+    rounds: [
+      buildFixtureRound({
+        mode,
+        framework: frameworkIdOf(framework),
+        prompt: title,
+        language,
+        advisorIds: advisors.map((persona) => persona.id),
+        advisorStances: advisors.reduce<Record<string, string>>((map, persona) => {
+          map[persona.id] = persona.stance;
+          return map;
+        }, {}),
+        roundIndex: 1,
+      }),
     ],
-    synthesis: {
-      chairTitle: t.sampleChair,
-      chairRole: t.sampleNarrator,
-      statusBadge: t.fixtureNotConsensus,
-      coreOutput: t.sampleTakeaway,
-      stipulations: [t.sampleStipulationOne, t.sampleStipulationTwo],
-      nextAction: t.sampleNextAction,
-      quote: t.sampleQuote,
-    },
     scenarios: {
       good: { title: t.favorableTitle, subtitle: t.illustrativeOnly, description: t.favorableDescription, actions: [t.favorableActionOne, t.favorableActionTwo] },
       normal: { title: t.baselineTitle, subtitle: t.illustrativeOnly, description: t.baselineDescription, actions: [t.baselineActionOne, t.baselineActionTwo] },
