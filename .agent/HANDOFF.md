@@ -154,3 +154,47 @@ Test lộ ra một điều: `effectivePlan` đọc đồng hồ hệ thống bê
 4. **Đồng nghiệp**: apply `web/supabase/migrations/0001_zc_orders.sql`, đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env, đăng ký webhook URL payOS.
 5. **Chủ dự án**: tạo tài khoản payOS + điền 3 credential — theo hướng dẫn trong `README.md`.
 6. Dừng server tạm trước khi kết thúc.
+
+---
+
+# HANDOFF — Deliberation loop (2026-09-27)
+
+Worktree `.worktrees/deliberation-loop`; branch `deliberation-loop`; base `cb4bee8` (`origin/main`).
+Các worktree cũ (`product-proposal-ui`, `feature-prototype-ui-integration`, `governance-v74`, `responsive-polish`, `ui-ux-local-mock`, `vi-font-fix`) **không đụng tới**, vẫn chờ chủ dự án quyết.
+
+## Đã làm
+
+1. **Seam engine**: `web/src/lib/deliberation/engine.ts` — `runDeliberation(req): Promise<Round>` là hàm duy nhất UI gọi. Thay engine thật = thay một thân hàm. Có block comment `DELEGATED` soi cùng kiểu với `authenticateFromSession` để không ai vá chỗ khác.
+2. **Logic thuần tách ra** `plan.ts` (không i18n, không dependency) để `node --test` chạy được không cần bundler. Engine trả **id** ma trận, UI map sang nhãn.
+3. **Ba phương thức chọn được** (`independent` / `debate` / `chain`), phân biệt bằng dữ liệu: không cross-ref / `rebuts` / `buildsOn`. Người dùng chọn giữa phiên, áp cho vòng sau.
+4. **`RoundThread`** + **`FrameworkPanel`**: rail chọn vòng, badge tham chiếu chéo, phần Chair; panel render 3 nhánh / 6 khối Hats / bảng ma trận có trọng số.
+5. **`SessionActiveView`** viết lại: chọn phương thức, composer chạy vòng tiếp, trạng thái chờ + Cancel, `AbortSignal`.
+6. **`SessionConcludedView`** đọc vòng cuối, dùng chung `FrameworkPanel`, xoá 3 bản sao `ScenarioBranch`.
+7. **Bảngnghi `frameworkAppliesNext`**: trước đó đổi framework giữa phiên **không hiện gì** vì panel bám `round.framework` — người dùng tưởng nút hỏng.
+8. **Test parity i18n** chốt thành test thường trực (parity hai chiều + placeholder khớp), không còn kiểm tay.
+9. Xoá `testimonies` + `synthesis` + `scenarios` không vòng; thay bằng `rounds: Round[]` + `mode`.
+
+## Evidence
+
+Lái app thật bằng `next start` (không dùng dev server — HMR hỏng):
+
+| Tiêu chí | Bằng chứng quan sát |
+|---|---|
+| Mode switch đổi loại badge | Round 2 ở Debate → `Answers The Pragmatist`, `Answers The Dreamer`; Round 1 giữ `Nobody saw the other answers.` |
+| Vòng 2 tạo được, vòng 1 xem lại được | Rail `Round 1 / Round 2 / Round 3`; bấm `Round 1` → về đúng nội dung independent |
+| Framework đổi hình dạng panel | Hats = 6 khối White/Red/Black/Yellow/Green/Blue; Matrix = bảng có weight; Scenarios = Favorable/Neutral/Difficult |
+| Kéo weight chấm lại tổng | weight 3,4,5,1 → 30/51/32 của 65. Đổi cost 3→1 → 28/45/22 của 55. Đổi 1,1,1,5 → 26/17/23 của 40, người dẫn đầu chuyển sang `Roll out everywhere` |
+| Cancel dừng vòng đang chờ | Panel "The council is deliberating…" hiện, bấm Cancel → rail vẫn 2 vòng, toast `Round stopped.` |
+| Song ngữ | `html[lang=vi]`, toàn bộ nhãn đổi, bảngnghi "tạo bằng tiếng English" hiện đúng |
+
+Cổng: `tsc` 0 · `eslint` 0 · `next build` 0 · `node --test` 44/44.
+
+## Cần bạn nhìn kỹ
+
+1. **Bug tôi tự tạo ra rồi tự sửa**: đổi framework giữa phiên lúc đầu **không hiện gì trên UI**. Tôi thêm bảngnghi thay vì sửa panel theo session, vì sửa panel sẽ phá nguyên tắc "vòng đã xong là lịch sử bất biến" mà phương thức giao tiếp đang giữ. Nếu bạn muốn đổi framework là thấy ngay thì phải đổi cả hai, tôi chưa làm.
+2. **Danh sách 3 phương thức là giả định của tôi.** Bạn nói "có thể chọn phương thức", không chốt cụ thể. `vote` tôi cố tình bỏ vì trùng Decision Matrix.
+3. **Ma trận đang chấm bằng weight view state.** Kéo slider không ghi vào round, chuyển vòng là về lại số cũ. Khi có engine thật, điều này có còn đúng không thì cần bạn chốt.
+4. **Chưa có CI** (rule 32.6 còn thiếu). Ba cổng trên tôi chạy tay.
+5. `actions/checkout` vẫn ghim tag `@v4` chứ không phải SHA (rule 20) — chưa dùng thật nên chấp nhận được, nhưng phải sửa trước lần chạy thật.
+6. `features/` + `FEATURE_MAP.md` (rule 28.2) vẫn chưa sinh.
+7. **PR chưa mở, chưa merge.** Cần bạn duyệt.
