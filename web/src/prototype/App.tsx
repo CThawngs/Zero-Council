@@ -20,11 +20,13 @@ import { SettingsView } from './components/SettingsView';
 import { BillingHistoryView } from './components/BillingHistoryView';
 import { PrivacyView } from './components/PrivacyView';
 import { PricingView } from './components/PricingView';
+import { SignInView } from './components/SignInView';
+import { SignUpView } from './components/SignUpView';
 
 const ChamberContent: React.FC = () => {
   const { currentView, t } = useApp();
   const mainRef = useRef<HTMLElement>(null);
-  const isPublicPage = currentView === 'overview' || currentView === 'privacy' || currentView === 'pricing';
+  const isPublicPage = currentView === 'overview' || currentView === 'privacy' || currentView === 'pricing' || currentView === 'sign-in' || currentView === 'sign-up';
 
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
@@ -49,6 +51,8 @@ const ChamberContent: React.FC = () => {
           {currentView === 'billing' && <BillingHistoryView />}
           {currentView === 'pricing' && <PricingView />}
           {currentView === 'privacy' && <PrivacyView />}
+          {currentView === 'sign-up' && <SignUpView />}
+          {currentView === 'sign-in' && <SignInView />}
         </main>
       </div>
       {isPublicPage && <Footer />}

@@ -40,32 +40,44 @@ export const SignUpView: React.FC = () => {
 
     return (
         <div>
-            <form onSubmit={handleSignUp}>
+            <form onSubmit={handleSignUp}
+            className='p-[5%] border-white border-2 flex flex-col gap-3 w-full sm:w-fit h-full'>
+                <h1 className='font-serif text-4xl text-center text-brass mb-5'>Sign Up</h1>
+
                 <input type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder='Email'
                 required
-                name=""
-                id="" />
+                name="email"
+                id="email"
+                className='border-white border-2'/>
 
                 <input type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder='Password'
                 required
-                name=""
-                id="" />
+                name="password"
+                id="password"
+                className='border-white border-2'/>
 
-                <button type="submit">
+                <button type="submit"
+                className='button-secondary mt-5'>
                     Sign Up
                 </button>
+                
+                <span className='flex gap-1.5 justify-center'>
+                    Or
+                    <button type='button' onClick={() => setCurrentView('sign-in')}
+                    className='underline hover:text-brass hover:no-underline'>
+                        Sign In
+                    </button>
+                </span>
                 
                 {message && <p>{message}</p>}
                 {error && <p>{error}</p>}
             </form>
-
-            <button type="button" onClick={() => setCurrentView('sign-in')}>Or Sign In</button>
         </div>
     )
 };

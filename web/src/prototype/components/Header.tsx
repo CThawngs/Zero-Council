@@ -132,7 +132,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
           </button>
 
           {/* TEMP */}
-          <a href="/auth" className="nav-link whitespace-nowrap">{labels.nav.signIn}</a>
+          <button type='button' onClick={() => setCurrentView('sign-in')} className="button-secondary header-cta">{labels.nav.signIn}</button>
 
           {isWorkspace && (
             <button type="button" onClick={() => navigate('settings')} className="icon-button header-settings min-w-11" aria-label={labels.nav.settings}>
