@@ -121,3 +121,33 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 - Không deploy, cấu hình cloud, tạo account/provider hoặc dùng secret. Lượt thanh toán: việc cần chủ dự án làm là tạo tài khoản payOS, điền 3 biến môi trường, và đăng ký webhook URL — không phải viết code.
 - **DELEGATED (lượt 7, 2026-09-27)**: deploy, auth và tạo project Supabase là của đồng nghiệp chủ dự án, ngoài phạm vi. Việc chờ đồng nghiệp: apply `web/supabase/migrations/0001_zc_orders.sql`, đặt `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` trong Vercel env. Không tự tạo gì trong project của người khác.
 - Xoá local (rule 12): **mốc 70–80% không phải quyền xoá**. Folder local hiện 628 MB, trong đó `node_modules` 438 MB + `.next` 189 MB; pnpm store 5.4 GB nằm ngoài folder. Dữ liệu nặng không phải `.env.local` (vài trăm byte).
+
+---
+
+# Phụ lục — Deliberation loop (2026-09-27)
+
+Worktree `.worktrees/deliberation-loop`; branch `deliberation-loop`; base `cb4bee8` (`origin/main`).
+Trạng thái: IMPLEMENTED + VERIFIED (chờ PR, chưa merge).
+
+## Quyết định chủ dự án (phỏng vấn nhiều vòng)
+
+- CONFIRMED: phần tương tác là việc chung chủ dự án + kỹ sư; lượt này dựng UI với data ảo, engine thật nối vào sau.
+- CONFIRMED: **phương thức cố vấn giao tiếp phải chọn được, không gói gọn một phương thức**. Người dùng chọn mỗi lúc muốn á.
+- CONFIRMED: không thiết kế lại layout; chỉ bổ sung thành phần còn thiếu + điều khiển tương tác.
+- OBSERVED: `data/mockData.ts` không hề rẽ nhánh theo `framework`; UI là một lượt tĩnh, không có ô nhập sau khi gửi, không có vòng, không có mặt phẳng tranh luận.
+- ASSUMPTION: danh sách 3 phương thức dưới đây là mặc định đề xuất; chủ dự án được sửa bất kỳ lúc nào.
+
+## Ranh giới runtime (bổ sung)
+
+- `Round` là đơn vị lịch sử: `mode` và `framework` được đóng băng tại lúc tạo. Đổi cả hai trong phiên chỉ áp dụng cho vòng kế tiếp; UI nói rõ điều này thay vì sửa lịch sử.
+- Toàn bộ đường AI nằm sau đúng một hàm: `runDeliberation(req): Promise<Round>` (`web/src/lib/deliberation/engine.ts`). Thành phần chỉ biết `Round`.
+- Lời văn sinh ra là dữ liệu cố định, đã dán nhãn minh họa. Câu trả lời giữ nguyên ngôn ngữ lúc sinh; UI hiện bảngnghi khi `round.language` khác ngôn ngữ đang xem.
+- Ma trận quyết định: engine trả **id** (`cost`/`speed`/`risk`/`reversibility` × `optionA/B/C`), UI mới map sang nhãn — nhờ vậy `plan.ts` không phụ thuộc i18n và test được bằng `node --test` không cần bundler.
+- Weight là **view state**, không ghi vào round. Kéo slider chấm lại bảng đang xem nhưng không viết đè vòng đã xong.
+
+## Rủ lý ro mới
+
+- Risk: đổi framework giữa phiên trước đây **không hiện gì** (panel bám `round.framework`), người dùng tưởng nút hỏng. Đã thêm bảngnghi `frameworkAppliesNext` nói rõ framework mới áp từ vòng sau.
+- Risk: chạy nhiều `click()` trong cùng một tick đọc DOM cũ của React — đã làm tôi kết luận sai về mode. Khi kiểm chứng bằng trình duyệt phải chờ render giữa mỗi thao tác.
+- Risk: `aria-pressed` không hợp lệ trên `role="tab"` (chặn bởi `jsx-a11y/role-supports-aria-props`). Toggle group dùng `role="group"` + `aria-pressed`.
+- Recovery: thêm callback `onContribution` vào `engine.ts` khi engine thật stream từng cố vấn; `FIXTURE_DELAY_MS` là điểm neo cho UI chờ.
