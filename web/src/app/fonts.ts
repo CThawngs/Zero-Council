@@ -16,7 +16,7 @@ export const sans = Inter({
 // designed for multilingual reading and covers the Vietnamese subset cleanly.
 export const serif = Literata({
   subsets: ['latin', 'vietnamese'],
-  weight: ['500', '600'],
+  weight: ['400','500', '600'],
   display: 'swap',
   variable: '--font-literata',
 });
