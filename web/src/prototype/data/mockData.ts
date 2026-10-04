@@ -1,6 +1,7 @@
 import { AdvisorPersona, ApiKeyConfig, DeliberationSession, Language, ModelProvider, SupportedModel, frameworkIdOf } from '../types';
 import { copy } from '../i18n';
-import { buildFixtureRound, type CommunicationMode } from '@/lib/deliberation/engine';
+import { buildFixtureRound } from '@/lib/deliberation/fixture';
+import type { CommunicationMode } from '@/lib/deliberation/engine';
 
 const sessionFixture = (
   id: string,

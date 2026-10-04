@@ -103,3 +103,49 @@ export const clampScale = (value: number, max: number = MAX_SCORE): number => {
   if (!Number.isFinite(value)) return 1;
   return Math.min(max, Math.max(1, Math.round(value)));
 };
+
+export const MODES: readonly CommunicationMode[] = ['independent', 'debate', 'chain'];
+export const FRAMEWORKS: readonly FrameworkId[] = ['scenarios', 'hats', 'matrix'];
+export const LANGUAGES: readonly string[] = ['en', 'vi'];
+
+/** DeliberationRequest minus the types it would drag in — kept loose so this stays testable. */
+export interface RequestShape {
+  mode: string;
+  framework: string;
+  prompt: string;
+  language: string;
+  advisorIds: readonly string[];
+  roundIndex: number;
+}
+
+/**
+ * Everything wrong with a request, as plain strings. Returns a list rather than
+ * throwing the first one: a real engine talks to a network, and a caller fixing
+ * a bad call wants the whole list, not one error per round trip.
+ *
+ * A fixture never sees a malformed request, so without this the first real key
+ * would be the first time an empty advisor list or a NaN round index reaches a
+ * provider.
+ */
+export const requestProblems = (request: RequestShape): string[] => {
+  const problems: string[] = [];
+  if (typeof request.prompt !== 'string' || !request.prompt.trim()) {
+    problems.push('prompt is empty');
+  }
+  const ids = request.advisorIds;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    problems.push('no advisors to ask');
+  } else {
+    if (ids.some((id) => typeof id !== 'string' || !id.trim())) problems.push('advisor id is empty');
+    if (new Set(ids).size !== ids.length) problems.push('advisor ids repeat');
+  }
+  if (!Number.isInteger(request.roundIndex) || request.roundIndex < 1) {
+    problems.push(`round index ${String(request.roundIndex)} is not a whole round`);
+  }
+  if (!MODES.includes(request.mode as CommunicationMode)) problems.push(`unknown mode ${request.mode}`);
+  if (!FRAMEWORKS.includes(request.framework as FrameworkId)) {
+    problems.push(`unknown framework ${request.framework}`);
+  }
+  if (!LANGUAGES.includes(request.language)) problems.push(`unknown language ${request.language}`);
+  return problems;
+};

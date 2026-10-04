@@ -169,4 +169,54 @@ Yêu cầu lượt này (chủ dự án): nhìn được nhiều AI tranh luận
 ## Ngoài scope
 
 - [ ] Engine thật: thay thân `runDeliberation`. Cần thêm `onContribution` để stream từng cố vấn thay vì chờ trọn vòng.
+
+---
+
+# TODO — Ổn định hoá engine (2026-10-04)
+
+Yêu cầu: làm cho engine chắc và ổn định **trước khi** cấu hình API key. Khung + engine thôi, brain thêm sau.
+
+## Phát hiện được khi đọc code
+
+- [x] `else throw error` trong `runRound` biến mọi lỗi thành unhandled rejection — đúng cái sẽ xảy ra ngay khi có provider thật.
+- [x] Chặn chạy song song dựa trên `isDeliberating` (state) — hai click cùng tick đều đọc `false`, tạo hai vòng **cùng số thứ tự**.
+- [x] `startNewSession` không đụng `abortRef`: vòng đang chạy vẫn ghi vào phiên cũ và kéo `selectedRoundIndex` của phiên mới.
+- [x] `createSession` không nhận `AbortSignal` → không hủy được, cùng `isDeliberating` dùng chung cho hai việc.
+- [x] Không timeout: engine treo là spinner vĩnh viễn.
+- [x] `engine.ts` import `@/prototype/i18n` nên `node --test` không chạy được — **contract không kiểm chứng được chỉ vì nó dính bản dịch**.
+
+## Cấp 1 — Tách seam cho test được
+
+- [x] `engine.ts` = hợp đồng thuần, không import gì ngoài `./plan.ts`. Dùng đuôi `.ts` tường minh vì ESM không đoán đuôi.
+- [x] `fixture.ts` = câu trả lời cứng + `pacedProducer`. Nơi duy nhất cần bảng copy.
+- [x] `createDeliberationEngine(produce, timeoutMs?)` — app gọi hàm đã bọc, không gọi producer.
+- [x] `types.ts` re-export `Language` từ engine thay vì định nghĩa trùng.
+
+## Cấp 2 — Bốn bảo đảm của contract
+
+- [x] `requestProblems()` trả **danh sách** vấn đề, chặn trước khi làm việc — không bao giờ gọi provider với request hỏng.
+- [x] Deadline gấp với signal của người dùng; producer treo thành `DeliberationError` chứ không phải spinner.
+- [x] Kết quả tới **sau khi** hủy vẫn bị bỏ, không commit.
+- [x] `onContribution` báo từng cố vấn theo thứ tự nói, ghế chủ tọa đi sau.
+
+## Cấp 3 — Sửa ổn định ở Context
+
+- [x] `busyRef` chặn chạy song song ngay lập tức, không đợi render.
+- [x] `createSession` nhận `AbortSignal`; `startNewSession` hủy vòng cũ trước khi tạo phiên mới.
+- [x] `runRound` bắt **mọi** lỗi, trả `boolean`, không rethrow.
+- [x] Composer **giữ câu hỏi** khi vòng hỏng hoặc bị hủy; chỉ xoá khi vòng thật sự ghi vào.
+- [x] `onContribution` nối vào `roundProgress`; pending panel hiện từng cố vấn đã trả lời.
+
+## Cấp 4 — Kiểm chứng
+
+- [x] `node --test` 54/54 (26 trong deliberation: 7 validation + 5 contract + 14 cũ).
+- [x] Tìm ra 1 bug thật bằng test: signal đã abort **trước** khi gọi không được thừa nhận, vì listener forward gắn vào signal đã nổ rồi nên không bao giờ chạy. Không có test nào bắt được trước đó.
+- [x] `tsc` 0 · `eslint` 0, không warning · `next build` 0.
+- [x] App thật: streaming hiện đúng thứ tự (thinking → answered cho từng cố vấn, Chair sau cùng); bấm Run round hai lần cùng tick chỉ sinh **một** vòng; Cancel giữ nguyên câu hỏi trong ô; thành công thì ô được xoá.
+
+## Chưa kiểm chứng
+
+- [ ] Toast `toastRoundFailed` **chưa từng hiện** trên trình duyệt — fixture không bao giờ hỏng. Đường đi được unit test ở tầng engine, nhưng cái toast thì không.
+- [ ] Deadline 30 giây không chạy thật trên trình duyệt (test dùng 20ms qua tham số).
+- [ ] Tạo phiên đầu tiên vẫn không có pending panel — `EmptyChamberView` không đọc `isDeliberating`.
 - [ ] Bảngnghi này viết sau khi đã lái app, không phải trước. `features/` + `FEATURE_MAP.md` (28.2) vẫn chưa sinh.

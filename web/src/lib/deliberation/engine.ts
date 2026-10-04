@@ -3,38 +3,39 @@
  * DELEGATED — the one seam where a real deliberation engine drops in.
  * ============================================================================
  *
- * `runDeliberation` is the only place in the app that produces an advisor
- * answer. Everything upstream (mode picker, round rail, composer, framework
- * panels) is written against the `Round` it returns and never against how the
- * answer was made. Swapping the fixture below for a call to a real model
- * provider should not require touching a single component.
+ * This file is the *contract*, not an engine. It owns the four guarantees any
+ * provider has to keep, and nothing else:
+ *
+ *   1. a malformed request is refused before any work, so a bad call never
+ *      reaches a paid provider
+ *   2. every wait is bounded — the caller's cancel signal AND our own deadline
+ *   3. a result that arrives after a cancel is discarded, not committed
+ *   4. `onContribution` reports each advisor as it lands, in speaking order
+ *
+ * It deliberately imports nothing outside ./plan. That keeps it runnable under
+ * plain `node --test`, which is what makes the guarantees above provable rather
+ * than merely written down. The canned answers live in ./fixture because they
+ * need the copy tables; swapping in a real engine means writing a producer and
+ * changing one import in AppContext.
+ *
+ * The explicit `.ts` on that one import is what lets Node resolve it — ESM does
+ * no extension guessing, and the alternative is an untestable contract.
  *
  * Same contract style as `authenticateFromSession` in lib/currentUser.ts.
- *
- * Today it returns canned text so the interaction can be designed and tested
- * before any engine exists. What is NOT fixture: the *shape* of a round. Which
- * advisor answers, in what order, and who answers whom is decided by
- * `planContributions` in ./plan and is what the UI actually renders.
  */
 
-import { copy } from '@/prototype/i18n';
-import type { Language } from '@/prototype/types';
 import {
-  clampScale,
-  MAX_SCORE,
-  MAX_WEIGHT,
-  MATRIX_CRITERION_IDS,
-  MATRIX_OPTION_IDS,
-  planContributions,
+  requestProblems,
   type CommunicationMode,
   type FrameworkId,
   type MatrixCriterion,
-  type MatrixCriterionId,
   type MatrixOption,
-  type MatrixOptionId,
-} from './plan';
+} from './plan.ts';
 
-export type { CommunicationMode, FrameworkId, HatId, MatrixCriterionId, MatrixOptionId } from './plan';
+export type { CommunicationMode, FrameworkId, HatId, MatrixCriterionId, MatrixOptionId } from './plan.ts';
+
+/** Owned here, not in the prototype types: the round records the language it was written in. */
+export type Language = 'en' | 'vi';
 
 export interface Contribution {
   advisorId: string;
@@ -72,6 +73,15 @@ export interface Round {
   frameworkOutput: FrameworkOutput;
 }
 
+/** What the engine knows at a point in time. Mirrors how a streaming engine reports. */
+export interface RoundProgress {
+  roundIndex: number;
+  /** Contributed so far, in speaking order. */
+  landed: Contribution[];
+  /** Set only once the chair has spoken. */
+  chair: Round['chair'] | null;
+}
+
 export interface DeliberationRequest {
   mode: CommunicationMode;
   framework: FrameworkId;
@@ -83,7 +93,21 @@ export interface DeliberationRequest {
   /** 1-based. A follow-up question becomes round 2, 3, … */
   roundIndex: number;
   signal?: AbortSignal;
+  /** Called as each advisor lands, then once more when the chair has spoken. */
+  onContribution?: (progress: RoundProgress) => void;
 }
+
+/** What a producer is handed: the request, plus the tools to stay inside the contract. */
+export interface ProducerContext {
+  signal: AbortSignal;
+  /** Forwarded from the caller's `onContribution`. Call it as answers land. */
+  report: (progress: RoundProgress) => void;
+}
+
+export type RoundProducer = (
+  request: Omit<DeliberationRequest, 'signal' | 'onContribution'>,
+  context: ProducerContext
+) => Promise<Round>;
 
 export class DeliberationCancelled extends Error {
   constructor() {
@@ -92,116 +116,115 @@ export class DeliberationCancelled extends Error {
   }
 }
 
-const FIXTURE_DELAY_MS = 900;
+/** The request was refused before any work, or the engine ran out of time. */
+export class DeliberationError extends Error {
+  readonly problems: readonly string[];
+  constructor(problems: readonly string[]) {
+    super(`DELIBERATION_FAILED:${problems.join('; ')}`);
+    this.name = 'DeliberationError';
+    this.problems = problems;
+  }
+}
 
+/** ponytail: generous enough for a slow provider, short enough that a hang is visible. */
+export const ENGINE_TIMEOUT_MS = 30_000;
+
+/**
+ * Resolves after `ms`, or rejects with the signal's reason if it aborts first.
+ * The listener comes off on the success path too — a signal that outlives one
+ * wait would otherwise hold every settled callback alive.
+ */
 const sleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) return reject(new DeliberationCancelled());
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(new DeliberationCancelled());
-      },
-      { once: true }
-    );
-  });
-
-const fill = (template: string, values: Record<string, string | number>) =>
-  Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
-
-/**
- * Fixture matrix. Deterministic and round-sensitive: a follow-up question
- * rotates the scores, so a round 2 can legitimately produce a different winner
- * than round 1. That is the behaviour a real engine has to reproduce.
- */
-const fixtureMatrix = (roundIndex: number): MatrixData => {
-  const shift = Math.max(0, roundIndex - 1);
-  const criteria: MatrixCriterion[] = MATRIX_CRITERION_IDS.map((id, index) => ({
-    id,
-    weight: clampScale(((index + 2) % MAX_WEIGHT) + 1, MAX_WEIGHT),
-  }));
-  const options: MatrixOption[] = MATRIX_OPTION_IDS.map((id, optionIndex) => ({
-    id: id as MatrixOptionId,
-    scores: MATRIX_CRITERION_IDS.reduce((scores, criterionId, criterionIndex) => {
-      scores[criterionId as MatrixCriterionId] = clampScale(
-        ((optionIndex * 2 + criterionIndex + shift) % MAX_SCORE) + 1,
-        MAX_SCORE
-      );
-      return scores;
-    }, {} as Record<MatrixCriterionId, number>),
-  }));
-  return { criteria, options };
-};
-
-const voiceFor = (
-  mode: CommunicationMode,
-  roundIndex: number,
-  language: Language,
-  stance: string,
-  targetName: string
-): string => {
-  const t = copy[language];
-  if (roundIndex > 1) {
-    return fill(t.voiceFollowUp, { round: roundIndex, stance, target: targetName });
-  }
-  if (mode === 'debate') return fill(t.voiceDebate, { stance, target: targetName });
-  if (mode === 'chain') return fill(t.voiceChain, { stance, target: targetName });
-  return fill(t.voiceIndependent, { stance });
-};
-
-/**
- * The fixture, without the wait. Split out so seeded sample sessions can be
- * built synchronously at module load — a real engine has no such need.
- */
-export const buildFixtureRound = (request: Omit<DeliberationRequest, 'signal'>): Round => {
-  const { mode, framework, prompt, language, advisorIds, advisorStances, roundIndex } = request;
-  const t = copy[language];
-
-  const shapes = planContributions(mode, advisorIds);
-  const nameOf = (advisorId: string | null) =>
-    advisorId ? (advisorStances[advisorId] ?? advisorId) : '';
-
-  const contributions: Contribution[] = shapes.map((shape) => {
-    const targetName = nameOf(shape.rebuts ?? shape.buildsOn);
-    return {
-      advisorId: shape.advisorId,
-      text: voiceFor(mode, roundIndex, language, nameOf(shape.advisorId), targetName),
-      rebuts: shape.rebuts,
-      buildsOn: shape.buildsOn,
+    if (signal?.aborted) return reject(signal.reason);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal?.reason);
     };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 
+/**
+ * Folds the caller's cancel signal together with our own deadline, so a real
+ * engine that stops responding becomes a visible error instead of a spinner
+ * that never ends.
+ */
+const withDeadline = (signal: AbortSignal | undefined, timeoutMs: number) => {
+  const controller = new AbortController();
+  const forward = () => controller.abort(new DeliberationCancelled());
+  const timer = setTimeout(
+    () => controller.abort(new DeliberationError(['no answer within ' + String(timeoutMs) + 'ms'])),
+    timeoutMs
+  );
+  // An already-aborted signal never fires a listener added afterwards, so a
+  // cancel that landed before this call would otherwise be lost entirely.
+  if (signal?.aborted) forward();
+  else signal?.addEventListener('abort', forward, { once: true });
   return {
-    index: roundIndex,
-    mode,
-    framework,
-    prompt,
-    language,
-    contributions,
-    chair: {
-      summary: t.chairSummary,
-      dissent: t.chairDissent,
-      recommendation: t.chairRecommendation,
-    },
-    frameworkOutput: {
-      kind: framework,
-      matrix: framework === 'matrix' ? fixtureMatrix(roundIndex) : null,
+    signal: controller.signal,
+    release: () => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', forward);
     },
   };
 };
 
 /**
- * FIXME(fixture): returns canned text after a fake wait. Replace the body with a
- * call to the real engine, keeping the `Round` return shape.
+ * Wraps a producer in the contract. This is the only thing the app calls.
  *
- * ponytail: no streaming. The real engine will want to emit each contribution
- * as it lands, which means adding an `onContribution` callback here. The UI
- * already renders a pending state and a Cancel button, so adding it should not
- * change any component.
+ * FIXME(engine): the app currently wires this to the fixture producer in
+ * ./fixture. A real engine writes its own producer and changes one import —
+ * no component moves, because every panel reads a `Round` and nothing else.
  */
-export const runDeliberation = async (request: DeliberationRequest): Promise<Round> => {
-  await sleep(FIXTURE_DELAY_MS, request.signal);
-  return buildFixtureRound(request);
+export const createDeliberationEngine = (produce: RoundProducer, timeoutMs: number = ENGINE_TIMEOUT_MS) => {
+  const runDeliberation = async (request: DeliberationRequest): Promise<Round> => {
+    const problems = requestProblems(request);
+    if (problems.length > 0) throw new DeliberationError(problems);
+
+    const { signal, release } = withDeadline(request.signal, timeoutMs);
+    try {
+      // Spelled out rather than spread: a producer must never receive the
+      // caller's signal or callback and mistake them for its own.
+      const input = {
+        mode: request.mode,
+        framework: request.framework,
+        prompt: request.prompt,
+        language: request.language,
+        advisorIds: request.advisorIds,
+        advisorStances: request.advisorStances,
+        roundIndex: request.roundIndex,
+      };
+      const round = await produce(input, {
+        signal,
+        report: (progress) => request.onContribution?.(progress),
+      });
+      // The caller may have cancelled while the producer was still working.
+      // Returning anyway would commit a round the user already backed out of.
+      if (signal.aborted) throw signal.reason;
+      return round;
+    } finally {
+      release();
+    }
+  };
+  return runDeliberation;
 };
+
+/** A producer that answers one advisor per `stepMs`, then lets the chair close. */
+export const pacedProducer =
+  (build: (request: Omit<DeliberationRequest, 'signal' | 'onContribution'>) => Round, stepMs: number): RoundProducer =>
+  async (request, context) => {
+    const round = build(request);
+    const landed: Contribution[] = [];
+    for (const contribution of round.contributions) {
+      await sleep(stepMs, context.signal);
+      landed.push(contribution);
+      context.report({ roundIndex: round.index, landed: [...landed], chair: null });
+    }
+    await sleep(stepMs, context.signal);
+    context.report({ roundIndex: round.index, landed, chair: round.chair });
+    return round;
+  };

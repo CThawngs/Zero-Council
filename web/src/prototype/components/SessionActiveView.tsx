@@ -25,6 +25,7 @@ export const SessionActiveView: React.FC = () => {
     runRound,
     cancelRound,
     isDeliberating,
+    roundProgress,
     selectedRoundIndex,
     selectRound,
     t,
@@ -48,8 +49,12 @@ export const SessionActiveView: React.FC = () => {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (!draft.trim() || isDeliberating) return;
-    void runRound(draft);
-    setDraft('');
+    const question = draft;
+    // Keep the question on screen until the round is actually committed. A
+    // failed round then costs a click, not the sentence the user typed.
+    void runRound(question).then((committed) => {
+      if (committed) setDraft('');
+    });
   };
 
   return (
@@ -143,6 +148,51 @@ export const SessionActiveView: React.FC = () => {
                 .replace('{count}', String(currentSession.advisors.length))
                 .replace('{mode}', modeLabel(currentSession.mode, language))}
             </p>
+            {/* Each advisor lands on its own, so the wait shows who has spoken. */}
+            <ol className="mt-4 space-y-2">
+              {currentSession.advisors.map((advisor, index) => {
+                const landed = roundProgress?.landed.some((item) => item.advisorId === advisor.id);
+                return (
+                  <li
+                    key={advisor.id}
+                    className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
+                      landed ? 'border-brass/40 bg-background text-ink' : 'border-border text-ink-muted'
+                    }`}
+                  >
+                    <span
+                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                        landed ? 'bg-brass text-background' : 'bg-background text-ink-muted'
+                      }`}
+                      aria-hidden="true"
+                    >
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                    <span className="min-w-0 truncate font-medium">{advisor.name}</span>
+                    <span className="ml-auto shrink-0 text-xs text-ink-muted">
+                      {landed ? t.voiceLanded : t.voiceWaiting}
+                    </span>
+                  </li>
+                );
+              })}
+              <li
+                className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm ${
+                  roundProgress?.chair ? 'border-brass/40 bg-background text-ink' : 'border-border text-ink-muted'
+                }`}
+              >
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ${
+                    roundProgress?.chair ? 'bg-brass text-background' : 'bg-background text-ink-muted'
+                  }`}
+                  aria-hidden="true"
+                >
+                  —
+                </span>
+                <span className="min-w-0 truncate font-medium">{t.chairLabel}</span>
+                <span className="ml-auto shrink-0 text-xs text-ink-muted">
+                  {roundProgress?.chair ? t.voiceLanded : t.voiceWaiting}
+                </span>
+              </li>
+            </ol>
             <button
               type="button"
               onClick={cancelRound}

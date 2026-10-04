@@ -140,14 +140,17 @@ Trạng thái: IMPLEMENTED + VERIFIED (chờ PR, chưa merge).
 ## Ranh giới runtime (bổ sung)
 
 - `Round` là đơn vị lịch sử: `mode` và `framework` được đóng băng tại lúc tạo. Đổi cả hai trong phiên chỉ áp dụng cho vòng kế tiếp; UI nói rõ điều này thay vì sửa lịch sử.
-- Toàn bộ đường AI nằm sau đúng một hàm: `runDeliberation(req): Promise<Round>` (`web/src/lib/deliberation/engine.ts`). Thành phần chỉ biết `Round`.
+- Toàn bộ đường AI nằm sau **hai** module: `engine.ts` là *hợp đồng* (validation, deadline, cancel, streaming) và không import gì ngoài `plan.ts`; `fixture.ts` là câu trả lời cứng. Vì engine không dính bảng copy, hợp đồng chạy được bằng `node --test` không cần bundler.
 - Lời văn sinh ra là dữ liệu cố định, đã dán nhãn minh họa. Câu trả lời giữ nguyên ngôn ngữ lúc sinh; UI hiện bảngnghi khi `round.language` khác ngôn ngữ đang xem.
 - Ma trận quyết định: engine trả **id** (`cost`/`speed`/`risk`/`reversibility` × `optionA/B/C`), UI mới map sang nhãn — nhờ vậy `plan.ts` không phụ thuộc i18n và test được bằng `node --test` không cần bundler.
 - Weight là **view state**, không ghi vào round. Kéo slider chấm lại bảng đang xem nhưng không viết đè vòng đã xong.
+- Chỉ một vòng chạy tại một thời điểm, chặn bằng `busyRef` chứ không bằng state — state chưa kịp render thì hai click vẫn chạy song song.
 
 ## Rủ lý ro mới
 
 - Risk: đổi framework giữa phiên trước đây **không hiện gì** (panel bám `round.framework`), người dùng tưởng nút hỏng. Đã thêm bảngnghi `frameworkAppliesNext` nói rõ framework mới áp từ vòng sau.
-- Risk: chạy nhiều `click()` trong cùng một tick đọc DOM cũ của React — đã làm tôi kết luận sai về mode. Khi kiểm chứng bằng trình duyệt phải chờ render giữa mỗi thao tác.
+- Risk: chạy nhiều `click()` trong cùng một tick đọc DOM cũ của React — đã làm tôi kết luận sai về mode. Khi kiểm chứng bằng trình duyệt phải chờ render giữa mỗi thao tác. Textarea cũng bị thay node khi hiện pending panel, nên phải query lại chứ không giữ tham chiếu.
 - Risk: `aria-pressed` không hợp lệ trên `role="tab"` (chặn bởi `jsx-a11y/role-supports-aria-props`). Toggle group dùng `role="group"` + `aria-pressed`.
-- Recovery: thêm callback `onContribution` vào `engine.ts` khi engine thật stream từng cố vấn; `FIXTURE_DELAY_MS` là điểm neo cho UI chờ.
+- Risk: `runRound` từng `throw` lỗi không phải cancel → unhandled rejection, im lặng. Đã bắt mọi lỗi thành toast và giữ nguyên câu hỏi trong ô.
+- Risk: engine không có deadline nghĩa là một provider treo là spinner vĩnh viễn. `ENGINE_TIMEOUT_MS` biến nó thành lỗi nhìn thấy được.
+- Recovery: engine thật = viết một `RoundProducer` rồi bọc `createDeliberationEngine`, đổi **một** dòng import trong `AppContext`. Không component nào phải đổi.

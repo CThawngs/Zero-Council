@@ -1,5 +1,7 @@
 import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
 
+export type { Language } from '@/lib/deliberation/engine';
+
 export type ViewType =
   | 'overview'
   | 'empty-chamber'
@@ -13,8 +15,6 @@ export type ViewType =
   | 'billing'
   | 'pricing'
   | 'privacy';
-
-export type Language = 'en' | 'vi';
 
 export type DecisionFramework =
   | 'Good / Normal / Bad Scenarios'

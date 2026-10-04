@@ -9,11 +9,27 @@ import {
   MAX_SCORE,
   MAX_WEIGHT,
   planContributions,
+  requestProblems,
   scoreMatrix,
 } from '../web/src/lib/deliberation/plan.ts';
+import {
+  createDeliberationEngine,
+  DeliberationCancelled,
+  DeliberationError,
+  pacedProducer,
+} from '../web/src/lib/deliberation/engine.ts';
 import { copy, missingCopyKeys } from '../web/src/prototype/i18n.ts';
 
 const ADVISORS = ['pragmatist', 'dreamer', 'skeptic'];
+
+const VALID_REQUEST = {
+  mode: 'debate',
+  framework: 'matrix',
+  prompt: 'Ship the rewrite everywhere, or pilot with one team?',
+  language: 'en',
+  advisorIds: ADVISORS,
+  roundIndex: 1,
+};
 
 test('independent mode: nobody references anyone', () => {
   const shapes = planContributions('independent', ADVISORS);
@@ -187,4 +203,147 @@ test('every placeholder used by a value exists in the copy it is interpolated in
   }
   // A missing {name} in one language ships a literal "{name}" to that reader.
   assert.deepEqual(mismatches, []);
+});
+
+// --- The contract a real engine has to keep when the first API key arrives ---
+
+test('a well formed request has no problems', () => {
+  assert.deepEqual(requestProblems(VALID_REQUEST), []);
+});
+
+test('a request the engine cannot honour is refused before any work', () => {
+  // Every one of these would otherwise reach a paid provider: an empty advisor
+  // list renders an empty council, a NaN round index renders a "Round NaN" rail.
+  const bad = {
+    prompt: '   ',
+    advisorIds: [],
+    roundIndex: 0,
+    mode: 'shouting',
+    framework: 'vibes',
+    language: 'fr',
+  };
+  assert.deepEqual(requestProblems(bad), [
+    'prompt is empty',
+    'no advisors to ask',
+    'round index 0 is not a whole round',
+    'unknown mode shouting',
+    'unknown framework vibes',
+    'unknown language fr',
+  ]);
+});
+
+test('a repeated advisor is caught — it would answer as the same voice twice', () => {
+  assert.deepEqual(requestProblems({ ...VALID_REQUEST, advisorIds: ['a', 'a'] }), ['advisor ids repeat']);
+  assert.deepEqual(requestProblems({ ...VALID_REQUEST, advisorIds: ['a', ' '] }), ['advisor id is empty']);
+});
+
+test('a round index that is not a whole round is refused', () => {
+  for (const roundIndex of [1.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(requestProblems({ ...VALID_REQUEST, roundIndex }).length, 1, String(roundIndex));
+  }
+  assert.deepEqual(requestProblems({ ...VALID_REQUEST, roundIndex: 7 }), []);
+});
+
+// --- The contract itself. A fake producer stands in for a flaky provider. ---
+
+const FAKE_ROUND = {
+  index: 1,
+  mode: 'debate',
+  framework: 'matrix',
+  prompt: 'x',
+  language: 'en',
+  contributions: [{ advisorId: 'a', text: 'a', rebuts: null, buildsOn: null }],
+  chair: { summary: 's', dissent: 'd', recommendation: 'r' },
+  frameworkOutput: { kind: 'matrix', matrix: null },
+};
+
+const REQUEST = { ...VALID_REQUEST, advisorStances: {} };
+
+test('a malformed request never reaches the producer', async () => {
+  let called = false;
+  const run = createDeliberationEngine(async () => {
+    called = true;
+    return FAKE_ROUND;
+  });
+  await assert.rejects(
+    () => run({ ...REQUEST, advisorIds: [] }),
+    (error) => error instanceof DeliberationError && error.problems.includes('no advisors to ask')
+  );
+  // The point is what never happened.
+  assert.equal(called, false);
+});
+
+test('a producer that stops answering fails instead of spinning forever', async () => {
+  // This is the network-hang case a fixture can never produce on its own: the
+  // producer waits for a signal that only the deadline will ever fire.
+  const run = createDeliberationEngine(
+    (_, context) =>
+      new Promise((_, reject) => context.signal.addEventListener('abort', () => reject(context.signal.reason))),
+    20
+  );
+  await assert.rejects(
+    () => run(REQUEST),
+    (error) => error instanceof DeliberationError && error.problems[0].includes('no answer within')
+  );
+});
+
+test('an answer that arrives after a cancel is discarded, not committed', async () => {
+  // A provider that ignores the abort signal and answers anyway. The round must
+  // still be refused, or the user backs out and the round appears anyway.
+  const run = createDeliberationEngine(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    return FAKE_ROUND;
+  });
+  const controller = new AbortController();
+  const pending = run({ ...REQUEST, signal: controller.signal });
+  setTimeout(() => controller.abort(), 5);
+  await assert.rejects(pending, (error) => error instanceof DeliberationCancelled);
+});
+
+test('a result that is already in hand still loses to a cancel that landed first', async () => {
+  const controller = new AbortController();
+  const run = createDeliberationEngine(async () => FAKE_ROUND);
+  controller.abort();
+  await assert.rejects(
+    () => run({ ...REQUEST, signal: controller.signal }),
+    (error) => error instanceof DeliberationCancelled
+  );
+});
+
+test('onContribution reaches the caller in speaking order, chair last', async () => {
+  const three = {
+    ...FAKE_ROUND,
+    contributions: ['a', 'b', 'c'].map((id) => ({ advisorId: id, text: id, rebuts: null, buildsOn: null })),
+  };
+  const seen = [];
+  const run = createDeliberationEngine(
+    pacedProducer(() => three, 1)
+  );
+  await run({ ...REQUEST, onContribution: (progress) => seen.push(progress) });
+  assert.deepEqual(
+    seen.map((progress) => progress.landed.length),
+    [1, 2, 3, 3]
+  );
+  assert.equal(seen.at(-1).chair !== null, true);
+  assert.equal(
+    seen.slice(0, 3).every((progress) => progress.chair === null),
+    true
+  );
+});
+
+test('an already-aborted signal discards the result', async () => {
+  // The listener that forwards the cancel is attached to a signal that already
+  // fired, so it never runs again — the deadline check is the only thing left.
+  const controller = new AbortController();
+  controller.abort();
+  let reached = false;
+  const run = createDeliberationEngine(async () => {
+    reached = true;
+    return FAKE_ROUND;
+  });
+  await assert.rejects(
+    () => run({ ...REQUEST, signal: controller.signal }),
+    (error) => error instanceof DeliberationCancelled
+  );
+  assert.equal(reached, true, 'the producer may start, but its answer must be thrown away');
 });

@@ -8,12 +8,9 @@ import {
   ViewType,
   frameworkIdOf,
 } from '../types';
-import {
-  DeliberationCancelled,
-  runDeliberation,
-  type CommunicationMode,
-  type Round,
-} from '@/lib/deliberation/engine';
+import { DeliberationCancelled } from '@/lib/deliberation/engine';
+import { runDeliberation } from '@/lib/deliberation/fixture';
+import type { CommunicationMode, Round, RoundProgress } from '@/lib/deliberation/engine';
 import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
 
@@ -34,9 +31,10 @@ interface AppContextType {
   startNewSession: (question?: string, framework?: DeliberationSession['framework']) => void;
   setCurrentFramework: (framework: DeliberationSession['framework']) => void;
   setCurrentMode: (mode: CommunicationMode) => void;
-  runRound: (prompt: string) => Promise<void>;
+  runRound: (prompt: string) => Promise<boolean>;
   cancelRound: () => void;
   isDeliberating: boolean;
+  roundProgress: RoundProgress | null;
   selectedRoundIndex: number;
   selectRound: (index: number) => void;
   purgeSessions: () => void;
@@ -76,7 +74,9 @@ const createSession = async (
   framework: DeliberationSession['framework'],
   mode: CommunicationMode,
   personas: AdvisorPersona[],
-  language: Language
+  language: Language,
+  signal: AbortSignal,
+  onContribution?: (progress: RoundProgress) => void
 ): Promise<DeliberationSession> => {
   const t = copy[language];
   const round = await runDeliberation({
@@ -87,6 +87,8 @@ const createSession = async (
     advisorIds: personas.map((persona) => persona.id),
     advisorStances: stancesOf(personas),
     roundIndex: 1,
+    signal,
+    onContribution,
   });
   return {
     id: nextSessionId(),
@@ -135,9 +137,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
   const [isDeliberating, setIsDeliberating] = useState(false);
+  const [roundProgress, setRoundProgress] = useState<RoundProgress | null>(null);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
+  // `isDeliberating` is state, so two clicks in the same tick both read it as
+  // false and start two rounds with the same index. This ref flips immediately.
+  const busyRef = useRef(false);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -185,21 +191,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     void (async () => {
+      if (busyRef.current) return;
+      busyRef.current = true;
+      // A session being created must not leave the previous round running into
+      // a view the user already left.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
       setIsDeliberating(true);
+      setRoundProgress(null);
       try {
         const session = await createSession(
           question.trim(),
           framework,
           currentMode,
           localizedPersonas,
-          language
+          language,
+          controller.signal,
+          setRoundProgress
         );
         setSessions((value) => [session, ...value]);
         setCurrentSessionId(session.id);
         setSelectedRoundIndex(1);
         setCurrentView('session-active');
+      } catch (error) {
+        if (!(error instanceof DeliberationCancelled)) {
+          showToast('toastRoundFailed');
+        }
       } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+        busyRef.current = false;
         setIsDeliberating(false);
+        setRoundProgress(null);
       }
     })();
   };
@@ -224,15 +247,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     abortRef.current?.abort();
   };
 
-  const runRound = async (prompt: string) => {
+  /** @returns true when the round was committed, false when it was cancelled or failed. */
+  const runRound = async (prompt: string): Promise<boolean> => {
     const question = prompt.trim();
-    if (!question || isDeliberating) return;
+    if (!question || busyRef.current) return false;
     const session = sessions.find((item) => item.id === currentSessionId);
-    if (!session) return;
+    if (!session) return false;
 
+    busyRef.current = true;
     const controller = new AbortController();
     abortRef.current = controller;
     setIsDeliberating(true);
+    setRoundProgress(null);
     try {
       const round: Round = await runDeliberation({
         mode: session.mode,
@@ -243,7 +269,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         advisorStances: stancesOf(session.advisors),
         roundIndex: session.rounds.length + 1,
         signal: controller.signal,
+        onContribution: setRoundProgress,
       });
+      if (controller.signal.aborted) throw new DeliberationCancelled();
       setSessions((value) =>
         value.map((item) =>
           item.id === currentSessionId ? { ...item, rounds: [...item.rounds, round] } : item
@@ -251,12 +279,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
       setSelectedRoundIndex(round.index);
       showToast('toastRoundAdded', { round: String(round.index) });
+      return true;
     } catch (error) {
       if (error instanceof DeliberationCancelled) showToast('toastRoundCancelled');
-      else throw error;
+      else showToast('toastRoundFailed');
+      return false;
     } finally {
-      abortRef.current = null;
+      if (abortRef.current === controller) abortRef.current = null;
+      busyRef.current = false;
       setIsDeliberating(false);
+      setRoundProgress(null);
     }
   };
 
@@ -315,6 +347,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         runRound,
         cancelRound,
         isDeliberating,
+        roundProgress,
         selectedRoundIndex,
         selectRound,
         purgeSessions,
