@@ -66,6 +66,14 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   }, [menuOpen]);
 
   const navigate = (view: ViewType) => {
+    // /auth is a separate route with its own, isolated app state. It only
+    // ever renders the sign-in/sign-up views, so switching to any other view
+    // there leaves the page blank. Send those clicks back to the real home
+    // page instead of changing local state that nothing on this route reads.
+    if (view !== 'sign-in' && view !== 'sign-up' && typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
+      window.location.href = '/';
+      return;
+    }
     setCurrentView(view);
     setMenuOpen(false);
     // Without this the scroll offset of the view being left is inherited by the
