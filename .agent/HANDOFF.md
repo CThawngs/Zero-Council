@@ -198,3 +198,53 @@ Cổng: `tsc` 0 · `eslint` 0 · `next build` 0 · `node --test` 44/44.
 5. `actions/checkout` vẫn ghim tag `@v4` chứ không phải SHA (rule 20) — chưa dùng thật nên chấp nhận được, nhưng phải sửa trước lần chạy thật.
 6. `features/` + `FEATURE_MAP.md` (rule 28.2) vẫn chưa sinh.
 7. **PR chưa mở, chưa merge.** Cần bạn duyệt.
+
+---
+
+# Lượt 2 — Ổn định hoá engine trước khi cấu hình API key (2026-10-04)
+
+Yêu cầu: `đảm bảo engine hoạt động tốt và ổn định trước khi config API Key. Khung + engine thôi, brain thêm sau.`
+Chủ dự án chốt hai điểm khi hỏi: thêm `onContribution` ngay, và khi lỗi thì **cảnh báo + giữ câu hỏi để thử lại**.
+
+## Vì sao phải tách seam mới kiểm chứng được
+
+`engine.ts` import `@/prototype/i18n` chỉ để lấy câu trả lời cứng. Node không resolve alias nên **contract không test được** — và nó chỉ dính bản dịch. Đã tách:
+
+- `engine.ts` — hợp đồng thuần, import duy nhất là `./plan.ts`
+- `fixture.ts` — câu trả lời cứng + `pacedProducer`, nơi duy nhất cần bảng copy
+
+`createDeliberationEngine(produce, timeoutMs?)` bọc producer; app gọi hàm đã bọc. Khi có engine thật: viết producer + đổi **một** dòng import trong `AppContext`.
+
+## Năm lỗi tìm được khi đọc code trước khi cấu hình key
+
+1. `else throw error` trong `runRound` → unhandled rejection, im lặng.
+2. Chặn song song bằng `isDeliberating` (state) → hai click cùng tick đều thấy `false`, sinh hai vòng **cùng số thứ tự**. Đổi sang `busyRef`.
+3. `startNewSession` không hủy vòng đang chạy → vòng cũ ghi vào phiên đã rời, kéo `selectedRoundIndex` của phiên mới.
+4. `createSession` không nhận `AbortSignal` → không hủy được.
+5. Không deadline → provider treo là spinner vĩnh viễn.
+
+## Bug thật do test tìm ra
+
+Signal đã abort **trước** khi gọi không được thừa nhận: listener forward được gắn vào một signal đã nổ, nên không bao giờ chạy lần nữa. Không test nào bắt được trước đó vì mọi test cũ đều abort *giữa* chừng.
+
+## Evidence
+
+`node --test` **54/54** (26 trong deliberation: 7 validation + 5 contract + 14 cũ) · `tsc` 0 · `eslint` 0 không warning · `next build` 0.
+
+App thật (`next start -p 8794`):
+
+| Tiêu chí | Quan sát được |
+|---|---|
+| Streaming đúng thứ tự | `thinking,thinking,thinking,thinking` → từng cố vấn `answered` lần lượt → `Chair=answered` cuối cùng |
+| Bấm Run round hai lần cùng tick | Rail `Round 1..3` → `Round 1..4`: **một** vòng mới, không trùng số |
+| Cancel giữ câu hỏi | Panel chờ hiện, Cancel → toast `Round stopped.`, ô nhập vẫn còn `A question I want to keep after cancelling` |
+| Thành công thì xoá ô | Ô trống, toast `Round 5 added.` |
+
+## Cần bạn nhìn kỹ
+
+1. **Toast lỗi chưa từng hiện trên trình duyệt.** Fixture không bao giờ hỏng nên không có cách nào kích nó từ UI. Đường đi `DeliberationError` được unit test ở tầng engine, nhưng cái toast thì chỉ tin vào code đọc được chứ không phải quan sát được.
+2. **Deadline 30 giây không chạy thật trên trình duyệt** — test dùng 20ms qua tham số `timeoutMs`. Con số 30.000 chỉ là điểm neo, chưa đo độ trễ provider thật.
+3. **Tạo phiên đầu tiên vẫn không có pending panel** — `EmptyChamberView` không đọc `isDeliberating`, nên lúc tạo phiên người dùng thấy màn không đổi trong ~1.7 giây. Tôi để nguyên vì ngoài phạm vi lượt này, nhưng nó là ứng viên sửa tiếp theo rõ ràng.
+4. **Không có giới hạn số vòng.** Người dùng bấm 500 lần thì mảng `rounds` phình trong bộ nhớ trình duyệt. Chưa chốt vì cần biết giới hạn thật của gói (Free 2 / Pro 4 / Ultra 8 advisor — nhưng đó là advisor, không phải vòng).
+5. **`onContribution` chỉ báo chứ không còn giữ trong state vĩnh viễn** — progress bị xoá khi vòng xong, đúng nhưng nghĩa là nếu sau này muốn vòng chạy dở rồi mở lại thì phải thêm phần lưu riêng.
+6. **PR #15 vẫn chưa merge.** Tôi không tự duyệt.
