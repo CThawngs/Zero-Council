@@ -53,8 +53,8 @@ Cap theo gói xác nhận luôn chạy: modal hiện "2 of 2 selected" trên gó
 1. **Trần vòng lặp chưa chốt — mâu thuẫn đang mở.** Spec gốc: "vòng lặp vô tận cho đến khi user kêu dừng". Chủ dự án từng chốt 3 lượt. Đang chạy `DEFAULT_MAX_TURNS = 12` + `DEFAULT_ROOM_BUDGET = 200`. Muốn "vô tận" thật thì phải chặn bằng **ngân sách tiền**, không phải số lượt — vòng không có khiến thì đốt token vô hạn.
 2. **`scriptedGenerator` không suy nghĩ.** Nó tuân thủ hợp đồng nên chứng minh **routing** đúng; **không** chứng minh model thật sẽ phát ra handoff. Chỉ BYOK mới trả lời được. Đây là giới hạn lớn nhất còn lại.
 3. **Persistence chưa có.** Phòng chỉ sống trong React; F5 là mất. Hermes có memory riêng từng thành viên + `/compress` — chưa làm.
-4. **Claim vượt code (mục OPEN 6 cũ vẫn đúng).** Landing hứa BYOK AES-256, hội thoại mã hoá. Repo không có mã hoá nào. `currentUser.ts` trả `null`, `SignInView` còn rỗng.
-5. `features/` + `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh.
+4. **Claim vượt code — đã hẹn lại, chỉ còn phần mã hoá.** Cấp 12 BYOK **có** adapter Anthropic + OpenAI chạy thật, key chạy từ trình duyệt ra vendor. Còn nói dối: landing hứa **AES-256** và hội thoại mã hoá — repo **không có mã hoá nào**; key nằm thô trong RAM tab, transcript nằm rõ trong `sessionStorage`. `currentUser.ts` trả `null`, `SignInView` còn rỗng. Chi tiết: `features/FEATURE_MAP.md` mục 5.
+5. ~~`features/` + `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh.~~ **Đã sinh** ở cấp 14. Bảng kiểm kê nằm ở `features/FEATURE_MAP.md`.
 
 ## Bàn giao (vòng 11)
 
@@ -203,7 +203,7 @@ Test lộ ra một điều: `effectivePlan` đọc đồng hồ hệ thống bê
 8. Mã giảm giá chưa có giá trị nào được duyệt — bảng đọc từ `PAYLOS_DISCOUNT_CODES`, để trống là từ chối mọi mã.
 9. **`colorToken` trong `types.ts` vẫn chưa component nào dùng.** 4 màu persona đã quay lại orb, nhưng thẻ advisor trong app vẫn chưa dùng trường này.
 10. Logo 24px đọc ra **3 chấm nằm ngang, không phải 4 chấm trên vòng** — vì logo không xoay nên scene phẳng, node 0°/180° chiếu về chung tâm. Đã ghi trong comment CSS. Muốn đúng 4 thì phải bật lại spin hoặc dùng SVG phẳng.
-11. `.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.
+11. ~~`.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.~~ **Xong ở cấp 14 (2026-10-07).** `features/FEATURE_MAP.md` kiểm kê trung thực, tách rõ *đã có bằng chứng* với *chỉ có lời*; mục 5 liệt kê đúng những gì landing đang hứa mà chưa có. Skill verify-app đã **chạy thử thật**: `31/31` check qua cả ba driver.
 12. **Workflow chưa từng gọi Vercel thật.** 5/5 test pass với HTTP stub — chứng minh URL, method, header, payload, xử lý 403 và dọn file tạm. Không chứng minh Vercel nhận token hay body đúng schema. Chạy một lần sau khi có `VERCEL_TOKEN`.
 13. **`actions/checkout` đang ghim tag `@v4`, chưa phải SHA** (rule 20). Chưa "dùng thật" nên chấp nhận được, nhưng phải đổi trước lần chạy thật đầu tiên.
 14. **Còn phụ thuộc đồng nghiệp ở 3 chỗ**, không giảm được bằng workflow: (a) deploy, (b) apply migration, (c) **redeploy sau mỗi lần đổi secret** — Vercel chụp biến theo từng deployment. Muốn bỏ hẳn (c) thì cách duy nhất là thêm chủ dự án vào Vercel project.

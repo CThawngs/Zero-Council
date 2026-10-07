@@ -1,5 +1,5 @@
 {
-  "ranAt": "2026-10-07T16:14:44.965Z",
+  "ranAt": "2026-10-07T16:24:30.345Z",
   "base": "http://127.0.0.1:3232",
   "trace": [
     {
@@ -44,7 +44,7 @@
     },
     {
       "step": "screenshot",
-      "detail": "council-persist.png"
+      "detail": "drive-persist.png"
     }
   ],
   "failures": []
