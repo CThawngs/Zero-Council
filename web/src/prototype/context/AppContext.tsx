@@ -25,6 +25,7 @@ import {
   type WhyStop,
 } from '../chat/engine';
 import { byokGenerator } from '../chat/byok';
+import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type PlanId } from '../data/plans';
 
@@ -173,7 +174,12 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentView, setCurrentView] = useState<ViewType>('overview');
+  // Read once. The room and the view have to be decided from the SAME read, or a reload drops the
+  // user on the marketing page with a live deliberation sitting unread behind it — which is worse
+  // than losing the room, because nothing looks broken.
+  const [restored] = useState(() => readStoredRoom());
+
+  const [currentView, setCurrentView] = useState<ViewType>(restored ? 'chat-room' : 'overview');
   const [language, setLanguage] = useState<Language>('en');
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
@@ -182,7 +188,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
-  const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
+  const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(() => {
+    // Rehydrate on the first render so the room is already there when the view mounts. Without this
+    // the user sees an empty chamber flash before the transcript appears, which reads as data loss.
+    if (!restored) return null;
+    return {
+      title: restored.title,
+      mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
+      roster: restored.roster,
+      messages: restored.messages,
+      turns: restored.turns,
+      stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
+      failures: (restored.failures as TurnFailure[]) ?? [],
+      held: restored.held ?? [],
+    };
+  });
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -198,6 +218,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     document.title = copy[language].documentTitle;
     document.querySelector('meta[name="description"]')?.setAttribute('content', copy[language].documentDescription);
   }, [language]);
+
+  // Mirror every room change into the tab store. This is the only writer; nothing else touches it.
+  useEffect(() => {
+    if (currentRoom) writeStoredRoom(currentRoom);
+  }, [currentRoom]);
 
   const localizedSessions = useMemo(
     () => sessions.map((session) => localizeSession(session, language)),
@@ -284,6 +309,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const stopRoom = () => setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'user' } : room));
 
   const clearRoom = () => {
+    // Clearing the store too is the point: if it survived, the room the user just discarded would
+    // come back on reload and look like the delete button had not worked.
+    clearStoredRoom();
     setCurrentRoom(null);
     setCurrentView('empty-chamber');
   };

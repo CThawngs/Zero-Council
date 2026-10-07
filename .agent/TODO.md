@@ -218,13 +218,35 @@ Không có câu scripted nào lọt. Nếu lọt, nghĩa là key bị bỏ qua v
 
 **Bug tôi tự gây ra rồi bắt được:** driver đầu tiên reload trang giữa chừng, mà reload **xoá key trong RAM**, nên phòng rơi về scripted và driver vẫn báo PASS. Check `From my lens` bị lừa. Đã sửa thứ tự: vào phòng → nối key → quay lại phòng bằng điều hướng trong app, không reload.
 
+## Cấp 13 — Phòng sống sót qua reload (2026-10-07)
+
+F5 xoá sạt phòng đang họp. Với sản phẩm mà cả luận điểm là hàng chính, đó là lỗi nặng nhất còn lại.
+
+- [x] `chat/storage.ts` (mới): `sessionStorage`, native, **không thêm dependency**. Một file duy nhất chạm storage.
+- [x] Nạp ở render đầu tiên — không có nháy "phòng trống" rồi mới hiện transcript, vì nháy đó đọc ra như mất dữ liệu.
+- [x] Ghi theo `useEffect([currentRoom])`. Xoá phòng thì **xoá store**, không chỉ xoá state.
+- [x] Blob có `schema` tag: bản build cũ **không** nạp nửa vào UI mới.
+- [x] JSON hỏng, sai cấu trúc, roster rỗng, store bị chặn (private mode / quota) → đọc ra `null`, **không ném**. Phòng đang chạy không được chết vì cache.
+- [x] `tests/storage.test.mjs` — **8 test**, trong đó nửa là đường âm.
+- [x] `tests/drive-persist.mjs` (mới) — reload thật giữa chừng, **9/9 pass**. Bằng chứng `.agent/evidence/council-persist.png`.
+
+**Bug thật mà driver bắt được:** lần đầu `sessionStorage` ghi **đúng** (kiểm tra thấy schema 1, 3 tin, 2 cố vấn) — nhưng reload vẫn rơi về **landing marketing**. Vì `currentView` mặc định `'overview'`. Dữ liệu còn nguyên mà phòng bị giấu sau trang quảng cáo; tệ hơn nhiều so với mất hẳn, vì **không có gì trông như hỏng**.
+
+Sửa: đọc store **một lần** rồi lấy cả hai quyết định từ cùng một lần đọc —
+`restored ? 'chat-room' : 'overview'` và `restored ? phòng : null`.
+Hai state đọc lệch nhau là chính là lỗi này.
+
+Hai check còn lại cũng là thứ dễ làm hỏng nhất: nếu "Xoá" chỉ reset React mà quên xoá store, **phòng đã xoá sẽ tự quay lại** ở lần refresh sau — trông y hệt nút hỏng.
+
+**Trần đã ghi trong code:** `sessionStorage` là **theo tab**, chết cùng tab, không sang máy khác. Không phải backup, không phải lịch sử bền. Muốn bền thì cần auth + store thật; khi có, chỉ thay đúng file này.
+
 ## Ngoài scope
 
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
 - [ ] **Auth (đồng nghiệp)**: chỉ cần làm `authenticateFromSession` trong `web/src/lib/currentUser.ts`. Mọi thứ còn lại đã dựng sẵn quanh nó.
 - [ ] Hạn mức 2/4/8 advisor: **đã chặn thật** ở `JoinRoomModal` + `PersonasView` + `joinRoom` (xác nhận trong browser: "2 of 2 selected").
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
-- [ ] Persistence: phòng chỉ sống trong React, F5 là mất. Hermes có memory riêng từng thành viên + `/compress` — chưa làm.
+- [ ] Persistence bền: `sessionStorage` đủ cho reload nhưng **chết theo tab**. Lịch sử lâu dài cần auth + DB — vẫn chặn ở `authenticateFromSession`.
 
 ## Cần bạn nhìn kỹ (rule 31.3)
 
