@@ -6,8 +6,9 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { Footer } from './components/Footer';
 import { Toast } from './components/Toast';
-import { FrameworkModal } from './components/FrameworkModal';
 import { CounterDraftModal } from './components/CounterDraftModal';
+import { JoinRoomModal } from './components/JoinRoomModal';
+import { ChatRoomView } from './components/ChatRoomView';
 import { OverviewView } from './components/OverviewView';
 import { EmptyChamberView } from './components/EmptyChamberView';
 import { SessionActiveView } from './components/SessionActiveView';
@@ -49,11 +50,12 @@ const ChamberContent: React.FC = () => {
           {currentView === 'billing' && <BillingHistoryView />}
           {currentView === 'pricing' && <PricingView />}
           {currentView === 'privacy' && <PrivacyView />}
+          {currentView === 'chat-room' && <ChatRoomView />}
         </main>
       </div>
       {isPublicPage && <Footer />}
-      <FrameworkModal />
       <CounterDraftModal />
+      <JoinRoomModal />
       <Toast />
       <span className="sr-only" aria-live="polite">{t.localBadge}</span>
     </div>

@@ -117,9 +117,82 @@ Supabase là của đồng nghiệp, không thuộc phạm vi task này.
 - [x] Evidence app thật (`next start -p 3200`): 18/20 kịch bản, 2 fail là **kỳ vọng test sai**, đã verify riêng (xem HANDOFF).
 - [x] `.gitignore` chặn `.zc-account.json` — file store chứa email thật, gần như lọt vào commit.
 
+## Cấp 10 — Phòng hội đồng: loop A2A bằng `@` (2026-10-05)
+
+Yêu cầu: luồng chat nhiều bot — popup chọn bot + cơ chế, chat như messenger, mỗi AI một card,
+trao lượt bằng `@`, bot được mention đọc toàn bộ lịch sử rồi đi tiếp, vòng lặp đến khi user kêu dừng.
+
+**Quyết định lượt này (chủ dự án trả lời 2026-10-05):**
+
+| Câu hỏi | Chốt |
+|---|---|
+| Engine AI | **Loop + UI với generator script trước**, xác minh workflow chạy đúng; BYOK thêm sau, thay đúng 1 export |
+| Auth | Gate local bằng `ZC_DEV_LOGIN_EMAIL` (đã có sẵn trong `currentUser.ts`) |
+| Trần loop | **3 lượt serial** như Hermes |
+| Mode "tổng hợp" | Cả nhóm trả lời nối tiếp rồi bot cuối tổng hợp |
+
+- [x] `web/src/prototype/chat/engine.ts` — routing thuần: `parseMentions` (alias bỏ dấu, mention nhiều từ, tên lạ → không resolve), `planSpeakers` (round-robin / panel), `runTurn` (queue động, handoff `@`, hard cap), `isStopDirective` (`stop @bot` giữ bot; giữa câu là prose).
+- [x] `web/src/prototype/chat/scripted.ts` — `scriptedGenerator` sinh `@handoff`/`@user` giả định; **đây là điểm duy nhất BYOK sẽ thay**.
+- [x] `tests/chat-engine.test.mjs` — 13/13 pass thật.
+- [x] `JoinRoomModal.tsx` — chọn bot (cap theo plan) + chọn mode.
+- [x] `ChatRoomView.tsx` — messenger UI, 1 bot = 1 card, composer Enter gửi / Shift+Enter xuống dòng.
+- [x] Chặn cap 2/4/8 ở `addPersona` + disable nút ở `PersonasView` (đóng lỗ hổng TODO mục "Ngoài scope").
+- [x] `tsc --noEmit` exit 0, `eslint` exit 0.
+- [~] ~~`next build` CHƯA chạy~~ → **đã chạy exit 0** ở Cấp 11.
+- [~] ~~Chưa lái app thật trên browser~~ → **đã lái, `ALL_CHECKS_PASS`** ở Cấp 11b.
+- [~] ~~13/13 pass thật~~ → bộ test này đã **bị viết lại** ở Cấp 11. Nó assert *parser*, tức là
+  chứng minh regex trên prose hoạt động — đúng thứ **không** nên làm. Số liệu cũ không còn ý nghĩa.
+
+## Cấp 11 — Engine viết lại: A2A có cấu trúc, không regex trên văn bản (2026-10-07)
+
+Yêu cầu: "A2A phải thực sự hoạt động giống như Hermes bots mode. Engine là fondation."
+
+**Vấn đề gốc:** bản trước đọc `@name` trong prose của bot để trao lượt. Sai ở tầng kiến trúc —
+regex không phân biệt được *nhắc* với *trích dẫn*, không đảm bảo tên luôn resolve, và model
+quên quy ước thì rơi về fallback im lặng. Hermes dùng `message_agent(target=...)`: tool call có cấu trúc.
+
+- [x] `engine.ts` — `BotTurn { text, handoffs, silent? }`, `BotGenerator` trả `BotTurn`. Routing đọc `handoffs`, **không** đọc prose. `WhyStop` đủ 5 nhánh: `user | silent | max-turns | budget | failed`. `TurnFailure` có kind `silent|timeout|transient|fatal`; chỉ `transient` retry đúng 1 lần.
+- [x] Queue động: handoff kéo được cố vấn **không có trong vòng đã lên lịch**, nhưng không được nhảy lên đầu hàng đã xếp.
+- [x] `buildContext`: 200 tin / 32k ký tự / excerpt 8k. Sửa bug tin quá lớn bị **âm thầm rớt** (check ngân sách chạy trước check kích thước → `continue` thay `break`).
+- [x] Ngồi yên đúng nghĩa: chỉ `silent` khi hàng cạn mà **không ai nói** (`produced === 0`). Bản cũ cắt sau 2/3 cố vấn.
+- [x] `scripted.ts` trả `BotTurn`. Đây là **điểm duy nhất** BYOK sẽ thay — engine không đổi.
+- [x] `AppContext.sendMessage` — `stoppedBy: WhyStop | null`, `failures: TurnFailure[]`, `turns` cộng dồn (trước reset mỗi lượt).
+- [x] `ChatRoomView` hiện 5 lý do dừng, mỗi cái một câu riêng; thêm 3 khoá copy EN + VI.
+
+**Bug tìm ra khi lái app thật (rule 19), không lộ ra qua test:**
+
+- [x] `stop @bot` vẫn chạy thành một lượt. Vì advisor vừa bị hold nên không còn trong roster, mention không resolve → `speakers = []` → phòng báo "No advisor answered" cho một tin **không phải câu hỏi**. Đã sửa: `stop` là lệnh thuần, không chạy vòng.
+- [x] Nhận diện directive phải dùng **roster đầy đủ**, không dùng roster đã lọc — advisor cần bị dừng thì đương nhiên không có trong roster rút gọn.
+- [x] `@all` **phải** chạy một vòng (user đang bảo hội đồng tiếp tục; im lặng mới là lỗi). Chỉ `stop` mới không chạy.
+- [x] Ràng buộc trần: `DEFAULT_MAX_TURNS = 12`, `DEFAULT_ROOM_BUDGET = 200`. **Chưa chốt với chủ dự án** — yêu cầu gốc là "vòng lặp vô tận", đang dùng trần để chặn chi phí.
+
+## Cấp 11b — Kiểm chứng thật (2026-10-07)
+
+- [x] `tests/chat-engine.test.mjs` — **25/25**. Assert **hành vi** (ai được trao lượt, khi nào vòng dừng, xử lý generator lỗi), không assert parser. Có test *"prose alone never routes"* chắc chắn thất bại dưới thiết kế cũ.
+- [x] `tests/drive-council.mjs` (mới) — lái Chrome thật qua CDP, **không thêm dependency** (Node 24 có `WebSocket` + `fetch` sẵn). `agent-browser` chưa cài; cài global là đụng máy nên không tự ý làm.
+- [x] `next build` → exit 0, `BUILD_ID` mới.
+- [x] **Lái app thật: `ALL_CHECKS_PASS`** trên `next start -p 3230`. Screenshot + JSON ở `.agent/evidence/`.
+
+| Tình huống | Kết quả thật |
+|---|---|
+| Gửi câu hỏi không mention | Pragmatist mở lượt → `@The Dreamer` → Dreamer trả lời → `@user` |
+| `@The Dreamer ...` | Dreamer mở lượt, Pragmatist **không** mở |
+| `stop @The Pragmatist` | Không cố vấn nào nói, **không** báo "nobody answered" |
+| `@all carry on` | Pragmatist quay lại, mở lượt, handoff tiếp |
+
+- [x] `tsc --noEmit` exit 0 · `eslint src` exit 0.
+- [x] Xoá scratch `.zc-*`.
+
 ## Ngoài scope
 
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
 - [ ] **Auth (đồng nghiệp)**: chỉ cần làm `authenticateFromSession` trong `web/src/lib/currentUser.ts`. Mọi thứ còn lại đã dựng sẵn quanh nó.
-- [ ] Hạn mức 2/4/8 advisor vẫn là con số hiển thị, chưa có chỗ nào chặn.
+- [ ] Hạn mức 2/4/8 advisor: **đã chặn thật** ở `JoinRoomModal` + `PersonasView` + `joinRoom` (xác nhận trong browser: "2 of 2 selected").
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
+- [ ] Persistence: phòng chỉ sống trong React, F5 là mất. Hermes có memory riêng từng thành viên + `/compress` — chưa làm.
+
+## Cần bạn nhìn kỹ (rule 31.3)
+
+- **Trần vòng lặp chưa chốt.** Spec gốc viết "vòng lặp vô tận cho đến khi user kêu ngừng", nhưng chủ dự án từng chốt 3 lượt. Tôi đang để `12` + trần phòng `200`. Muốn "vô tận" thật thì phải có cơ chế dừng bằng ngân sách tiền thật, không phải số lượt.
+- **`scriptedGenerator` không suy nghĩ.** Nó tuân thủ hợp đồng nên chứng minh **routing** đúng; không chứng minh model thật sẽ phát ra handoff. Chỉ BYOK mới trả lời được câu đó.
+- **Landing vẫn hứa** BYOK AES-256, hội thoại mã hoá — chưa có code sau lưng. `currentUser.ts` trả `null`, `SignInView` còn rỗng.

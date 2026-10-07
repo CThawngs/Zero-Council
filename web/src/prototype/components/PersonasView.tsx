@@ -4,7 +4,7 @@ import { Cpu, LockKeyhole, PlusCircle } from 'lucide-react';
 import { modelLabel, providerLabel } from '../data/mockData';
 
 export const PersonasView: React.FC = () => {
-  const { personas, setCurrentView, t, language } = useApp();
+  const { personas, setCurrentView, canAddPersona, personaCap, t, language } = useApp();
 
   return (
     <div className="content-shell space-y-7">
@@ -14,8 +14,14 @@ export const PersonasView: React.FC = () => {
           <h1>{t.personasTitle}</h1>
           <p>{t.personasBody}</p>
         </div>
-        <button type="button" onClick={() => setCurrentView('new-advisor')} className="button-primary min-h-11 w-full shrink-0 justify-center sm:w-auto"><PlusCircle className="h-4 w-4" />{t.addPersona}</button>
+        <button type="button" onClick={() => setCurrentView('new-advisor')} disabled={!canAddPersona} title={!canAddPersona ? t.personaCapHint.replace('{cap}', String(personaCap)) : undefined} className="button-primary min-h-11 w-full shrink-0 justify-center disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"><PlusCircle className="h-4 w-4" />{t.addPersona}</button>
       </header>
+
+      <p className="text-xs leading-relaxed text-ink-muted">
+        {t.personaCapCount
+          .replace('{used}', String(personas.length))
+          .replace('{cap}', String(personaCap))}
+      </p>
 
       <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm font-medium text-ink"><Cpu className="h-4 w-4 text-brass" />{t.modelLabel}</div>

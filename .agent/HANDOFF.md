@@ -1,4 +1,66 @@
-# HANDOFF — Zero Council product voice, Literata, brass-only hero
+# LƯỢT 11 — Engine viết lại: A2A có cấu trúc (2026-10-07)
+
+Lượt này viết lại `engine.ts` từ đầu. Phần cũ của HANDOFF (lượt 9, billing/coupon) giữ nguyên.
+
+## Quyết định nền tảng: bỏ regex trên prose
+
+Bản cũ trao lượt A2A bằng cách đọc `@name` trong **văn bản** bot. Sai ở tầng kiến trúc:
+
+- Nhắc (*"dreamer, what do you think?"*) bị nhầm là trao lượt — nhất là khi trích dẫn code block.
+- Model quên quy ước `@` → rơi về fallback im lặng, không báo lỗi.
+- Tên nhiều từ dễ không resolve.
+- Không phân biệt được *muốn ai trả lời* với *nhắc tới ai*.
+
+Hermes làm đúng việc này bằng tool call có cấu trúc (`message_agent(target=…)`). Vì vậy:
+
+```ts
+export interface BotTurn { text: string; handoffs: string[]; silent?: boolean }
+export type BotGenerator = (request: ChatTurnRequest) => Promise<BotTurn> | BotTurn;
+```
+
+Engine đọc `handoffs`, **không bao giờ** đọc prose. BYOK thay đúng một export (`scriptedGenerator`) là xong — `runTurn` không đổi.
+
+Có test *"prose alone never routes — a quoted mention is not a handoff"* chắc chắn **thất bại** dưới thiết kế cũ.
+
+## Bug tìm ra khi lái app thật
+
+Cả hai đều **không** lộ ra qua test — chỉ lộ khi lái Chrome thật (rule 19):
+
+1. **`stop @bot` vẫn chạy thành một lượt.** Advisor vừa bị hold nên không còn trong roster, mention không resolve → `speakers = []` → phòng hiện "No advisor answered this round" cho một tin **không phải câu hỏi**. Đó là lời nói dối về chính hội đồng.
+2. **Nhận diện directive dùng sai roster.** Dòng cũ dùng roster **đã lọc**; advisor cần bị dừng thì đương nhiên không có trong đó → không bao giờ nhận ra lệnh dừng.
+
+Sửa: directive nhận diện trên **roster đầy đủ**; `stop` là lệnh thuần nên **không** chạy vòng; `@all` thì **phải** chạy vòng (user đang bảo hội đồng tiếp tục — im lặng mới là lỗi).
+
+## Evidence
+
+Cổng chất lượng: `tsc --noEmit` exit 0 · `eslint src` exit 0 · `next build` exit 0 · `node --test tests/chat-engine.test.mjs` **25/25**.
+
+**Lái app thật: `ALL_CHECKS_PASS`** (`next start -p 3230`). Bằng chứng: `.agent/evidence/council-room.png`, `.agent/evidence/council-drive.json`.
+
+| Tình huống | Kết quả quan sát được |
+|---|---|
+| Câu hỏi không mention | Pragmatist mở lượt → `@The Dreamer` → Dreamer trả lời → `@user` |
+| `@The Dreamer …` | Dreamer mở lượt, Pragmatist **không** mở |
+| `stop @The Pragmatist` | Không cố vấn nào nói, **không** báo "nobody answered" |
+| `@all carry on` | Pragmatist quay lại, mở lượt, handoff tiếp sang Dreamer |
+
+Cap theo gói xác nhận luôn chạy: modal hiện "2 of 2 selected" trên gói Free.
+
+`tests/drive-council.mjs` lái Chrome thật qua CDP **không thêm dependency** — Node 24 có `WebSocket` + `fetch` sẵn. `agent-browser` chưa cài; cài global là thay đổi máy nên không tự ý làm (rule 9).
+
+## OPEN (vòng 11)
+
+1. **Trần vòng lặp chưa chốt — mâu thuẫn đang mở.** Spec gốc: "vòng lặp vô tận cho đến khi user kêu dừng". Chủ dự án từng chốt 3 lượt. Đang chạy `DEFAULT_MAX_TURNS = 12` + `DEFAULT_ROOM_BUDGET = 200`. Muốn "vô tận" thật thì phải chặn bằng **ngân sách tiền**, không phải số lượt — vòng không có khiến thì đốt token vô hạn.
+2. **`scriptedGenerator` không suy nghĩ.** Nó tuân thủ hợp đồng nên chứng minh **routing** đúng; **không** chứng minh model thật sẽ phát ra handoff. Chỉ BYOK mới trả lời được. Đây là giới hạn lớn nhất còn lại.
+3. **Persistence chưa có.** Phòng chỉ sống trong React; F5 là mất. Hermes có memory riêng từng thành viên + `/compress` — chưa làm.
+4. **Claim vượt code (mục OPEN 6 cũ vẫn đúng).** Landing hứa BYOK AES-256, hội thoại mã hoá. Repo không có mã hoá nào. `currentUser.ts` trả `null`, `SignInView` còn rỗng.
+5. `features/` + `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh.
+
+## Bàn giao (vòng 11)
+
+1. Code + docs: xong.
+2. **Chưa commit.** Tree đang có thay đổi ở `main` — cần chủ dự án chốt hướng commit/PR.
+3. Dừng server tạm: xong (xem `.agent/evidence/council-drive.json` để chạy lại).
 
 Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các worktree khác không đụng tới; handoff cũ của `vi-font-fix` giữ nguyên lịch sử ở commit trước.
 

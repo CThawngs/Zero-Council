@@ -10,7 +10,8 @@ export type ViewType =
   | 'settings'
   | 'billing'
   | 'pricing'
-  | 'privacy';
+  | 'privacy'
+  | 'chat-room';
 
 export type Language = 'en' | 'vi';
 
