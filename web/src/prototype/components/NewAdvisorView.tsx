@@ -5,15 +5,15 @@ import { modelLabel, providerLabel } from '../data/mockData';
 import { ArrowLeft, LockKeyhole, PlusCircle } from 'lucide-react';
 
 const modelLabels: { model: SupportedModel; provider: ModelProvider }[] = [
-  { model: 'Model label A', provider: 'Provider label A' },
-  { model: 'Model label B', provider: 'Provider label B' },
-  { model: 'Model label C', provider: 'Provider label C' },
+  { model: 'claude-sonnet-4-5', provider: 'anthropic' },
+  { model: 'gpt-4o', provider: 'openai' },
+  { model: 'gpt-4o-mini', provider: 'openai' },
 ];
 
 export const NewAdvisorView: React.FC = () => {
-  const { addPersona, setCurrentView, showToast, t, language } = useApp();
+  const { addPersona, setCurrentView, showToast, t } = useApp();
   const [archetype, setArchetype] = useState('');
-  const [model, setModel] = useState<SupportedModel>('Model label A');
+  const [model, setModel] = useState<SupportedModel>('claude-sonnet-4-5');
   const [stance, setStance] = useState('');
   const [instructions, setInstructions] = useState('');
   const [showRequiredError, setShowRequiredError] = useState(false);
@@ -40,7 +40,7 @@ export const NewAdvisorView: React.FC = () => {
     setShowRequiredError(false);
     setInvalidFields({ archetype: false, stance: false, instructions: false });
     const cleanArchetype = archetype.trim();
-    const provider = modelLabels.find((item) => item.model === model)?.provider ?? 'Provider label A';
+    const provider = modelLabels.find((item) => item.model === model)?.provider ?? 'anthropic';
     const persona: AdvisorPersona = {
       id: `advisor-${crypto.randomUUID()}`,
       name: t.samplePersonaName.replace('{name}', cleanArchetype),
@@ -64,7 +64,7 @@ export const NewAdvisorView: React.FC = () => {
       <form onSubmit={handleSubmit} className="panel space-y-6 p-5 sm:p-7" noValidate>
         <div className="grid gap-5 sm:grid-cols-2">
           <label className="field"><span className="field-label">{t.archetype}</span><input ref={archetypeRef} value={archetype} onChange={(event) => { setArchetype(event.target.value); setShowRequiredError(false); setInvalidFields((value) => ({ ...value, archetype: false })); }} placeholder={t.archetypePlaceholder} required aria-invalid={invalidFields.archetype} aria-describedby={invalidFields.archetype ? 'advisor-form-error' : undefined} /></label>
-          <label className="field"><span className="field-label">{t.modelLabel}</span><select value={model} onChange={(event) => setModel(event.target.value as SupportedModel)}>{modelLabels.map((item) => <option key={item.model} value={item.model}>{modelLabel(item.model, language)} · {providerLabel(item.provider, language)}</option>)}</select></label>
+          <label className="field"><span className="field-label">{t.modelLabel}</span><select value={model} onChange={(event) => setModel(event.target.value as SupportedModel)}>{modelLabels.map((item) => <option key={item.model} value={item.model}>{modelLabel(item.model)} · {providerLabel(item.provider)}</option>)}</select></label>
         </div>
         <label className="field"><span className="field-label">{t.stance}</span><input ref={stanceRef} value={stance} onChange={(event) => { setStance(event.target.value); setShowRequiredError(false); setInvalidFields((value) => ({ ...value, stance: false })); }} placeholder={t.stancePlaceholder} required aria-invalid={invalidFields.stance} aria-describedby={invalidFields.stance ? 'advisor-form-error' : undefined} /></label>
         <label className="field"><span className="field-label">{t.instructions}</span><textarea ref={instructionsRef} value={instructions} onChange={(event) => { setInstructions(event.target.value); setShowRequiredError(false); setInvalidFields((value) => ({ ...value, instructions: false })); }} placeholder={t.instructionsPlaceholder} rows={5} required aria-invalid={invalidFields.instructions} aria-describedby={invalidFields.instructions ? 'advisor-form-error' : undefined} /></label>

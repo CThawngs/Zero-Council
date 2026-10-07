@@ -183,6 +183,41 @@ quên quy ước thì rơi về fallback im lặng. Hermes dùng `message_agent(
 - [x] `tsc --noEmit` exit 0 · `eslint src` exit 0.
 - [x] Xoá scratch `.zc-*`.
 
+## Cấp 12 — BYOK: nối model thật vào seam (2026-10-07)
+
+Chủ dự án chốt: **Anthropic + OpenAI**, key gửi **thẳng từ trình duyệt** ra provider, không qua server ta.
+
+- [x] `chat/byok.ts` (mới): adapter Anthropic + OpenAI. Không SDK — `fetch` đủ cho cả hai wire format.
+- [x] Tool `message_agent(target)` — **trùng tên và shape với Hermes**. Đây là điểm nối với bản tham chiếu, không phải chi tiết tuỳ chọn.
+- [x] Key nằm trong RAM của tab, **không** storage, **không** server. Đổi lại: F5 là mất key.
+- [x] Phòng là **hỗn hợp provider**: mỗi cố vấn gọi đúng vendor của nó. Cố vấn không có key thì rơi về scripted, không làm hỏng vòng.
+- [x] Xoá `Model label A/B/C` + `Provider label A/B/C` → id thật (`claude-sonnet-4-5`, `gpt-4o`, `gpt-4o-mini`, `anthropic`, `openai`). Xoá 6 khoá i18n chết.
+- [x] Tên vendor/model là proper noun nên **không dịch** — xoá luôn lớp `modelLabel(x, language)` / `providerLabel(x, language)`.
+
+**Một quyết định thiết kế đáng ghi:** tool call **có mặt nhưng không đọc được** ≠ *không có tool call*.
+Nếu gộp hai thứ, JSON hỏng sẽ bị đọc thành "cố vấn không trao lượt" và phòng treo im lặng. Vì vậy adapter trả
+thêm cờ `attempted`; chỉ khi có tool call mà không resolve được tên thì mới đóng vòng về `user`.
+
+**Một thiếu sót trong prompt:** nhánh "không closing" ban đầu không hề nhắc `user` là một target hợp lệ.
+Cố vấn hết ý sẽ chọn bạn ngẫu nhiên thay vì trả câu hỏi về cho người, và vòng kéo dài. Đã sửa.
+
+## Cấp 12b — Kiểm chứng (2026-10-07)
+
+- [x] `tests/byok.test.mjs` — **9 test**, stub `fetch`: tool_use → `handoffs`, tool_call JSON → `handoffs`, arguments hỏng → mất handoff **nhưng giữ câu trả lời**, `[SILENT]` → pass, prose có `@name` → **không** route, lỗi HTTP → throw kèm status.
+- [x] `tsc --noEmit` 0 · `eslint src` 0 · `next build` 0 · **34/34** test.
+- [x] `tests/drive-keys.mjs` (mới) — lái Chrome thật, **14/14 pass**. Bằng chứng `.agent/evidence/council-keys.png`.
+
+Check quan trọng nhất của driver này: **nối key sai rồi bắt cố vấn trả lời.** Kết quả thật:
+
+```
+YOU What should we ship first?
+An advisor stopped working (fatal). The rest of the council is still here.
+```
+
+Không có câu scripted nào lọt. Nếu lọt, nghĩa là key bị bỏ qua và hội đồng **bịa** cố vấn — tệ hơn nhiều so với báo lỗi.
+
+**Bug tôi tự gây ra rồi bắt được:** driver đầu tiên reload trang giữa chừng, mà reload **xoá key trong RAM**, nên phòng rơi về scripted và driver vẫn báo PASS. Check `From my lens` bị lừa. Đã sửa thứ tự: vào phòng → nối key → quay lại phòng bằng điều hướng trong app, không reload.
+
 ## Ngoài scope
 
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
@@ -193,6 +228,7 @@ quên quy ước thì rơi về fallback im lặng. Hermes dùng `message_agent(
 
 ## Cần bạn nhìn kỹ (rule 31.3)
 
-- **Trần vòng lặp chưa chốt.** Spec gốc viết "vòng lặp vô tận cho đến khi user kêu ngừng", nhưng chủ dự án từng chốt 3 lượt. Tôi đang để `12` + trần phòng `200`. Muốn "vô tận" thật thì phải có cơ chế dừng bằng ngân sách tiền thật, không phải số lượt.
-- **`scriptedGenerator` không suy nghĩ.** Nó tuân thủ hợp đồng nên chứng minh **routing** đúng; không chứng minh model thật sẽ phát ra handoff. Chỉ BYOK mới trả lời được câu đó.
-- **Landing vẫn hứa** BYOK AES-256, hội thoại mã hoá — chưa có code sau lưng. `currentUser.ts` trả `null`, `SignInView` còn rỗng.
+- **Chưa từng gọi provider thật.** Toàn bộ bằng chứng dùng key giả và HTTP stub. Chứng minh *đường nối và ánh xạ* đúng; **không** chứng minh Anthropic/OpenAI nhận request và trả tool call. Muốn chắc thì cần một key thật chạy một vòng.
+- **Key không lưu, mất khi F5.** Đây là cái giá của việc không cho server chạm vào key. Nếu muốn nhớ key thì phải chọn hoặc mã hoá phía client, hoặc để server giữ — hai đều đổi lại thứ đang được bán.
+- **Trần vòng lặp chưa chốt.** Spec gốc "vòng lặp vô tận", chủ dự án từng chốt 3 lượt. Đang `12` + trần phòng `200`. Muốn vô tận thật thì phải chặn bằng **ngân sách tiền**.
+- **Landing vẫn hứa** BYOK AES-256, hội thoại mã hoá. Giờ có key chạy thật, nhưng **không có mã hoá nào** và key sống trong RAM. `currentUser.ts` trả `null`, `SignInView` còn rỗng.

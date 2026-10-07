@@ -57,9 +57,9 @@ export const localizePersona = (persona: AdvisorPersona, language: Language): Ad
 };
 
 export const initialPersonas: AdvisorPersona[] = [
-  { id: 'pragmatist', name: copy.en.pragmatistName, archetype: copy.en.pragmatistArchetype, model: 'Model label A', provider: 'Provider label A', colorToken: 'persona-sage', colorHex: '#7C9885', stance: copy.en.pragmatistStance, instructions: copy.en.pragmatistInstructions, sampleQuote: copy.en.pragmatistQuote },
-  { id: 'dreamer', name: copy.en.dreamerName, archetype: copy.en.dreamerArchetype, model: 'Model label B', provider: 'Provider label B', colorToken: 'persona-rose', colorHex: '#B98389', stance: copy.en.dreamerStance, instructions: copy.en.dreamerInstructions, sampleQuote: copy.en.dreamerQuote },
-  { id: 'skeptic', name: copy.en.skepticName, archetype: copy.en.skepticArchetype, model: 'Model label C', provider: 'Provider label C', colorToken: 'persona-slate', colorHex: '#6E85A6', stance: copy.en.skepticStance, instructions: copy.en.skepticInstructions, sampleQuote: copy.en.skepticQuote },
+  { id: 'pragmatist', name: copy.en.pragmatistName, archetype: copy.en.pragmatistArchetype, model: 'claude-sonnet-4-5', provider: 'anthropic', colorToken: 'persona-sage', colorHex: '#7C9885', stance: copy.en.pragmatistStance, instructions: copy.en.pragmatistInstructions, sampleQuote: copy.en.pragmatistQuote },
+  { id: 'dreamer', name: copy.en.dreamerName, archetype: copy.en.dreamerArchetype, model: 'gpt-4o', provider: 'openai', colorToken: 'persona-rose', colorHex: '#B98389', stance: copy.en.dreamerStance, instructions: copy.en.dreamerInstructions, sampleQuote: copy.en.dreamerQuote },
+  { id: 'skeptic', name: copy.en.skepticName, archetype: copy.en.skepticArchetype, model: 'gpt-4o-mini', provider: 'openai', colorToken: 'persona-slate', colorHex: '#6E85A6', stance: copy.en.skepticStance, instructions: copy.en.skepticInstructions, sampleQuote: copy.en.skepticQuote },
 ];
 
 export const initialSessions: DeliberationSession[] = [
@@ -68,26 +68,22 @@ export const initialSessions: DeliberationSession[] = [
   sessionFixture('process-change', copy.en.initialProcessTitle, 'Decision Matrix'),
 ];
 
+/** One row per provider. The key itself is never stored here — it lives in memory only. */
 export const initialApiKeys: ApiKeyConfig[] = [
-  { provider: 'Provider label A', modelName: 'Model label A', connected: false },
-  { provider: 'Provider label B', modelName: 'Model label B', connected: false },
-  { provider: 'Provider label C', modelName: 'Model label C', connected: false },
+  { provider: 'anthropic', modelName: 'claude-sonnet-4-5', connected: false },
+  { provider: 'openai', modelName: 'gpt-4o', connected: false },
 ];
 
-const modelLabelKeys: Record<SupportedModel, 'modelLabelA' | 'modelLabelB' | 'modelLabelC'> = {
-  'Model label A': 'modelLabelA',
-  'Model label B': 'modelLabelB',
-  'Model label C': 'modelLabelC',
+// Vendors and model names are proper nouns. Translating them was never useful and produced copy
+// that said "Provider label A" in every language.
+const modelLabels: Record<SupportedModel, string> = {
+  'claude-sonnet-4-5': 'Claude Sonnet 4.5',
+  'gpt-4o': 'GPT-4o',
+  'gpt-4o-mini': 'GPT-4o mini',
 };
 
-const providerLabelKeys: Record<ModelProvider, 'providerLabelA' | 'providerLabelB' | 'providerLabelC'> = {
-  'Provider label A': 'providerLabelA',
-  'Provider label B': 'providerLabelB',
-  'Provider label C': 'providerLabelC',
-};
+const providerLabels: Record<ModelProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
 
-export const modelLabel = (model: SupportedModel, language: Language) =>
-  copy[language][modelLabelKeys[model]];
+export const modelLabel = (model: SupportedModel) => modelLabels[model];
 
-export const providerLabel = (provider: ModelProvider, language: Language) =>
-  copy[language][providerLabelKeys[provider]];
+export const providerLabel = (provider: ModelProvider) => providerLabels[provider];

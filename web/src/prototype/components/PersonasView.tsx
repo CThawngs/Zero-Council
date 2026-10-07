@@ -1,10 +1,10 @@
-import React from 'react';
+﻿import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Cpu, LockKeyhole, PlusCircle } from 'lucide-react';
 import { modelLabel, providerLabel } from '../data/mockData';
 
 export const PersonasView: React.FC = () => {
-  const { personas, setCurrentView, canAddPersona, personaCap, t, language } = useApp();
+  const { personas, setCurrentView, canAddPersona, personaCap, t} = useApp();
 
   return (
     <div className="content-shell space-y-7">
@@ -39,7 +39,7 @@ export const PersonasView: React.FC = () => {
               <span className="badge-neutral min-w-0 max-w-full break-words">{persona.archetype}</span>
             </div>
             <dl className="mt-5 space-y-4 text-sm">
-              <div><dt className="field-label">{t.modelLabel}</dt><dd className="mt-1 text-ink">{modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}</dd></div>
+              <div><dt className="field-label">{t.modelLabel}</dt><dd className="mt-1 text-ink">{modelLabel(persona.model)} · {providerLabel(persona.provider)}</dd></div>
               <div><dt className="field-label">{t.primaryLens}</dt><dd className="mt-1 break-words text-ink">{persona.stance}</dd></div>
               <div><dt className="field-label">{t.fixtureInstructions}</dt><dd className="mt-1 break-words rounded-lg border border-border bg-background/60 p-3 text-xs leading-relaxed text-ink-muted">{persona.instructions}</dd></div>
             </dl>

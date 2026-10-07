@@ -12,7 +12,7 @@ export const Toast: React.FC = () => {
     values.name = copy[language].samplePersonaName.replace('{name}', values.name);
   }
   if ((toastMessage?.key === 'toastProviderOn' || toastMessage?.key === 'toastProviderOff') && values?.provider) {
-    values.provider = providerLabel(values.provider as ModelProvider, language);
+    values.provider = providerLabel(values.provider as ModelProvider);
   }
   const message = toastMessage
     ? copy[language][toastMessage.key].replace(/\{(\w+)\}/g, (_, name: string) => values?.[name] ?? '')

@@ -2,17 +2,27 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ModelProvider } from '../types';
 import { modelLabel, providerLabel } from '../data/mockData';
+import { providerById } from '../chat/byok';
 import { Check, LockKeyhole, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
 
 export const ApiKeysView: React.FC = () => {
-  const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, language, t } = useApp();
+  const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, t } = useApp();
   const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
   const [isClearOpen, setIsClearOpen] = useState(false);
+  const [draftKey, setDraftKey] = useState('');
   const activeItem = activeProvider ? apiKeys.find((key) => key.provider === activeProvider) : undefined;
+  const provider = activeProvider ? providerById(activeProvider) : undefined;
   const toggle = () => {
     if (!activeProvider || !activeItem) return;
-    if (activeItem.connected) removeApiKey(activeProvider); else connectApiKey(activeProvider);
+    if (activeItem.connected) {
+      removeApiKey(activeProvider);
+    } else if (draftKey.trim()) {
+      connectApiKey(activeProvider, draftKey.trim());
+    } else {
+      return;
+    }
+    setDraftKey('');
     setActiveProvider(null);
   };
 
@@ -28,8 +38,8 @@ export const ApiKeysView: React.FC = () => {
       <div className="grid gap-4">
         {apiKeys.map((item) => (
           <article key={item.provider} className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-serif text-lg text-ink">{providerLabel(item.provider, language)}</h2><span className="badge-neutral">{modelLabel(item.modelName, language)}</span><span className={item.connected ? 'badge-success' : 'badge-muted'}>{item.connected ? t.stateOn : t.stateOff}</span></div><p className="mt-2 text-sm leading-relaxed text-ink-muted">{item.connected ? t.stateOnBody : t.stateOffBody}</p></div>
-            <button type="button" onClick={() => setActiveProvider(item.provider)} className={item.connected ? 'button-secondary min-h-11 shrink-0 justify-center' : 'button-primary min-h-11 shrink-0 justify-center'} aria-label={`${item.connected ? t.clearState : t.toggleState}: ${providerLabel(item.provider, language)}`}>{item.connected ? <><RotateCcw className="h-4 w-4" />{t.clearState}</> : <><Check className="h-4 w-4" />{t.toggleState}</>}</button>
+            <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-serif text-lg text-ink">{providerLabel(item.provider)}</h2><span className="badge-neutral">{modelLabel(item.modelName)}</span><span className={item.connected ? 'badge-success' : 'badge-muted'}>{item.connected ? t.stateOn : t.stateOff}</span></div><p className="mt-2 text-sm leading-relaxed text-ink-muted">{item.connected ? t.stateOnBody : t.stateOffBody}</p></div>
+            <button type="button" onClick={() => setActiveProvider(item.provider)} className={item.connected ? 'button-secondary min-h-11 shrink-0 justify-center' : 'button-primary min-h-11 shrink-0 justify-center'} aria-label={`${item.connected ? t.clearState : t.toggleState}: ${providerLabel(item.provider)}`}>{item.connected ? <><RotateCcw className="h-4 w-4" />{t.clearState}</> : <><Check className="h-4 w-4" />{t.toggleState}</>}</button>
           </article>
         ))}
       </div>
@@ -48,6 +58,23 @@ export const ApiKeysView: React.FC = () => {
         }
       >
         <p className="text-sm leading-relaxed text-ink-muted">{activeItem?.connected ? t.stateOnBody : t.stateOffBody}</p>
+        {!activeItem?.connected && (
+          // type=password and autoComplete=off: the value must not be offered by the browser, and
+          // it is never persisted anywhere, so a shared machine does not inherit it.
+          <label className="field mt-4">
+            <span className="field-label">{t.keyLabel}</span>
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode="text"
+              value={draftKey}
+              placeholder={provider?.keyHint ?? ''}
+              onChange={(event) => setDraftKey(event.target.value)}
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
+            />
+          </label>
+        )}
       </Modal>
       <Modal
         isOpen={isClearOpen}

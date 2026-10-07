@@ -1,10 +1,10 @@
-import React from 'react';
+﻿import React from 'react';
 import { useApp } from '../context/AppContext';
 import { ArrowRight, Eye, Layers3, ShieldCheck, UsersRound } from 'lucide-react';
 import { modelLabel, providerLabel } from '../data/mockData';
 
 export const SessionActiveView: React.FC = () => {
-  const { currentSession, setCurrentView, openFrameworkModal, t, language } = useApp();
+  const { currentSession, setCurrentView, openFrameworkModal, t} = useApp();
   const frameworkLabel = {
     'Good / Normal / Bad Scenarios': t.scenarioTitle,
     'Six Thinking Hats': t.hatsTitle,
@@ -70,7 +70,7 @@ export const SessionActiveView: React.FC = () => {
                   <h3 className="font-medium text-ink">{advisor.name}</h3>
                   <p className="mt-1 text-xs leading-relaxed text-ink-muted">{advisor.stance}</p>
                   <p className="mt-2 text-[11px] text-ink-muted">
-                    {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.modelLabel}
+                    {advisor ? `${modelLabel(advisor.model)} · ${providerLabel(advisor.provider)}` : t.modelLabel}
                   </p>
                 </div>
               </div>
@@ -95,7 +95,7 @@ export const SessionActiveView: React.FC = () => {
                   <div className="min-w-0">
                     <h3 className="font-medium text-ink">{testimony.heading}</h3>
                     <p className="mt-1 text-[11px] text-ink-muted">
-                      {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.modelLabel}
+                      {advisor ? `${modelLabel(advisor.model)} · ${providerLabel(advisor.provider)}` : t.modelLabel}
                     </p>
                   </div>
                   <span className="shrink-0 rounded-md border border-border bg-background px-2 py-1 text-[10px] text-brass">

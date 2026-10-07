@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import {
@@ -19,8 +19,7 @@ export const SessionConcludedView: React.FC = () => {
     openCounterDraftModal,
     showToast,
     t,
-    language,
-  } = useApp();
+    } = useApp();
   const [isCopying, setIsCopying] = useState(false);
 
   const frameworkLabel = {
@@ -206,7 +205,7 @@ export const SessionConcludedView: React.FC = () => {
                 <div className="border-b border-border pb-3">
                   <h3 className="font-medium text-ink">{testimony.heading}</h3>
                   <p className="mt-1 text-[11px] text-ink-muted">
-                    {t.modelLabel}: {advisor ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}` : t.notImplemented}
+                    {t.modelLabel}: {advisor ? `${modelLabel(advisor.model)} · ${providerLabel(advisor.provider)}` : t.notImplemented}
                   </p>
                 </div>
                 <p className="mt-4 text-sm leading-relaxed text-ink">{testimony.primaryText}</p>

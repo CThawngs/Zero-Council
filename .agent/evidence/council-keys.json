@@ -1,0 +1,71 @@
+{
+  "ranAt": "2026-10-07T15:42:30.807Z",
+  "base": "http://127.0.0.1:3231",
+  "trace": [
+    {
+      "step": "joined a room",
+      "detail": "PASS — joined"
+    },
+    {
+      "step": "Integrations opens",
+      "detail": "PASS — clicked"
+    },
+    {
+      "step": "real vendor names, not placeholders",
+      "detail": "PASS — Anthropic, OpenAI, Claude Sonnet 4.5, GPT-4o"
+    },
+    {
+      "step": "no placeholder copy survives",
+      "detail": "PASS — scan for \"Provider A/B\""
+    },
+    {
+      "step": "connect dialog asks for a key",
+      "detail": "PASS — Connect this provider?The connection is stored on your account and can be removed at any time.Add a key to let advisors "
+    },
+    {
+      "step": "the key field is a password box",
+      "detail": "PASS — {\"has\":true,\"autocomplete\":\"off\"}"
+    },
+    {
+      "step": "the browser will not offer to save it",
+      "detail": "PASS — autocomplete=off"
+    },
+    {
+      "step": "key accepted",
+      "detail": "PASS — clicked"
+    },
+    {
+      "step": "provider reads as connected",
+      "detail": "PASS — {\"connected\":true,\"leaked\":false}"
+    },
+    {
+      "step": "the key is not rendered back into the page",
+      "detail": "PASS — no raw key in the DOM"
+    },
+    {
+      "step": "returned to the room with the key still held",
+      "detail": "PASS — composer present: true"
+    },
+    {
+      "step": "room-after-bad-key",
+      "detail": "{\"text\":\"YOU What should we ship first? An advisor stopped working (fatal). The rest of the council is still here.\",\"grew\":true}"
+    },
+    {
+      "step": "the room says something happened",
+      "detail": "PASS — transcript grew"
+    },
+    {
+      "step": "the key was actually used, not silently bypassed",
+      "detail": "PASS — no scripted text"
+    },
+    {
+      "step": "an unusable key is reported, not papered over",
+      "detail": "PASS — YOU What should we ship first? An advisor stopped working (fatal). The rest of the council is still here."
+    },
+    {
+      "step": "screenshot",
+      "detail": "council-keys.png"
+    }
+  ],
+  "failures": []
+}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+﻿import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { planById } from '../data/plans';
@@ -30,7 +30,6 @@ export const ChatRoomView: React.FC = () => {
     personas,
     setCurrentView,
     currentPlanId,
-    language,
     t,
   } = useApp();
   const [draft, setDraft] = useState('');
@@ -154,7 +153,7 @@ export const ChatRoomView: React.FC = () => {
                 </span>
                 {persona && (
                   <span className="text-[11px] text-ink-muted">
-                    {modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}
+                    {modelLabel(persona.model)} · {providerLabel(persona.provider)}
                   </span>
                 )}
               </header>

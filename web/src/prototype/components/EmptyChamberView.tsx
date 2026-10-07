@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { DecisionFramework } from '../types';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { Check, Compass, GitBranch, Layers3, MessageSquareText, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
 
 export const EmptyChamberView: React.FC = () => {
-  const { startNewSession, openJoinRoom, personas, setCurrentView, t, language } = useApp();
+  const { startNewSession, openJoinRoom, personas, setCurrentView, t} = useApp();
   const [question, setQuestion] = useState('');
   const [selectedFramework, setSelectedFramework] =
     useState<DecisionFramework>('Good / Normal / Bad Scenarios');
@@ -136,7 +136,7 @@ export const EmptyChamberView: React.FC = () => {
                   <div className="min-w-0">
                     <p className="min-w-0 truncate text-sm font-medium text-ink">{persona.name}</p>
                     <p className="min-w-0 truncate text-[11px] text-ink-muted">
-                      {modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}
+                      {modelLabel(persona.model)} · {providerLabel(persona.provider)}
                     </p>
                   </div>
                 </div>

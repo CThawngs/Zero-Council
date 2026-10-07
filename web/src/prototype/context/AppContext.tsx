@@ -24,6 +24,7 @@ import {
   type TurnFailure,
   type WhyStop,
 } from '../chat/engine';
+import { byokGenerator } from '../chat/byok';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type PlanId } from '../data/plans';
 
@@ -63,7 +64,7 @@ interface AppContextType {
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
   apiKeys: ApiKeyConfig[];
-  connectApiKey: (provider: ModelProvider) => void;
+  connectApiKey: (provider: ModelProvider, key: string) => void;
   removeApiKey: (provider: ModelProvider) => void;
   revokeAllKeys: () => void;
   isFrameworkModalOpen: boolean;
@@ -332,7 +333,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // duplicated every user message in the transcript.
       history: currentRoom.messages,
       userMessage,
-      generate: scriptedGenerator(activeBots, { lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '' }),
+      // Each advisor answers through its own vendor, so the room is a mix: one key per provider, and any
+      // advisor whose vendor has no key falls back to the scripted reply instead of failing the round.
+      // The engine cannot see this choice — it only ever sees `BotTurn`, which is the whole point of
+      // the generator seam.
+      generate: (request) => {
+        const persona = active.find((p) => p.id === request.bot.id);
+        const provider = persona?.provider;
+        const key = provider ? keys[provider] : undefined;
+        if (!provider || !key || !persona) {
+          return scriptedGenerator(activeBots, { lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '' })(request);
+        }
+        return byokGenerator(
+          { provider, model: persona.model, apiKey: key },
+          { personaOf: (bot) => active.find((p) => p.id === bot.id)?.instructions }
+        )(request);
+      },
       maxTurns: DEFAULT_MAX_TURNS,
       roomBudget: DEFAULT_ROOM_BUDGET,
       turnsUsed: currentRoom.turns,
@@ -352,7 +368,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const connectApiKey = (provider: ModelProvider) => {
+  // Keys live in memory for the life of the tab and nowhere else: not in storage, not on our server.
+  // Reloading clears them, which is the trade for never handing a key to anyone but the vendor.
+  const [keys, setKeys] = useState<Partial<Record<ModelProvider, string>>>({});
+
+  const connectApiKey = (provider: ModelProvider, key: string) => {
+    setKeys((value) => ({ ...value, [provider]: key }));
     setApiKeys((value) =>
       value.map((item) => (item.provider === provider ? { ...item, connected: true } : item))
     );
@@ -360,6 +381,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const removeApiKey = (provider: ModelProvider) => {
+    setKeys((value) => {
+      const next = { ...value };
+      delete next[provider];
+      return next;
+    });
     setApiKeys((value) =>
       value.map((item) => (item.provider === provider ? { ...item, connected: false } : item))
     );
@@ -367,6 +393,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const revokeAllKeys = () => {
+    setKeys({});
     setApiKeys((value) => value.map((item) => ({ ...item, connected: false })));
     showToast('toastProvidersCleared');
   };
