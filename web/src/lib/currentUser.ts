@@ -33,10 +33,6 @@ const authenticateFromSession = async (): Promise<SessionUser | null> => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  /**
-   * getUser lấy từ bên Server
-   * đã qua xử lý và kiểm tra từ bên Browser
-   */
 
   if (!user?.email) return null;
 
