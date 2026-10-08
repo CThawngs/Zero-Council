@@ -1,7 +1,12 @@
 ## Supabase cần 3 mục:
 + Client.ts: truy cập Supabase từ phía browser
 + Server.ts: truy cập Supabase từ phía server
-+ Proxy: quản lý Auth tokens giữa 2 phía
++ lib/proxy.ts: cập nhật cookies Đăng nhập giữa 2 phía
++ proxy.ts: Matcher (quy định những đường dẫn proxy có thể chạy) dành riêng cho lib/proxy.ts
+
+#### Lưu ý: Next.js là framework có sử dụng Server-Side Rendering nên cần thay đổi cơ chế đăng ký và đăng nhập bằng cách trao đổi token Auth khi đăng ký. TUY NHIÊN, vì việc làm theo quy trình này (PCKE flow) có yêu cầu thay SMTP và tên miền nên hiện đang dùng kiểu lai.
+
+Nói chung callback route.ts sẽ xử lý việc trao đổi thông tin (token) giữa server và client, và lưu vào cookies khi đăng ký / đăng nhập
 
 ## Workflow cho Authentication:
 
@@ -20,8 +25,8 @@ trong trường hợp user click vào Google để đăng ký account -> vào da
 ## TODO
 - [X] Init Supabase
 - [X] Tạo Clients
-- [ ] Gắn Đăng ký qua Email
-- [ ] Gắn Đăng nhập qua Email
+- [X] Gắn Đăng ký qua Email
+- [X] Gắn Đăng nhập qua Email
 - [ ] Gắn Đăng ký qua Google, yêu cầu tạo mk riêng cho Zero-Council
 - [ ] Gắn Đăng nhập qua Google
 - [ ] Gộp tài khoản nếu trùng email và Google
