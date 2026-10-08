@@ -27,7 +27,7 @@ export const SignUpView: React.FC = () => {
             password,
             options: {
                 emailRedirectTo:
-                `${window.location.origin}/auth/callback`,
+                `${window.location.origin}/`,
             },
         });
 
