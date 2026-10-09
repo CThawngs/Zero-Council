@@ -77,6 +77,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # --- Gates. Rẻ, chạy trước, fail sớm ---
+      # Tạo evidence/ ngay từ đầu: bước upload có `if-no-files-found: error`, nên
+      # nếu build chết trước bước "Bật app" mà thư mục chưa có, upload đỏ thêm
+      # một lỗi giả không liên quan gì tới nguyên nhân thật.
+      - name: Chuẩn bị thư mục bằng chứng
+        run: mkdir -p evidence
+
       # --test-timeout vì một test treo âm thầm đã ăn trọn 20 phút của job.
       # Giờ nó báo đỏ sau 60s thay vì bắt cả runner đứng yên.
       - name: Test hợp đồng và logic
@@ -90,25 +96,34 @@ jobs:
         working-directory: web
         run: pnpm exec eslint
 
-      # `next/font/google` tải Literata lúc build, tức phụ thuộc mạng ra ngoài.
-      # Runner đôi khi không lấy được và Turbopack chết với
+      # `next/font/google` tải Literata/Inter lúc build, tức phụ thuộc mạng ra ngoài.
+      # Runner mất mạng thì Turbopack chết với
       # "Module not found: @vercel/turbopack-next/internal/font/google/font".
-      # Đã gặp thật ở run này, re-run là xanh — tức là mạng, không phải app.
+      # Đã gặp thật 2 lần: một run fail rồi re-run xanh ngay; một run fail cả 3
+      # lần thử liên tiếp rồi lại xanh. Tức là mạng, không phải app.
       #
-      # Build không có side effect lặp lại vô hạn nên thử lại 3 lần là rẻ hơn
-      # nhiều so với nhét file font vào repo, và log vẫn nói thẳng lần cuối.
+      # Vì vậy backoff phải đủ dài để qua được một đợt mạng chết, chứ 3 lần cách
+      # nhau 10s là không đủ (3 lần đó thua sạch). 5 lần × 30s vẫn nằm trong
+      # `timeout-minutes: 20`.
+      #
+      # Chưa chọn cách bỏ hẳn phụ thuộc mạng (vendoring file font vào repo):
+      # `next/font/local` không hỗ trợ `unicode-range`, nên phải viết `@font-face`
+      # tay — đụng hệ thống font của sản phẩm. Đó là việc của chủ sản phẩm, không
+      # phải sửa CI. Ghi lại ở đây để lần sau không phải đoán.
       - name: Build
         working-directory: web
         run: |
-          for attempt in 1 2 3; do
+          for attempt in 1 2 3 4 5; do
             if pnpm exec next build; then
               echo "build ok (lần $attempt)"
               exit 0
             fi
-            echo "build fail lần $attempt — lại sau 10s"
-            sleep 10
+            if [ "$attempt" -lt 5 ]; then
+              echo "build fail lần $attempt — lại sau 30s"
+              sleep 30
+            fi
           done
-          echo "build fail 3 lần liên tiếp"
+          echo "build fail 5 lần liên tiếp. Nếu chạy lại thì xanh, đây là mạng của runner, không phải app."
           exit 1
 
       # --- Bật app thật rồi hỏi nó ---
