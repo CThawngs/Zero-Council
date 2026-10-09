@@ -105,6 +105,18 @@ const systemPrompt = (request: ChatTurnRequest, persona: string | undefined): st
       // picks a colleague at random instead of handing the question back, and the round drags on.
       'When you are done, call message_agent with the name of the advisor who should go next, or with "user" if the council has nothing left to add and the human should decide.';
 
+  // The text was pulled out once, when the human pinned the link. It goes in as material, not as a
+  // link to click: a model cannot fetch, and asking it to would invite it to invent the contents.
+  // A link that could not be read is named rather than dropped — silence would read as "you ignored
+  // what I sent".
+  const pinned = (request.attachments ?? [])
+    .map((attachment) =>
+      attachment.problem
+        ? `- ${attachment.name} (${attachment.href}): NOT read — ${attachment.problem}`
+        : `- ${attachment.name} (${attachment.href}):\n${attachment.text ?? ''}`
+    )
+    .join('\n');
+
   return [
     persona,
     '',
@@ -112,6 +124,9 @@ const systemPrompt = (request: ChatTurnRequest, persona: string | undefined): st
     'Read the room before answering. Take a position, say why, and name what would change your mind.',
     'Speak in the room’s own language and keep it to a few sentences.',
     '',
+    // Only when the human actually pinned something: an empty heading teaches the model that
+    // attachments are normal even in the rooms that have none.
+    ...(pinned ? ['Pinned to this message:', pinned, ''] : []),
     'Still to speak this round:',
     roster || '- nobody',
     '',
@@ -143,6 +158,9 @@ const requestAnthropic = async (credentials: Credentials, request: ChatTurnReque
       messages: toAnthropicMessages(request),
       tools: [HANDOFF_TOOL],
     }),
+    // Cancelling the room has to kill the request, not just ignore the answer: a provider left
+    // running after Stop keeps the tab billed for a turn the user already walked away from.
+    signal: request.signal,
   });
 
   if (!response.ok) throw new Error(`anthropic ${response.status}: ${(await response.text()).slice(0, 300)}`);
@@ -193,6 +211,7 @@ const requestOpenAi = async (credentials: Credentials, request: ChatTurnRequest,
       ],
       tool_choice: 'auto',
     }),
+    signal: request.signal,
   });
 
   if (!response.ok) throw new Error(`openai ${response.status}: ${(await response.text()).slice(0, 300)}`);

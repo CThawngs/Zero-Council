@@ -1,8 +1,8 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { planById } from '../data/plans';
-import { AlertCircle, AtSign, Send, Square, Trash2 } from 'lucide-react';
+import { AlertCircle, AtSign, Link2, Send, Square, Trash2, X } from 'lucide-react';
 import { USER_HANDLE } from '../chat/engine';
 
 /**
@@ -27,14 +27,22 @@ export const ChatRoomView: React.FC = () => {
     sendMessage,
     stopRoom,
     clearRoom,
+    attachLink,
+    removePending,
+    isRoomBusy,
+    isReadingLink,
     personas,
     setCurrentView,
     currentPlanId,
     t,
   } = useApp();
   const [draft, setDraft] = useState('');
-  const [isRunning, setIsRunning] = useState(false);
+  const [link, setLink] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
+
+  // One source of truth for "the room is working". A second flag in this component would drift the
+  // moment a round is stopped rather than finished, and the composer would unlock mid-round.
+  const isRunning = isRoomBusy;
 
   const roster = currentRoom
     ? currentRoom.roster.map((id) => personas.find((persona) => persona.id === id)).filter(Boolean)
@@ -52,8 +60,14 @@ export const ChatRoomView: React.FC = () => {
         return t.chatBudgetReached;
       case 'silent':
         return t.chatNobodySpoke;
+      case 'cancelled':
+        return t.chatCancelled;
       case 'failed':
-        return t.chatAdvisorFailed.replace('{reason}', currentRoom.failures[0]?.kind ?? 'error');
+        // A dropped advisor reads as "an advisor stopped working"; the user needs the difference
+        // between "it broke" and "it was too slow", because only one of them is worth retrying.
+        return currentRoom.failures[0]?.kind === 'timeout'
+          ? t.chatAdvisorTimedOut
+          : t.chatAdvisorFailed.replace('{reason}', currentRoom.failures[0]?.kind ?? 'error');
       default:
         return null;
     }
@@ -82,12 +96,17 @@ export const ChatRoomView: React.FC = () => {
     const body = draft.trim();
     if (!body || isRunning) return;
     setDraft('');
-    setIsRunning(true);
-    try {
-      await sendMessage(body);
-    } finally {
-      setIsRunning(false);
-    }
+    await sendMessage(body);
+  };
+
+  // Reading happens on attach, not on send: a link that hangs mid-round is indistinguishable from a
+  // provider hang, and the room would report the wrong thing.
+  const handleAttach = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const href = link.trim();
+    if (!href || isReadingLink) return;
+    setLink('');
+    await attachLink(href);
   };
 
   return (
@@ -158,6 +177,28 @@ export const ChatRoomView: React.FC = () => {
                 )}
               </header>
               <p className="break-words text-sm leading-relaxed text-ink">{renderBody(message.body)}</p>
+              {message.attachments && message.attachments.length > 0 && (
+                <ul className="mt-3 space-y-1.5">
+                  {message.attachments.map((attachment) => (
+                    <li
+                      key={attachment.id}
+                      className={`flex items-start gap-2 rounded-lg border px-2.5 py-1.5 text-[11px] leading-relaxed ${
+                        attachment.problem
+                          ? 'border-sage/40 bg-sage/10 text-ink-muted'
+                          : 'border-border bg-background/60 text-ink-muted'
+                      }`}
+                    >
+                      <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
+                      <span className="min-w-0 break-all">
+                        <span className="font-medium text-ink">{attachment.name}</span>{' '}
+                        {attachment.problem
+                          ? t.chatAttachmentUnread.replace('{reason}', attachment.problem)
+                          : t.chatAttachmentRead}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </article>
           );
         })}
@@ -174,6 +215,64 @@ export const ChatRoomView: React.FC = () => {
           </p>
         )}
       </div>
+
+      <form onSubmit={handleAttach} className="flex flex-col gap-2 sm:flex-row">
+        <label htmlFor="chat-link" className="sr-only">
+          {t.chatAttachLabel}
+        </label>
+        <input
+          id="chat-link"
+          name="chat-link"
+          type="url"
+          inputMode="url"
+          value={link}
+          onChange={(event) => setLink(event.target.value)}
+          placeholder={t.chatAttachPlaceholder}
+          disabled={isRunning || isReadingLink}
+          autoComplete="off"
+          className="min-h-11 w-full rounded-xl border border-border bg-background px-4 py-2 text-sm text-ink placeholder:text-ink-muted/60 focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/20 disabled:opacity-60 sm:w-72"
+        />
+        <button
+          type="submit"
+          disabled={isRunning || isReadingLink || !link.trim()}
+          className="button-secondary min-h-11 justify-center self-end disabled:cursor-not-allowed disabled:opacity-45 sm:self-auto"
+        >
+          <Link2 className="h-4 w-4" aria-hidden="true" />
+          {isReadingLink ? t.chatAttachReading : t.chatAttach}
+        </button>
+      </form>
+
+      {/* Pinned but not sent. Shown as chips because "it read it silently and dropped it" is the
+          failure mode here: a link with no visible state is a link nobody trusts. */}
+      {currentRoom.pending.length > 0 && (
+        <ul className="flex flex-wrap gap-2">
+          {currentRoom.pending.map((attachment) => (
+            <li
+              key={attachment.id}
+              className={`flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-[11px] ${
+                attachment.problem
+                  ? 'border-sage/40 bg-sage/10 text-ink-muted'
+                  : 'border-brass/40 bg-brass/10 text-ink-muted'
+              }`}
+            >
+              <Link2 className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
+              <span className="min-w-0 truncate">
+                <span className="font-medium text-ink">{attachment.name}</span>{' '}
+                {attachment.problem ? t.chatAttachmentUnread.replace('{reason}', attachment.problem) : t.chatAttachmentRead}
+              </span>
+              <button
+                type="button"
+                onClick={() => removePending(attachment.id)}
+                disabled={isRunning}
+                aria-label={t.chatAttachRemove}
+                className="shrink-0 rounded-full p-0.5 text-ink-muted transition hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:opacity-45"
+              >
+                <X className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-2 sm:flex-row">
         <label htmlFor="chat-composer" className="sr-only">

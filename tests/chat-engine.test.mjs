@@ -364,3 +364,145 @@ test('a directive is recognised against the full roster, not the reduced one', (
   assert.equal(isStopDirective('stop @The Dreamer', ROSTER), true, 'detected against the full roster');
   assert.equal(parseMentions('stop @The Dreamer', reduced).length, 0, 'and does not resolve in the reduced one');
 });
+// --- The contract the room has to keep (from lib/deliberation/engine-v2) ---
+//
+// Three of these cannot be checked by the browser: a cancel landing 5ms into a provider call, a
+// provider that never answers, and a malformed request that must be refused BEFORE the call. They
+// are the cheapest place to prove them, so they live here rather than in a driver.
+
+test('a bad request is refused before any advisor is asked', async () => {
+  // The point is the thing that did NOT happen: a generator that throws if called. An empty
+  // question reaching a provider is a billed call that produces nothing.
+  const never = () => {
+    throw new Error('the generator must not run');
+  };
+  const { stoppedBy, failures } = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('   '),
+    generate: never,
+  });
+  assert.equal(stoppedBy, 'failed');
+  assert.deepEqual(
+    failures.map((failure) => failure.detail),
+    ['prompt is empty']
+  );
+});
+
+test('an empty roster is refused, not answered by whoever was around', async () => {
+  const { stoppedBy, failures } = await runTurn({
+    roster: [],
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('who is here?'),
+    generate: () => turn('should not happen', [], {}),
+  });
+  assert.equal(stoppedBy, 'failed');
+  assert.ok(failures.some((failure) => failure.detail === 'no advisors to ask'));
+});
+
+test('an advisor that never answers is dropped instead of spinning forever', async () => {
+  // Before the deadline this hung until the tab was closed, and the transcript went with it.
+  const { stoppedBy, failures, speakers } = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('take as long as you like'),
+    generate: () => new Promise(() => {}),
+    turnTimeoutMs: 25,
+  });
+  assert.equal(stoppedBy, 'failed');
+  assert.deepEqual(failures, [{ kind: 'timeout', after: 25 }]);
+  assert.deepEqual(speakers, [], 'a hung advisor is not credited with a turn');
+});
+
+test('Stop discards the answer an advisor was still writing', async () => {
+  // The bug this closes: Stop used to rewrite a label while the council kept answering and the
+  // provider kept billing. The answer arrives AFTER the cancel here, and must not reach the room.
+  const controller = new AbortController();
+  const { messages, stoppedBy } = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('go ahead'),
+    generate: async () => {
+      controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return turn('this answer must be thrown away', [], {});
+    },
+    signal: controller.signal,
+  });
+  assert.equal(stoppedBy, 'cancelled');
+  assert.deepEqual(
+    messages.map((message) => message.authorId),
+    [USER_HANDLE],
+    'only the user message survives a cancel'
+  );
+});
+
+test('each advisor appears as it answers, not when the round ends', async () => {
+  // With a live callback the room fills in while the council works. Before this, the transcript
+  // stayed blank until the whole round finished, which looked like a hang.
+  const seen = [];
+  await runTurn({
+    roster: ROSTER,
+    mode: 'panel',
+    history: [],
+    userMessage: userMsg('go'),
+    generate: ({ isClosing }) =>
+      // Only the closing advisor hands back to the user. Handing back on the first turn ends the
+      // round early — a different behaviour, asserted elsewhere.
+      isClosing ? turn('the council has spoken @user', [], {}) : turn('a point', [], {}),
+    onTurn: (message) => seen.push(message.authorId),
+  });
+  assert.deepEqual(seen, ['pragmatist', 'dreamer', 'skeptic']);
+});
+
+test('a pinned link reaches the advisor as material, read once at attach time', async () => {
+  // The text is pulled when the link is pinned. Re-reading per turn would mean one fetch per
+  // advisor per turn, and a page that changes mid-round would change the council's evidence.
+  const attachment = {
+    id: 'att-1',
+    kind: 'link',
+    name: 'https://example.com/spec',
+    href: 'https://example.com/spec',
+    text: 'the whole specification',
+  };
+  const seen = [];
+  await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: { ...userMsg('what does this say?'), attachments: [attachment] },
+    generate: (request) => {
+      seen.push(request.attachments);
+      return turn('answer @user', [], {});
+    },
+  });
+  assert.equal(seen[0][0], attachment);
+  assert.equal(seen[0][0].text, 'the whole specification');
+});
+
+test('a link that could not be read still travels, carrying the reason', async () => {
+  // Dropping it would let the council answer from the human's words alone without saying so.
+  const attachment = {
+    id: 'att-2',
+    kind: 'link',
+    name: 'https://example.com/gone',
+    href: 'https://example.com/gone',
+    problem: 'the page returned no readable text',
+  };
+  const seen = [];
+  await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: { ...userMsg('read this'), attachments: [attachment] },
+    generate: (request) => {
+      seen.push(request.attachments);
+      return turn('answer @user', [], {});
+    },
+  });
+  assert.equal(seen[0][0].problem, 'the page returned no readable text');
+});

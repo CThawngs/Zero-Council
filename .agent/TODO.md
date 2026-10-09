@@ -341,3 +341,41 @@ man hinh. Agent truoc lam viec tren `main`, bi push tu choi (behind 21), roi che
 - **Chua tung goi provider that.** Key that thi moi chung minh Anthropic/OpenAI nhan request va tra
   tool call; hien moi chung minh duong noi va anh xa dung.
 - **Vong lap co tran** (`12` luot, `200` tin) — spec goc la "vo han".
+
+## Cap 15 — Dong noi mang con lai cua PR #18 (2026-10-09)
+
+Muc 8 cua `features/FEATURE_MAP.md` la no da duoc tra trong luc gop PR #18. Day la phan con lai.
+
+- [x] `lib/deliberation/engine-v2.ts` — dat canh `engine.ts`, khong sua chong. Giu nguyen kien truc
+  framework ma `FrameworkPanel` + `RoundThread` doc.
+- [x] `plan.ts` += `requestProblems` + `rosterProblems`. Tach `rosterProblems` rieng vi phong Messenger
+  noi theo `round-robin`/`panel`, khong phai `CommunicationMode` — dua mot mode gia de tai dung ham
+  that la noi duoc nham chung de quyet dinh tien hon khi tien tien.
+- [x] **Chat room nhan hop dong do** thay vi bo engine-v2 lam code chet:
+  - deadline theo luot → `TurnFailure{kind:'timeout'}`. Truoc nay kieu nay **có trong type nhung khong
+    cho nao sinh ra**: mot provider treo se keo lai phong den khi dong tab, va transcript di theo.
+  - cancel that qua `AbortController` + truyen `signal` xuong `fetch` cua BYOK.
+  - streaming qua `onTurn`.
+  - kiem tra request truoc moi lai goi provider.
+- [x] **`stopRoom` dung that.** Truoc day no chi dat nhan `stoppedBy: 'user'` — hoi dong van tra loi,
+  provider van chay, nut Stop chi trang tri. Day la lo cham dung nhat tim ra trong luot nay.
+- [x] Doc link: tach `htmlToText` ra `html-text.ts`. Ly do cu the: `read-link.ts` import `node:dns`
+  de chan SSRF, mot value import tu component client lam Turbopack fail that —
+  *"the chunking context does not support external modules (request: node:dns/promises)"*. Parser la
+  logic, khong phai dua giong.
+- [x] `read-link-web.ts` — fetch phia browser, **khong** mo route. Endpoint doc URL tuy y khi chua
+  dang nhap la proxy mo; cau hoi do da ninh tu PR #18 va van chua co cau tra loi.
+- [x] `storage.ts` SCHEMA 1 → 2. Phong dang ghim ma chua gui phai song lai; truoc day no bien mat im
+  lang.
+- [x] Test: **160/160** (truoc 122). `engine-v2.test.mjs` 23, them 7 test contract vao
+  `chat-engine.test.mjs`, `read-link-web.test.mjs` 7, sua 2 test storage cho khop schema moi.
+- [x] Gate: `tsc` 0 · eslint 0 loi · `next build` 0 · `drive-council.mjs` `ALL_CHECKS_PASS` ·
+  `drive-attach.mjs` `ALL_CHECKS_PASS` (driver moi).
+
+## Can ban nhin ky (rule 31.3)
+
+- **Chua tung goi provider that.** Deadline/cancel duoc test bang generator hong, chua tung cat mot
+  request `fetch` that dang bay.
+- **Chua doc duoc link that o domain khac.** Driver dan `127.0.0.1` (cung origin) va mot URL bi CORS
+  chan. Da số website se bi chan — day la han cuc, phong noi thang chu khong giau.
+- **Van chua co route doc link phia server.** Con la cau hop ban.

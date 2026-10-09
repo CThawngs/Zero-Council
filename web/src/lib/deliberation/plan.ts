@@ -103,3 +103,86 @@ export const clampScale = (value: number, max: number = MAX_SCORE): number => {
   if (!Number.isFinite(value)) return 1;
   return Math.min(max, Math.max(1, Math.round(value)));
 };
+
+// --- Hợp đồng validate request (từ PR #18) -----------------------------------
+// Đặt ở đây vì cùng lý do phần trên: logic thuần, không i18n, chạy được dưới
+// `node --test`. Đây là lớp chặn *trước khi* tốn tiền — không có nó, lỗi đầu
+// tiên gặp danh sách rỗng hay round index hỏng sẽ là lần gọi provider đầu tiên.
+
+export const MODES: readonly CommunicationMode[] = ['independent', 'debate', 'chain'];
+
+export const LANGUAGES: readonly string[] = ['en', 'vi'];
+
+/** DeliberationRequest minus the types it would drag in — kept loose so this stays testable. */
+export interface RequestShape {
+  mode: string;
+  prompt: string;
+  language: string;
+  advisorIds: readonly string[];
+  attachments?: readonly AttachmentShape[];
+  roundIndex: number;
+}
+
+/** DeliberationRequest['attachments'][number], kept loose so this stays testable. */
+export interface AttachmentShape {
+  id: string;
+  kind: string;
+  name: string;
+  href: string;
+}
+
+/**
+ * Everything wrong with a request, as plain strings. Returns a list rather than
+ * throwing the first one: a real engine talks to a network, and a caller fixing
+ * a bad call wants the whole list, not one error per round trip.
+ *
+ * A fixture never sees a malformed request, so without this the first real key
+ * would be the first time an empty advisor list or a NaN round index reaches a
+ * provider.
+ */
+export const requestProblems = (request: RequestShape): string[] => {
+  const problems = rosterProblems(request);
+  if (!MODES.includes(request.mode as CommunicationMode)) problems.push(`unknown mode ${request.mode}`);
+  if (!LANGUAGES.includes(request.language)) problems.push(`unknown language ${request.language}`);
+  return problems;
+};
+
+/**
+ * The half of `requestProblems` that does not care how advisors speak to each
+ * other — prompt, roster, attachments, round index. Split out because the
+ * Messenger room speaks in `round-robin`/`panel`, which is not a
+ * `CommunicationMode`, and passing a fake mode just to reuse the whole function
+ * would be a lie in the one place whose whole job is checking things before
+ * spending money.
+ */
+export const rosterProblems = (
+  request: Pick<RequestShape, 'prompt' | 'advisorIds' | 'attachments' | 'roundIndex'>
+): string[] => {
+  const problems: string[] = [];
+  if (typeof request.prompt !== 'string' || !request.prompt.trim()) {
+    problems.push('prompt is empty');
+  }
+  const ids = request.advisorIds;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    problems.push('no advisors to ask');
+  } else {
+    if (ids.some((id) => typeof id !== 'string' || !id.trim())) problems.push('advisor id is empty');
+    if (new Set(ids).size !== ids.length) problems.push('advisor ids repeat');
+  }
+  if (!Number.isInteger(request.roundIndex) || request.roundIndex < 1) {
+    problems.push(`round index ${String(request.roundIndex)} is not a whole round`);
+  }
+  // A pinned attachment with no href is the one that silently costs money later:
+  // the producer only learns it was useless after it has already paid to read it.
+  const attachments = request.attachments ?? [];
+  if (!Array.isArray(attachments)) {
+    problems.push('attachments is not a list');
+  } else {
+    attachments.forEach((attachment, index) => {
+      if (!attachment?.id?.trim()) problems.push(`attachment ${index + 1} has no id`);
+      if (!attachment?.name?.trim()) problems.push(`attachment ${index + 1} has no name`);
+      if (!attachment?.href?.trim()) problems.push(`attachment ${index + 1} has nothing to open`);
+    });
+  }
+  return problems;
+};

@@ -1,4 +1,4 @@
-﻿import type { Language } from './types';
+import type { Language } from './types';
 
 export const translations = {
   en: {
@@ -398,6 +398,15 @@ export const copy = {
     chatBudgetReached: 'This room reached its turn budget. Clear it to start a fresh council.',
     chatNobodySpoke: 'No advisor answered this round. Name one with @ to open the floor.',
     chatAdvisorFailed: 'An advisor stopped working ({reason}). The rest of the council is still here.',
+    chatCancelled: 'You stopped this round. What an advisor was writing is discarded, not posted.',
+    chatAdvisorTimedOut: 'An advisor took too long and was dropped. The room moved on without them.',
+    chatAttachLabel: 'Attach a link for the council to read',
+    chatAttachPlaceholder: 'Paste a URL, then attach',
+    chatAttach: 'Attach',
+    chatAttachReading: 'Reading the link…',
+    chatAttachRemove: 'Remove this link',
+    chatAttachmentRead: 'Attached, read in full',
+    chatAttachmentUnread: 'Attached, but it could not be read: {reason}',
     chatCapNote: 'Your plan allows {cap} advisors in one room. Upgrade to bring more.',
     modeRoundRobin: 'Round robin',
     modeRoundRobinBody: 'One advisor speaks per turn. Start with no mention and they answer in join order.',
@@ -760,6 +769,15 @@ export const copy = {
     chatBudgetReached: 'Phòng này đã hết hạn mức lượt. Xoá phòng để mở hội đồng mới.',
     chatNobodySpoke: 'Vòng này không ai trả lời. Gọi tên bằng @ để trao lượt.',
     chatAdvisorFailed: 'Một cố vấn đã lỗi ({reason}). Phần còn lại của hội đồng vẫn ở đây.',
+    chatCancelled: 'Bạn đã dừng vòng này. Câu cố vấn đang viết bị bỏ, không đăng vào phòng.',
+    chatAdvisorTimedOut: 'Một cố vấn mất quá lâu nên đã bị bỏ. Phòng đi tiếp mà không có họ.',
+    chatAttachLabel: 'Gắn link để hội đồng tự đọc',
+    chatAttachPlaceholder: 'Dán URL, rồi bấm gắn',
+    chatAttach: 'Gắn link',
+    chatAttachReading: 'Đang đọc link…',
+    chatAttachRemove: 'Bỏ link này',
+    chatAttachmentRead: 'Đã gắn, đã đọc hết',
+    chatAttachmentUnread: 'Đã gắn, nhưng đọc không được: {reason}',
     chatCapNote: 'Gói của bạn cho phép {cap} cố vấn trong một phòng. Nâng cấp để thêm người.',
     modeRoundRobin: 'Luân phiên',
     modeRoundRobinBody: 'Mỗi lượt một cố vấn trả lời. Không gọi tên thì họ nói theo thứ tự được thêm vào.',
