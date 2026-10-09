@@ -1,0 +1,131 @@
+# Chứng minh app thật sự chạy — không phải chỉ "test xanh".
+#
+# Rule 20/32.6: CI tự bật app và lưu bằng chứng **kể cả khi pass**. Ba quyết định
+# trong file này đều có lý do, đổi một cái thì phải nghĩ:
+#
+#   1. `pull_request` giữ nguyên, không phải bỏ. PR từ fork không có secret —
+#      đó là hành vi ĐÚNG. Workflow này cố tình không cần secret nào, nên nó
+#      chạy được trên fork. Xoá `pull_request` để "vá" thì CI chỉ còn chạy trên
+#      branch của chính mình, tức là đúng cái PR mà cần kiểm nhất lại không ai
+#      nhìn thấy.
+#   2. Action ghim theo SHA, không theo tag. `checkout@v4` là một cái tên có thể
+#      trỏ đi đâu đó sau này; SHA thì không. Sửa SHA thì ghi comment kèm version.
+#   3. `if: always()` ở bước upload. Bằng chứng lúc fail có giá trị hơn lúc pass
+#      — đó là lúc bạn cần xem cái gì hỏng. Tắt nó đi là xoá đúng thứ đáng giá
+#      nhất.
+#
+# `ci/smoke.mjs` chỉ kiểm app có serve không, dùng Node thuần. Kiểm click thật
+# thì cần browser và thuộc về `.agent/skills/verify-app/SKILL.md` — không nhồi
+# 300 MB browser vào repo chỉ để CI có một dấu tick đẹp.
+
+name: Verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      # actions/checkout — SHA của tag v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      # pnpm phải có mặt TRƯỚC setup-node, vì `cache: pnpm` gọi `pnpm store path`
+      # ngay trong action đó. Thiếu bước này thì setup-node chết với
+      # "Unable to locate executable file: pnpm" — đúng lỗi lần chạy đầu.
+      # corepack đọc `packageManager` trong web/package.json nên tự lấy đúng version.
+      - name: Bật pnpm
+        run: corepack enable
+
+      # actions/setup-node — SHA của tag v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      # Lockfile nằm trong web/, không phải ở gốc.
+      - name: Cài dependency
+        working-directory: web
+        run: pnpm install --frozen-lockfile
+
+      # --- Gates. Rẻ, chạy trước, fail sớm ---
+      # --test-timeout vì một test treo âm thầm đã ăn trọn 20 phút của job.
+      # Giờ nó báo đỏ sau 60s thay vì bắt cả runner đứng yên.
+      - name: Test hợp đồng và logic
+        run: node --test --test-timeout=60000 tests/*.test.mjs
+
+      - name: Kiểm kiểu
+        working-directory: web
+        run: pnpm exec tsc --noEmit
+
+      - name: Lint
+        working-directory: web
+        run: pnpm exec eslint
+
+      - name: Build
+        working-directory: web
+        run: pnpm exec next build
+
+      # --- Bật app thật rồi hỏi nó ---
+      # `setsid` để next start có process group riêng. `$!` không phải PID của
+      # node mà là của pnpm, nên `kill $PID` chỉ giết đúng cái đó và để lại
+      # server chạy. Kill theo group thì cả chuỗi xuống.
+      #
+      # Log nằm trong workspace, KHÔNG phải /tmp: upload-artifact tính thư mục
+      # gốc bằng LCA của các path, nên trộn `evidence/` với `/tmp/...` đẩy
+      # artifact lên gốc `/` và evidence nằm ở
+      # `home/runner/work/<repo>/<repo>/evidence/…` — có, mà không ai tìm thấy.
+      - name: Bật app
+        working-directory: web
+        run: |
+          mkdir -p ../evidence
+          setsid pnpm exec next start -p 8803 > ../evidence/next-start.log 2>&1 &
+          echo $! > /tmp/next-start.pid
+          for i in $(seq 1 60); do
+            if curl -fsS -o /dev/null http://127.0.0.1:8803/ 2>/dev/null; then
+              echo "ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "app không sẵn sàng sau 60s"
+          cat ../evidence/next-start.log
+          exit 1
+
+      - name: Smoke — app có thật sự serve không
+        run: node ci/smoke.mjs http://127.0.0.1:8803 evidence web/.next
+
+      # Fallback về PID đơn: nếu job control bật, setsid fork, `$!` là PID đã
+      # chết, `kill -- -$PID` trúng group rỗng và im lặng — server sống sót.
+      # Thêm `if-no-files-found: error` để lần upload rỗng không còn exit 0.
+      - name: Dừng app
+        if: always()
+        run: |
+          if [ -f /tmp/next-start.pid ]; then
+            pid="$(cat /tmp/next-start.pid)"
+            kill -- -"$pid" 2>/dev/null || kill "$pid" 2>/dev/null || true
+          fi
+
+      # Bằng chứng phải còn lại dù xanh hay đỏ.
+      # actions/upload-artifact — SHA của tag v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: verify-evidence
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 14

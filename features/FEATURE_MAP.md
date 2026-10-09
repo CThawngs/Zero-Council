@@ -72,3 +72,39 @@ Cách sửa không cần hạ tính năng: **nói đúng**. "Key của bạn n�
 
 - `.agent/HANDOFF.md` chưa cập nhật cho cấp 12–13.
 - Ghi quyết định lên Notion (AI OS Documentation) — chưa làm.
+
+---
+
+## 7. Gộp PR #18 vào main (2026-10-09)
+
+Mục này viết lại sau khi gộp. **Mốc trước đó (`2e1e828`) nằm trên `main` cục bộ, chưa từng lên GitHub** — đó là 3 ngày công làm sau PR #18, làm nhầm trên nhánh `main` thay vì trên branch của PR, rồi chết giữa chừng lúc `git merge origin/main`.
+
+### Đã đưa vào
+
+| Từ | Gì | Bằng chứng |
+|---|---|---|
+| `origin/main` | UI deliberation (Scenario/Hats/Matrix), auth Google/Discord, payOS, coupon | đã merge qua PR #13–#17 |
+| local main (4 commit) | chat engine A2A có cấu trúc, BYOK Anthropic+OpenAI, `sessionStorage`, `FEATURE_MAP` này | 119 test · lái Chrome `ALL_CHECKS_PASS` |
+| PR #18 | `read-link.ts` + **33 test**, `ci/smoke.mjs`, `.github/workflows/verify.yml` (CI tự bật app), tài liệu `verify-app/features/` | smoke 4/4 exit 0 |
+| PR #18 | **3 test membership** viết lại cho engine đang chạy (`plan.ts`) | `tests/deliberation.test.mjs` 19/19 |
+
+### ⚠️ Không đưa vào — và vì sao
+
+PR #18 còn một nhánh thiết kế cũ **không ghép được** với engine đã chạy:
+
+| Phần của PR #18 | Vì sao bỏ |
+|---|---|
+| `lib/deliberation/engine.ts` thứ 2 (`createDeliberationEngine`: timeout 30s, cancel, attachment, streaming) | Kiến trúc khác hẳn: bản đang chạy có `FrameworkOutput`/`MatrixData`/`buildFixtureRound`, bản PR #18 thì không. `FrameworkPanel` + `RoundThread` + `scoreMatrix` cần bản đang chạy. **Đây là feature thật chưa lên main** — xem mục 8. |
+| 59 key copy deliberation bị xoá | Bản PR #18 xoá hết vì nó thay UI deliberation bằng UI riêng. Giữ UI cũ thì phải giữ key. |
+| `AdvisorConversation`, `CouncilSetupBar`, `PendingRoundPanel`, `AttachmentPicker` | 4 component của thiết kế UI cũ, không route tới từ `App.tsx` sau khi gộp. Membership nay do `JoinRoomModal` + cap theo gói đảm nhiệm. |
+| `EmptyChamberView` + `SessionActiveView` bản PR #18 | Lấy bản `origin/main`. Membership của PR #18 nằm ở tầng engine (`plan.ts`) nên không mất. |
+
+## 8. Nợ lớn nhất sau khi gộp
+
+**Engine `createDeliberationEngine` của PR #18 chưa lên main.** Nó có những thứ bản đang chạy không có: deadline 30s, cancel giữa chừng, attachment (đọc link/file), streaming `onContribution`, và `requestProblems` từ chối request hỏng **trước khi** tốn tiền. 27 test kèm theo đã bị bỏ cùng file.
+
+Đưa lên thì **không sửa chồng `engine.ts`** — phải đặt cạnh (`deliberation/engine-v2.ts`) và chuyển `AppContext` sang từng đường một, giữ `FrameworkPanel` chạy từng vòng. Việc nhiều ngày, không làm vội trong lượt gộp này.
+
+Nhỏ hơn, làm được ngay:
+- `read-link.ts` **chưa route nào gọi** — cố ý. Endpoint đọc URL tuỳ ý mà chưa đăng nhập là proxy mở cho ai tìm thấy.
+- `.agent/skills/verify-app/features/*.md` của PR #18 mô tả lái bằng Playwright; repo không có Playwright. Driver thật là `tests/drive-*.mjs` (Node + CDP). **Tài liệu sai so với repo** — cần sửa hoặc xoá.

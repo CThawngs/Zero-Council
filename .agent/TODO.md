@@ -301,3 +301,43 @@ Yêu cầu lượt này (chủ dự án): nhìn được nhiều AI tranh luận
 - **Key không lưu, mất khi F5.** Đây là cái giá của việc không cho server chạm vào key. Nếu muốn nhớ key thì phải chọn hoặc mã hoá phía client, hoặc để server giữ — hai đều đổi lại thứ đang được bán.
 - **Trần vòng lặp chưa chốt.** Spec gốc "vòng lặp vô tận", chủ dự án từng chốt 3 lượt. Đang `12` + trần phòng `200`. Muốn vô tận thật thì phải chặn bằng **ngân sách tiền**.
 - **Landing vẫn hứa** BYOK AES-256, hội thoại mã hoá. Giờ có key chạy thật, nhưng **không có mã hoá nào** và key sống trong RAM. `currentUser.ts` trả `null`, `SignInView` còn rỗng.
+
+## Cấp 14 — Gop PR #18 vao main (2026-10-09)
+
+Tinh huong goc: 4 commit engine/BYOK/persist (Cấp 11-13) **chua bao gio len GitHub**. Tinh
+trung cua PR #18 la mot nhanh khac, ca hai cung goc `cb4bee8`, ca hai deu sua cung mot
+man hinh. Agent truoc lam viec tren `main`, bi push tu choi (behind 21), roi chet giua
+`git merge origin/main` voi 5 file conflict.
+
+- [x] Giu `main` cuc bo trong tag `backup/main-before-gom-2026-10-09` (`200b534`) truoc khi dung.
+- [x] `git merge --abort` — merge do dang khong giu gì khong lay duoc tu 2 ve.
+- [x] Branch moi `pr18-complete` tu `origin/main`; gom 4 commit. Conflict 7 file giai tay, khong dung
+  `git checkout --theirs` o hang loat: view deliberation + chat engine **cung ton tai**, phai ghep.
+- [x] `modelLabel`/`providerLabel` cua `origin/main` nhan 2 tham so (`language`), ban gop nhan 1 →
+      goi 1 tham so cho ca 2 file view.
+- [x] `types.ts` phai **viet tay**, khong union may: union tao trung import, trung type, va lam mat
+      `ScenarioBranch`.
+- [x] Engine khong ghep duoc: `origin/main` co `FrameworkOutput`/`MatrixData`/`buildFixtureRound`,
+      PR #18 co `createDeliberationEngine` (timeout/cancel/attachment/streaming) — **hai kien truc khac
+      nhau**. `FrameworkPanel` + `RoundThread` + `scoreMatrix` can ban dang chay. Chon giu ban dang chay.
+- [x] Tu PR #18 chi lay phan **cong**: `read-link.ts` + 33 test, `ci/smoke.mjs`, `verify.yml`,
+      `features/README.md`.
+- [x] **3 test membership** viet lai cho `planContributions` hien tai. Hai test giong nguyen ban
+      PR #18; test thu ba dung `requestProblems` (chi co o engine PR #18) nen doi thanh
+      `planContributions(mode, [])` — cung khong ai duoc noi.
+- [x] `SKILL.md` bi lay nham ban Playwright cua PR #18 (repo khong co Playwright) → khoi phuc ban
+      Node + CDP. Xoa 4 file `features/*.md` mo ta UI da chet.
+- [x] Gate: **119/119 test** · `tsc` 0 · `eslint` 0 loi (3 warning) · `next build` 0 ·
+      `smoke` 4/4 exit 0 · lai Chrome that `ALL_CHECKS_PASS`.
+
+## Can ban nhin ky (rule 31.3)
+
+- **PR #18 khong merge nguyen ve.** Phan goc cua no (engine `createDeliberationEngine`: deadline,
+  cancel, attachment, streaming, `requestProblems`) **khong len main** — xac bang o
+  `features/FEATURE_MAP.md` muc 8. 27 test kem theo cung bo.
+- **Khong co route nao goi `read-link.ts`.** Endpoint doc URL tuy y khi chua dang nhap la proxy mo
+  cho ai tim thay. Can quyet dinh cua chu san pham.
+- **Landing van hua** AES-256 va "cuoc tro chuyen duoc ma hoa" — khong co ma hoa nao.
+- **Chua tung goi provider that.** Key that thi moi chung minh Anthropic/OpenAI nhan request va tra
+  tool call; hien moi chung minh duong noi va anh xa dung.
+- **Vong lap co tran** (`12` luot, `200` tin) — spec goc la "vo han".

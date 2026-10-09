@@ -1,6 +1,6 @@
 {
-  "at": "2026-10-07T16:23:37.610Z",
-  "base": "http://127.0.0.1:3232",
+  "at": "2026-10-09T08:57:50.654Z",
+  "base": "http://127.0.0.1:8803",
   "trace": [
     {
       "step": "navigate",
@@ -88,7 +88,7 @@
     },
     {
       "step": "screenshot",
-      "detail": "C:\\Users\\nguye\\OneDrive\\Documents\\Projects\\Zero-Council\\.agent\\evidence\\drive-council.png"
+      "detail": "C:\\Users\\nguye\\OneDrive\\Documents\\Projects\\Zero-Council\\.agent\\evidence\\council-merged.png"
     }
   ],
   "failures": []

@@ -4,3 +4,6 @@
 
 # Editor/tooling index. Rebuilt on demand, never a source of truth, and it is per-machine.
 .dsh-code-index/
+
+# Bang chung smoke cuc bo — CI tao evidence/ roi upload artifact, khong commit.
+evidence/
