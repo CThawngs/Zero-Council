@@ -411,3 +411,38 @@ Muc 8 cua `features/FEATURE_MAP.md` la no da duoc tra trong luc gop PR #18. Day 
   `notifications` nen API tra 404. Can ban tu chay: `gh auth refresh -s notifications`.
 - **Branch protection co the chong nhung thu ban van muon lam.** Push thang len `main` bay gio bi
   tu choi; chi con duong PR + CI xanh.
+
+## Cap 17 — Supabase Preview do + mo push thang len main (2026-10-09)
+
+**Day la check `Supabase Preview`, KHONG phai workflow cua ta.** `verify` (workflow) xanh suot;
+`Supabase Preview` (Supabase GitHub App) do. Hai cai khac nhau, va no moi thu biet den.
+
+- [x] Truoc het: **chua phai do gop PR #18.** Doi chieu tung commit:
+  `b38ad3e` → **success** · `bda1f0a` (PR #19) → **failure** · cac commit sau → failure het.
+  PR #19 dua `0003_zc_core_schema.sql` vao main.
+- [x] Loi goc: `ERROR: policy "Allow public read on subscription plans" ... already exists
+  (SQLSTATE 42710)`. File 0003 co chu dich idempotent — moi `create table/index` deu `if not exists`,
+  `create or replace function`, 3 `insert` deu co `on conflict` — **12 cau `create policy` la thu duy
+  khong idempotent**. Chay lan hai la no no ngay tai policy dau tien.
+- [x] Sua: them `drop policy if exists` tru moi `create policy` (12/12), dung style cua file.
+- [x] **Bua cua toi, sua ngay:** khi ghi file lan dau dung `UTF8Encoding($true)` → chen BOM. Postgres
+  tu choi BOM: `syntax error at or near U+FEFF (SQLSTATE 42601) tai statement 0`. Ghi lai bang
+  `UTF8Encoding($false)`. Kiem 3 file SQL trong `web/supabase/migrations/` — khong con file nao BOM.
+- [x] Bang chung that: `Supabase Preview` **success** + `verify` **success** tren `main` sau khi push.
+- [x] **Da go branch protection** theo yeu cau chu san pham: push thang len `main` lai. Hai lan push
+  truc tiep deu thanh cong.
+
+## Can ban nhin ky (rule 31.3)
+
+- **Khong chay duoc migration local de chung minh chay hai lan.** Docker daemon khong chay, va bat no
+  la thay doi may can consent (rule 9). Bang chung la Supabase Preview that, chay lai tren chinh moi
+  truong do — cung la noi loi phat sinh.
+- **Khong co branch protection.** Bay moi merge/ push truc tiep deu khong co check nao chan. `verify
+  van chay** va bao do, nhung khong co gi chan code do. Can lai thi dung `gh api -X PUT
+  repos/CThawngs/Zero-Council/branches/main/protection`.
+- **Sua `0003` truc tiep, khong them migration 0004.** Supabase danh dau migration da apply se khong
+  chay lai; sua tai cho file cung dung nghia hon. Neu co production da apply roi va can
+  `supabase db reset`, thi can migration 0004 thay vi sua 0003.
+- **PR #19 van con tren main voi cau truc token/DB khong duoc kiem chung.** File `0003` bay da tinh
+  idempotent nen no khong con lam hong gi, nhung phan `zc_users` / trigger `on_auth_user_created` thi
+  chua co test nao chay tren DB that.
