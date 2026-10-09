@@ -37,6 +37,20 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
+    # Auth của `origin/main` đọc `NEXT_PUBLIC_SUPABASE_URL` +
+    # `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. Next **inline biến `NEXT_PUBLIC_*`
+    # lúc build**, nên thiếu ở bước Build thì server chết ngay khi boot với
+    # "Your project's URL and Key are required" — không phải lỗi của app, mà
+    # workflow không có biến đó.
+    #
+    # Workflow cố ý **không dùng secret** (rule 20) để chạy được trên fork, nên
+    # đặt giá trị giữ chỗ. Smoke chỉ hỏi app có serve hay không, không gọi
+    # Supabase. Đừng dùng chỗ này để kiểm đăng nhập thật — việc đó cần
+    # credential thật và phải chạy ngoài CI.
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder-publishable-key
+
     steps:
       # actions/checkout — SHA của tag v4
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
