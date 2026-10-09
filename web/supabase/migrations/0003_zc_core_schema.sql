@@ -1,4 +1,4 @@
--- Zero Council Core Schema: Agents, Conversations, Models, and Plans
+﻿-- Zero Council Core Schema: Agents, Conversations, Models, and Plans
 -- Integrated with Supabase auth.users & full Foreign Key constraints
 --
 -- Shared contract: applies in order after 0001_zc_orders.sql and 0002_zc_coupons.sql.
@@ -304,42 +304,62 @@ alter table public.zc_messages enable row level security;
 alter table public.zc_message_attachments enable row level security;
 
 -- Public read-only policies for static catalogs
+drop policy if exists "Allow public read on subscription plans" on public.zc_subscription_plans;
+
 create policy "Allow public read on subscription plans"
   on public.zc_subscription_plans for select using (true);
+
+drop policy if exists "Allow public read on frameworks" on public.zc_frameworks;
 
 create policy "Allow public read on frameworks"
   on public.zc_frameworks for select using (true);
 
+drop policy if exists "Allow public read on providers and models" on public.zc_agent_providers;
+
 create policy "Allow public read on providers and models"
   on public.zc_agent_providers for select using (true);
+
+drop policy if exists "Allow public read on models" on public.zc_agent_models;
 
 create policy "Allow public read on models"
   on public.zc_agent_models for select using (true);
 
 -- User-scoped policies matching Supabase Auth session (auth.uid())
+drop policy if exists "Users can read/manage their own profile" on public.zc_users;
+
 create policy "Users can read/manage their own profile"
   on public.zc_users for all
   using (auth.uid() = id)
   with check (auth.uid() = id);
+
+drop policy if exists "Users can manage their own API keys" on public.zc_users_api_keys;
 
 create policy "Users can manage their own API keys"
   on public.zc_users_api_keys for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can read system presets or own agents" on public.zc_agents;
+
 create policy "Users can read system presets or own agents"
   on public.zc_agents for select
   using (user_id is null or auth.uid() = user_id);
+
+drop policy if exists "Users can modify their own custom agents" on public.zc_agents;
 
 create policy "Users can modify their own custom agents"
   on public.zc_agents for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
+drop policy if exists "Users can manage conversations they own" on public.zc_conversations;
+
 create policy "Users can manage conversations they own"
   on public.zc_conversations for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+drop policy if exists "Users can manage participants of their conversations" on public.zc_participants;
 
 create policy "Users can manage participants of their conversations"
   on public.zc_participants for all
@@ -350,6 +370,8 @@ create policy "Users can manage participants of their conversations"
     )
   );
 
+drop policy if exists "Users can view and write messages in their conversations" on public.zc_messages;
+
 create policy "Users can view and write messages in their conversations"
   on public.zc_messages for all
   using (
@@ -358,6 +380,8 @@ create policy "Users can view and write messages in their conversations"
       where c.id = zc_messages.conversation_id and c.user_id = auth.uid()
     )
   );
+
+drop policy if exists "Users can manage attachments in their conversation messages" on public.zc_message_attachments;
 
 create policy "Users can manage attachments in their conversation messages"
   on public.zc_message_attachments for all
