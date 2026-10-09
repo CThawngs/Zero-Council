@@ -108,3 +108,40 @@ PR #18 còn một nhánh thiết kế cũ **không ghép được** với engine
 Nhỏ hơn, làm được ngay:
 - `read-link.ts` **chưa route nào gọi** — cố ý. Endpoint đọc URL tuỳ ý mà chưa đăng nhập là proxy mở cho ai tìm thấy.
 - `.agent/skills/verify-app/features/*.md` của PR #18 mô tả lái bằng Playwright; repo không có Playwright. Driver thật là `tests/drive-*.mjs` (Node + CDP). **Tài liệu sai so với repo** — cần sửa hoặc xoá.
+
+---
+
+## 9. Đóng nốt mảng còn lại của PR #18 (2026-10-09, sau khi merge)
+
+Mục 8 là nợ đã được trả. Số ở mục này là **sau** khi nó đóng.
+
+### Lên rồi
+
+| Tính năng | Trạng thái | Bằng chứng |
+|---|---|---|
+| `engine-v2.ts` — hợp đồng deadline/cancel/streaming/membership | ✅ đứng cạnh `engine.ts` | **23 test** `tests/engine-v2.test.mjs` |
+| `requestProblems` + `rosterProblems` trong `plan.ts` | ✅ trước mọi lần gọi provider | 4 test trong `engine-v2.test.mjs` |
+| **Chat room từ chối request hỏng trước khi tốn tiền** | ✅ | `a bad request is refused before any advisor is asked` |
+| **Deadline theo lượt** — `TurnFailure{kind:'timeout'}` trước đây có trong type nhưng **không chỗ nào sinh ra** | ✅ giờ có | `an advisor that never answers is dropped` |
+| **Stop dừng thật** — trước đó chỉ đổi nhãn, hội đồng vẫn trả lời, provider vẫn bị tính tiền | ✅ `AbortController` + `fetch` bị huỷ | `Stop discards the answer an advisor was still writing` · lái Chrome |
+| **Streaming** — tin nhắn hiện ngay khi từng cố vấn trả lời | ✅ `onTurn` | `each advisor appears as it answers` |
+| **Đính kèm link** — đọc 1 lần lúc ghim, mang theo tin nhắn | ✅ | 3 test · `drive-attach.mjs` `ALL_CHECKS_PASS` |
+| `read-link-web.ts` — tầng đọc link phía browser | ✅ 7 test | `tests/read-link-web.test.mjs` |
+
+Test: **160/160** (trước: 122). Build 0 · `tsc` 0 · eslint 0 lỗi.
+
+### Vẫn nợ — và đây là lý do
+
+**Đọc link chạy trong trình duyệt, không qua server.** `read-link.ts` chặn SSRF bằng `node:dns` nên **không** bundle được cho client (Turbopack fail thật: *"the chunking context does not support external modules: node:dns/promises"*). Parser đã tách ra `html-text.ts` để dùng chung; phần fetch thì có hai đường:
+
+| Đường | Trạng thái | Đánh đổi |
+|---|---|---|
+| Browser fetch (`read-link-web.ts`) | ✅ đang dùng | Đa số website không gửi CORS → **bị chặn**. Phòng nói thẳng là không đọc được chứ không giấu. |
+| Server route qua `read-link.ts` | ❌ cố ý chưa làm | Endpoint đọc URL tuỳ ý mà chưa đăng nhập là **proxy mở**: ai tìm thấy cũng dùng băng thông của bạn. Cần quyết định của chủ sản phẩm + rate limit + auth. |
+
+Không tự mở route. Đây là câu hỏi đã nêu từ PR #18 và vẫn chưa có câu trả lời.
+
+### Vẫn chưa chứng minh
+
+- **Chưa từng gọi provider thật.** Toàn bộ bằng chứng dùng `scriptedGenerator` và key giả. Cơ chế deadline/cancel đã test bằng generator hỏng, nhưng chưa từng giết một request `fetch` thật đang bay.
+- **Chưa đọc được link thật qua mạng.** `drive-attach.mjs` dán `http://127.0.0.1/` (cùng origin) và một URL bị CORS chặn. Chưa từng đọc được một trang thật ở domain khác.

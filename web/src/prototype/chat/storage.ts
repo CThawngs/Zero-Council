@@ -12,8 +12,19 @@
  */
 
 /** Bumped whenever `ChatRoom` gains a field, so an old blob cannot half-load into a new UI. */
-const SCHEMA = 1;
+const SCHEMA = 2;
 const KEY = 'zero-council:room';
+
+/** What is stored about an attachment. `text` is kept so a reloaded room does not re-fetch the page. */
+interface StoredAttachment {
+  id: string;
+  /** Spelled out rather than imported: this file imports nothing, by design. */
+  kind: 'link' | 'image' | 'file';
+  name: string;
+  href: string;
+  text?: string;
+  problem?: string;
+}
 
 /**
  * Only the fields needed to rebuild the room. `mode`, `roster`, `held`, `turns`, `stoppedBy` and
@@ -24,7 +35,15 @@ interface StoredRoom {
   title: string;
   mode: string;
   roster: string[];
-  messages: { id: string; authorId: string; body: string; mentioned: string[] }[];
+  messages: {
+    id: string;
+    authorId: string;
+    body: string;
+    mentioned: string[];
+    attachments?: StoredAttachment[];
+  }[];
+  /** Pinned to the next message but not sent yet. Sending moves them onto that message. */
+  pending: StoredAttachment[];
   turns: number;
   stoppedBy: string | null;
   failures: unknown[];
@@ -43,6 +62,9 @@ export const readStoredRoom = (): StoredRoom | null => {
     const parsed = JSON.parse(raw) as StoredRoom;
     if (parsed?.schema !== SCHEMA) return null;
     if (!Array.isArray(parsed.messages) || !Array.isArray(parsed.roster)) return null;
+    // Pinned-but-unsent attachments live in the room: reloading must not silently drop what the
+    // user had just attached, which is how it was lost before this field existed.
+    if (!Array.isArray(parsed.pending)) return null;
     // A room with no advisors cannot produce a round; treat it as absent rather than as an error.
     if (parsed.roster.length === 0) return null;
     return parsed;

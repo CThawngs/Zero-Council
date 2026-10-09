@@ -34,6 +34,9 @@ const ROOM = {
     { id: '0', authorId: 'user', body: 'What first?', mentioned: [] },
     { id: '1', authorId: 'pragmatist', body: 'Feasibility.', mentioned: ['dreamer'] },
   ],
+  // A link pinned but not yet sent. It is in the room on purpose: reloading must not silently drop
+  // what the user had just attached, which is exactly how it was lost before the field existed.
+  pending: [{ id: 'a1', kind: 'link', name: 'https://example.com/spec', href: 'https://example.com/spec', text: 'the spec' }],
   turns: 1,
   stoppedBy: 'user',
   failures: [],
@@ -48,6 +51,12 @@ test('a room survives a write and a read', () => {
   assert.equal(back?.messages.length, 2, 'the whole transcript, not just the last turn');
   assert.deepEqual(back?.held, ['skeptic'], 'held advisors must survive too, or @all comes back wrong');
   assert.equal(back?.turns, 1, 'the turn budget is cumulative; resetting it would refund free rounds');
+  assert.equal(back?.pending.length, 1, 'an unsent attachment must survive a reload');
+  assert.equal(
+    back?.pending[0].text,
+    'the spec',
+    'with its text, or a reloaded room would re-fetch the page and could get different words'
+  );
 });
 
 test('clearing the room really clears it', () => {
@@ -72,8 +81,26 @@ test('corrupt JSON reads as no room instead of throwing', () => {
 });
 
 test('a structurally wrong blob reads as no room', () => {
-  globalThis.window.sessionStorage.setItem('zero-council:room', JSON.stringify({ schema: 1, roster: ['a'] }));
+  // Schema 2 on purpose: a stale schema is rejected by the version check, so testing "missing
+  // messages" with schema 1 would pass for the wrong reason and prove nothing.
+  globalThis.window.sessionStorage.setItem(
+    'zero-council:room',
+    JSON.stringify({ schema: 2, roster: ['a'] })
+  );
   assert.equal(readStoredRoom(), null, 'missing messages');
+});
+
+test('a room whose pinned attachments field is gone reads as no room', () => {
+  const { pending, ...withoutPending } = ROOM;
+  globalThis.window.sessionStorage.setItem(
+    'zero-council:room',
+    JSON.stringify({ ...withoutPending, schema: 2 })
+  );
+  assert.equal(
+    readStoredRoom(),
+    null,
+    'a blob with no pending list would drop whatever the user had attached'
+  );
 });
 
 test('a room with no advisors reads as no room', () => {

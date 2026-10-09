@@ -17,7 +17,17 @@
  *
  * `generate` is the only seam. The scripted provider satisfies it today; BYOK satisfies it later by
  * mapping its own tool call onto `handoffs`. Neither the routing rules nor their tests change.
+ *
+ * The request is checked (`rosterProblems`), every wait is bounded (`DEFAULT_TURN_TIMEOUT_MS`), and
+ * an answer that lands after a cancel is discarded rather than committed. Those three come from the
+ * contract in `lib/deliberation/engine-v2.ts`, which is the same idea applied to the structured
+ * deliberation room.
  */
+
+// Relative with the explicit `.ts`, not the `@/` alias: this file is imported by `node --test`,
+// and a value import through an alias does not resolve outside a bundler. Same reason
+// `lib/deliberation/engine-v2.ts` imports './plan.ts'.
+import { rosterProblems } from '../../lib/deliberation/plan.ts';
 
 export const USER_HANDLE = 'user';
 
@@ -43,11 +53,41 @@ export const DEFAULT_MAX_TURNS = 12;
 /** Total advisor turns for the whole room, independent of how many messages the user sends. */
 export const DEFAULT_ROOM_BUDGET = 200;
 
+/**
+ * How long one advisor may take before the room gives up on them.
+ *
+ * A provider that never answers used to leave the room spinning until the tab was closed: nothing
+ * upstream ever timed out, so the only way out was reloading — and the transcript went with it.
+ * Generous enough for a slow provider, short enough that a hang is a sentence, not a mystery.
+ */
+export const DEFAULT_TURN_TIMEOUT_MS = 30_000;
+
 export type ChatMode = 'round-robin' | 'panel';
 
 export interface ChatBot {
   id: string;
   name: string;
+}
+
+export type AttachmentKind = 'link' | 'image' | 'file';
+
+/**
+ * Something the human pinned to a message, the way a Messenger attachment is pinned.
+ *
+ * `text` is read ONCE, when it was attached, never per turn: a link that is re-fetched every turn
+ * can change under the council mid-round, and a room that re-reads a slow page twelve times is a
+ * room that hangs. `problem` exists so a link that could not be read is shown rather than dropped —
+ * a silently missing attachment reads as "the app ignored what I sent".
+ */
+export interface ChatAttachment {
+  id: string;
+  kind: AttachmentKind;
+  /** What the human sees: the URL as typed. */
+  name: string;
+  href: string;
+  text?: string;
+  /** Why it could not be read, in words safe to show a user. */
+  problem?: string;
 }
 
 export interface ChatMessage {
@@ -57,6 +97,8 @@ export interface ChatMessage {
   body: string;
   /** Ids resolved from `@` in the body — display and "who opens" only, never bot-to-bot routing. */
   mentioned: string[];
+  /** Pinned to this message. Read once at attach time; see ChatAttachment. */
+  attachments?: ChatAttachment[];
 }
 
 /** What one advisor produced. Routing is this shape; the prose is incidental. */
@@ -69,7 +111,7 @@ export interface BotTurn {
   silent?: boolean;
 }
 
-export type WhyStop = 'user' | 'silent' | 'max-turns' | 'budget' | 'failed';
+export type WhyStop = 'user' | 'silent' | 'max-turns' | 'budget' | 'failed' | 'cancelled';
 
 /** Why a turn produced nothing. Typed so the UI can say something true instead of "error". */
 export type TurnFailure =
@@ -89,6 +131,10 @@ export interface ChatTurnRequest {
   /** The user's words this round, for adapters that build a separate instruction block. */
   prompt: string;
   language: 'en' | 'vi';
+  /** Pinned to this turn's user message, with text already read. Empty on most turns. */
+  attachments: ChatAttachment[];
+  /** Aborted when the human stops the room, so a provider call in flight actually dies. */
+  signal?: AbortSignal;
 }
 
 export type BotGenerator = (request: ChatTurnRequest) => Promise<BotTurn> | BotTurn;
@@ -105,6 +151,13 @@ export interface RunTurnInput {
   language?: 'en' | 'vi';
   /** Advisors already spent in this room; drives the `budget` stop reason. */
   turnsUsed?: number;
+  /** Deadlines are only counted in whole rounds; one user message is one round. */
+  roundIndex?: number;
+  /** Human pressed Stop. Stops the loop and discards whatever the in-flight advisor was writing. */
+  signal?: AbortSignal;
+  /** Called as each advisor's message is committed, so the room fills in as it happens. */
+  onTurn?: (message: ChatMessage) => void;
+  turnTimeoutMs?: number;
 }
 
 export interface RunTurnResult {
@@ -274,6 +327,26 @@ const isTransient = (error: unknown): boolean => {
 };
 
 /**
+ * Rejects a promise that outlives `ms`.
+ *
+ * Resolves to `'timeout'` rather than throwing so the caller can record the one failure kind the
+ * room already knows how to show. The losing promise is left running on purpose: there is nothing
+ * to cancel here that the caller has not already aborted itself, and the caller checks `signal`
+ * before committing whatever eventually arrives.
+ */
+const raceDeadline = async <T>(work: Promise<T>, ms: number): Promise<{ value: T } | { timedOut: true }> => {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expiry = new Promise<{ timedOut: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ timedOut: true }), ms);
+  });
+  try {
+    return await Promise.race([work.then((value) => ({ value })), expiry]);
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
+/**
  * Runs one user message through the council.
  *
  * A turn that hands off enqueues the named advisor even when the round did not schedule them — that
@@ -282,6 +355,10 @@ const isTransient = (error: unknown): boolean => {
  *
  * A generator that throws is retried exactly once and only when the failure looks transient;
  * anything else is surfaced as a typed failure rather than silently swallowed.
+ *
+ * Three guarantees here are the contract from `lib/deliberation/engine-v2.ts`, applied to the room
+ * that actually ships: the request is checked before any provider is called, every wait is bounded,
+ * and an answer that arrives after a cancel is discarded rather than committed.
  */
 export const runTurn = async ({
   roster,
@@ -293,8 +370,30 @@ export const runTurn = async ({
   roomBudget = DEFAULT_ROOM_BUDGET,
   language = 'en',
   turnsUsed = 0,
+  roundIndex = 1,
+  signal,
+  onTurn,
+  turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
 }: RunTurnInput): Promise<RunTurnResult> => {
   const messages = [...history, userMessage];
+
+  // Before the first call, not after it. An empty roster or a whitespace-only message is a bug in
+  // the caller, and finding out about it through a provider bill is the worst possible way.
+  const problems = rosterProblems({
+    prompt: userMessage.body,
+    advisorIds: roster.map((bot) => bot.id),
+    attachments: userMessage.attachments ?? [],
+    roundIndex,
+  });
+  if (problems.length > 0) {
+    return {
+      messages,
+      stoppedBy: 'failed',
+      speakers: [],
+      failures: problems.map((detail) => ({ kind: 'fatal' as const, detail })),
+    };
+  }
+
   const { speakers } = planSpeakers({ roster, mode, history, userMessage });
 
   // A queue rather than an index into `speakers`: an advisor pulled in by a handoff is not
@@ -306,6 +405,10 @@ export const runTurn = async ({
   let stoppedBy: WhyStop = 'max-turns';
 
   while (queue.length > 0) {
+    if (signal?.aborted) {
+      stoppedBy = 'cancelled';
+      break;
+    }
     if (spoken.length >= maxTurns) {
       stoppedBy = 'max-turns';
       break;
@@ -324,16 +427,30 @@ export const runTurn = async ({
       isClosing,
       prompt: userMessage.body,
       language,
+      attachments: userMessage.attachments ?? [],
+      signal,
     };
 
     let turn: BotTurn | null = null;
     try {
-      turn = await generate(request);
+      const raced = await raceDeadline(Promise.resolve(generate(request)), turnTimeoutMs);
+      if ('timedOut' in raced) {
+        failures.push({ kind: 'timeout', after: turnTimeoutMs });
+        stoppedBy = 'failed';
+        break;
+      }
+      turn = raced.value;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       if (isTransient(error)) {
         try {
-          turn = await generate(request);
+          const retried = await raceDeadline(Promise.resolve(generate(request)), turnTimeoutMs);
+          if ('timedOut' in retried) {
+            failures.push({ kind: 'timeout', after: turnTimeoutMs });
+            stoppedBy = 'failed';
+            break;
+          }
+          turn = retried.value;
         } catch (retry) {
           failures.push({ kind: 'transient', detail: retry instanceof Error ? retry.message : String(retry) });
           stoppedBy = 'failed';
@@ -348,6 +465,14 @@ export const runTurn = async ({
 
     if (!turn) break;
 
+    // The human may have pressed Stop while the advisor was still writing. Committing now would put
+    // an answer in the transcript for a turn the human already walked away from, and the next round
+    // would open with it as though it had been said.
+    if (signal?.aborted) {
+      stoppedBy = 'cancelled';
+      break;
+    }
+
     if (turn.silent || turn.text.trim() === SILENT_TOKEN || !turn.text.trim()) {
       // A pass is a decision: it consumes a turn and adds nobody to the transcript, but the
       // scheduled advisor still gave up their place. The round is not judged until the queue
@@ -355,7 +480,14 @@ export const runTurn = async ({
       spoken.push(bot.id);
       continue;
     }
-    messages.push({ id: `${messages.length}`, authorId: bot.id, body: turn.text.trim(), mentioned: [] });
+    const message: ChatMessage = {
+      id: `${messages.length}`,
+      authorId: bot.id,
+      body: turn.text.trim(),
+      mentioned: [],
+    };
+    messages.push(message);
+    onTurn?.(message);
     spoken.push(bot.id);
     produced += 1;
 

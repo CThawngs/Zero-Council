@@ -19,12 +19,14 @@ import { copy, modeLabel, translations, type Copy } from '../i18n';
 import {
   DEFAULT_MAX_TURNS,
   DEFAULT_ROOM_BUDGET,
+  DEFAULT_TURN_TIMEOUT_MS,
   RESUME_ALL,
   USER_HANDLE,
   isResumeDirective,
   isStopDirective,
   parseMentions,
   runTurn,
+  type ChatAttachment,
   type ChatBot,
   type ChatMessage,
   type ChatMode,
@@ -32,6 +34,7 @@ import {
   type WhyStop,
 } from '../chat/engine';
 import { byokGenerator } from '../chat/byok';
+import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type PlanId } from '../data/plans';
@@ -43,6 +46,8 @@ export interface ChatRoom {
   /** Advisor ids in join order — the order the roster speaks in. */
   roster: string[];
   messages: ChatMessage[];
+  /** Pinned to the next message but not sent. Sending moves them onto that message. */
+  pending: ChatAttachment[];
   /** Bot turns taken by the last user message, and why the loop parked. */
   turns: number;
   stoppedBy: WhyStop | null;
@@ -96,6 +101,12 @@ interface AppContextType {
   sendMessage: (body: string) => Promise<void>;
   stopRoom: () => void;
   clearRoom: () => void;
+  /** True while the room is working, so the UI can offer Stop instead of a second send. */
+  isRoomBusy: boolean;
+  /** Reads a link NOW and pins the text to the next message. Never called mid-round. */
+  attachLink: (url: string) => Promise<void>;
+  removePending: (id: string) => void;
+  isReadingLink: boolean;
   canAddPersona: boolean;
   personaCap: number;
   toastMessage: ToastMessage | null;
@@ -202,12 +213,17 @@ const [isDeliberating, setIsDeliberating] = useState(false);
       mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
       roster: restored.roster,
       messages: restored.messages,
+      pending: restored.pending ?? [],
       turns: restored.turns,
       stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
       failures: (restored.failures as TurnFailure[]) ?? [],
       held: restored.held ?? [],
     };
   });
+  const [isRoomBusy, setIsRoomBusy] = useState(false);
+  const [isReadingLink, setIsReadingLink] = useState(false);
+  /** The one controller for the round in flight; `stopRoom` aborts it. Null when the room is idle. */
+  const roomAbortRef = useRef<AbortController | null>(null);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -367,6 +383,7 @@ const [isDeliberating, setIsDeliberating] = useState(false);
       mode,
       roster: capped.map((persona) => persona.id),
       messages: [],
+      pending: [],
       turns: 0,
       stoppedBy: null,
       failures: [],
@@ -376,14 +393,61 @@ const [isDeliberating, setIsDeliberating] = useState(false);
     setCurrentView('chat-room');
   };
 
-  const stopRoom = () => setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'user' } : room));
+  /**
+   * Stop means stop. Before the deadline landed this only rewrote a label, so the council kept
+   * answering a turn the user had walked away from and any provider call kept billing — the button
+   * looked like it worked and nothing had stopped. The abort kills the request in flight; the
+   * engine additionally refuses to commit an answer that arrives anyway.
+   */
+  const stopRoom = () => {
+    roomAbortRef.current?.abort();
+    setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
+  };
 
   const clearRoom = () => {
     // Clearing the store too is the point: if it survived, the room the user just discarded would
     // come back on reload and look like the delete button had not worked.
+    roomAbortRef.current?.abort();
     clearStoredRoom();
     setCurrentRoom(null);
     setCurrentView('empty-chamber');
+  };
+
+  /**
+   * Reads the link once, here, and pins its text to the next message.
+   *
+   * Not during a round: a fetch that hangs mid-round would look exactly like a provider hang, and
+   * the room would report the wrong thing. A link that cannot be read is still pinned, carrying the
+   * reason — a silently missing attachment reads as "the app ignored what I sent", and the council
+   * would answer from the human's words alone without ever saying so.
+   */
+  const attachLink = async (url: string) => {
+    const href = url.trim();
+    if (!href) return;
+    setIsReadingLink(true);
+    const attachment: ChatAttachment = {
+      id: `att-${Date.now()}`,
+      kind: 'link',
+      name: href,
+      href,
+    };
+    try {
+      const reading = await readLinkInBrowser(href);
+      attachment.text = reading.text;
+    } catch (error) {
+      attachment.problem = error instanceof UnreadableLinkError ? error.reason : String(error);
+    } finally {
+      setIsReadingLink(false);
+      setCurrentRoom((room) =>
+        room ? { ...room, pending: [...room.pending, attachment] } : room
+      );
+    }
+  };
+
+  const removePending = (id: string) => {
+    setCurrentRoom((room) =>
+      room ? { ...room, pending: room.pending.filter((item) => item.id !== id) } : room
+    );
   };
 
   const sendMessage = async (body: string) => {
@@ -413,18 +477,34 @@ const [isDeliberating, setIsDeliberating] = useState(false);
       authorId: USER_HANDLE,
       body,
       mentioned: parseMentions(body, activeBots),
+      // Pinned attachments travel WITH this message. Reading them in the engine would mean one
+      // fetch per advisor per turn; the text was already read when they were pinned.
+      ...(currentRoom.pending.length > 0 ? { attachments: currentRoom.pending } : {}),
     };
 
-    const parked: ChatRoom = { ...currentRoom, messages: [...currentRoom.messages, userMessage], held };
+    const parked: ChatRoom = {
+      ...currentRoom,
+      messages: [...currentRoom.messages, userMessage],
+      pending: [],
+      held,
+    };
     setCurrentRoom(parked);
+    setIsRoomBusy(true);
 
     // `stop @bot` is a control message, not a prompt, so it must not run a round: the @ would read as a
     // request for that advisor's answer, and because they are now held it resolved to nobody and the
     // room reported "nobody answered" — a lie about what happened. `@all` DOES run a round: the user
     // is telling the council to carry on, so silence would be its own failure.
-    if (stopping) return;
+    if (stopping) {
+      setIsRoomBusy(false);
+      return;
+    }
 
-    const result = await runTurn({
+    const controller = new AbortController();
+    roomAbortRef.current = controller;
+
+    try {
+      const result = await runTurn({
       roster: activeBots,
       mode: currentRoom.mode,
       // WITHOUT this turn's user message — runTurn appends it. Passing `parked.messages` here
@@ -451,19 +531,34 @@ const [isDeliberating, setIsDeliberating] = useState(false);
       roomBudget: DEFAULT_ROOM_BUDGET,
       turnsUsed: currentRoom.turns,
       language,
+      roundIndex: parked.messages.filter((message) => message.authorId === USER_HANDLE).length,
+      signal: controller.signal,
+      turnTimeoutMs: DEFAULT_TURN_TIMEOUT_MS,
+      // Each advisor appears the moment it answers instead of the room staying blank until the
+      // whole round ends. The state update is functional because a stalled round can otherwise
+      // overwrite an appended message with the transcript it started from.
+      onTurn: (message) => {
+        setCurrentRoom((room) =>
+          room ? { ...room, messages: [...room.messages, message] } : room
+        );
+      },
     });
 
-    setCurrentRoom((room) =>
-      room
-        ? {
-            ...room,
-            messages: result.messages,
-            turns: currentRoom.turns + result.speakers.length,
-            stoppedBy: result.stoppedBy,
-            failures: result.failures,
-          }
-        : room
-    );
+      setCurrentRoom((room) =>
+        room
+          ? {
+              ...room,
+              messages: result.messages,
+              turns: currentRoom.turns + result.speakers.length,
+              stoppedBy: result.stoppedBy,
+              failures: result.failures,
+            }
+          : room
+      );
+    } finally {
+      roomAbortRef.current = null;
+      setIsRoomBusy(false);
+    }
   };
 
   // Keys live in memory for the life of the tab and nowhere else: not in storage, not on our server.
@@ -545,6 +640,10 @@ const [isDeliberating, setIsDeliberating] = useState(false);
         sendMessage,
         stopRoom,
         clearRoom,
+        isRoomBusy,
+        attachLink,
+        removePending,
+        isReadingLink,
         toastMessage,
         showToast,
       }}
