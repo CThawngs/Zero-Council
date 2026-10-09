@@ -90,9 +90,26 @@ jobs:
         working-directory: web
         run: pnpm exec eslint
 
+      # `next/font/google` tải Literata lúc build, tức phụ thuộc mạng ra ngoài.
+      # Runner đôi khi không lấy được và Turbopack chết với
+      # "Module not found: @vercel/turbopack-next/internal/font/google/font".
+      # Đã gặp thật ở run này, re-run là xanh — tức là mạng, không phải app.
+      #
+      # Build không có side effect lặp lại vô hạn nên thử lại 3 lần là rẻ hơn
+      # nhiều so với nhét file font vào repo, và log vẫn nói thẳng lần cuối.
       - name: Build
         working-directory: web
-        run: pnpm exec next build
+        run: |
+          for attempt in 1 2 3; do
+            if pnpm exec next build; then
+              echo "build ok (lần $attempt)"
+              exit 0
+            fi
+            echo "build fail lần $attempt — lại sau 10s"
+            sleep 10
+          done
+          echo "build fail 3 lần liên tiếp"
+          exit 1
 
       # --- Bật app thật rồi hỏi nó ---
       # `setsid` để next start có process group riêng. `$!` không phải PID của
