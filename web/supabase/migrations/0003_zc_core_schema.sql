@@ -1,4 +1,4 @@
-﻿-- Zero Council Core Schema: Agents, Conversations, Models, and Plans
+-- Zero Council Core Schema: Agents, Conversations, Models, and Plans
 -- Integrated with Supabase auth.users & full Foreign Key constraints
 --
 -- Shared contract: applies in order after 0001_zc_orders.sql and 0002_zc_coupons.sql.
