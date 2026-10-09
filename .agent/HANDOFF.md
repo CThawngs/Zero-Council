@@ -1,4 +1,66 @@
-# HANDOFF — Zero Council product voice, Literata, brass-only hero
+# LƯỢT 11 — Engine viết lại: A2A có cấu trúc (2026-10-07)
+
+Lượt này viết lại `engine.ts` từ đầu. Phần cũ của HANDOFF (lượt 9, billing/coupon) giữ nguyên.
+
+## Quyết định nền tảng: bỏ regex trên prose
+
+Bản cũ trao lượt A2A bằng cách đọc `@name` trong **văn bản** bot. Sai ở tầng kiến trúc:
+
+- Nhắc (*"dreamer, what do you think?"*) bị nhầm là trao lượt — nhất là khi trích dẫn code block.
+- Model quên quy ước `@` → rơi về fallback im lặng, không báo lỗi.
+- Tên nhiều từ dễ không resolve.
+- Không phân biệt được *muốn ai trả lời* với *nhắc tới ai*.
+
+Hermes làm đúng việc này bằng tool call có cấu trúc (`message_agent(target=…)`). Vì vậy:
+
+```ts
+export interface BotTurn { text: string; handoffs: string[]; silent?: boolean }
+export type BotGenerator = (request: ChatTurnRequest) => Promise<BotTurn> | BotTurn;
+```
+
+Engine đọc `handoffs`, **không bao giờ** đọc prose. BYOK thay đúng một export (`scriptedGenerator`) là xong — `runTurn` không đổi.
+
+Có test *"prose alone never routes — a quoted mention is not a handoff"* chắc chắn **thất bại** dưới thiết kế cũ.
+
+## Bug tìm ra khi lái app thật
+
+Cả hai đều **không** lộ ra qua test — chỉ lộ khi lái Chrome thật (rule 19):
+
+1. **`stop @bot` vẫn chạy thành một lượt.** Advisor vừa bị hold nên không còn trong roster, mention không resolve → `speakers = []` → phòng hiện "No advisor answered this round" cho một tin **không phải câu hỏi**. Đó là lời nói dối về chính hội đồng.
+2. **Nhận diện directive dùng sai roster.** Dòng cũ dùng roster **đã lọc**; advisor cần bị dừng thì đương nhiên không có trong đó → không bao giờ nhận ra lệnh dừng.
+
+Sửa: directive nhận diện trên **roster đầy đủ**; `stop` là lệnh thuần nên **không** chạy vòng; `@all` thì **phải** chạy vòng (user đang bảo hội đồng tiếp tục — im lặng mới là lỗi).
+
+## Evidence
+
+Cổng chất lượng: `tsc --noEmit` exit 0 · `eslint src` exit 0 · `next build` exit 0 · `node --test tests/chat-engine.test.mjs` **25/25**.
+
+**Lái app thật: `ALL_CHECKS_PASS`** (`next start -p 3230`). Bằng chứng: `.agent/evidence/council-room.png`, `.agent/evidence/council-drive.json`.
+
+| Tình huống | Kết quả quan sát được |
+|---|---|
+| Câu hỏi không mention | Pragmatist mở lượt → `@The Dreamer` → Dreamer trả lời → `@user` |
+| `@The Dreamer …` | Dreamer mở lượt, Pragmatist **không** mở |
+| `stop @The Pragmatist` | Không cố vấn nào nói, **không** báo "nobody answered" |
+| `@all carry on` | Pragmatist quay lại, mở lượt, handoff tiếp sang Dreamer |
+
+Cap theo gói xác nhận luôn chạy: modal hiện "2 of 2 selected" trên gói Free.
+
+`tests/drive-council.mjs` lái Chrome thật qua CDP **không thêm dependency** — Node 24 có `WebSocket` + `fetch` sẵn. `agent-browser` chưa cài; cài global là thay đổi máy nên không tự ý làm (rule 9).
+
+## OPEN (vòng 11)
+
+1. **Trần vòng lặp chưa chốt — mâu thuẫn đang mở.** Spec gốc: "vòng lặp vô tận cho đến khi user kêu dừng". Chủ dự án từng chốt 3 lượt. Đang chạy `DEFAULT_MAX_TURNS = 12` + `DEFAULT_ROOM_BUDGET = 200`. Muốn "vô tận" thật thì phải chặn bằng **ngân sách tiền**, không phải số lượt — vòng không có khiến thì đốt token vô hạn.
+2. **`scriptedGenerator` không suy nghĩ.** Nó tuân thủ hợp đồng nên chứng minh **routing** đúng; **không** chứng minh model thật sẽ phát ra handoff. Chỉ BYOK mới trả lời được. Đây là giới hạn lớn nhất còn lại.
+3. **Persistence chưa có.** Phòng chỉ sống trong React; F5 là mất. Hermes có memory riêng từng thành viên + `/compress` — chưa làm.
+4. **Claim vượt code — đã hẹn lại, chỉ còn phần mã hoá.** Cấp 12 BYOK **có** adapter Anthropic + OpenAI chạy thật, key chạy từ trình duyệt ra vendor. Còn nói dối: landing hứa **AES-256** và hội thoại mã hoá — repo **không có mã hoá nào**; key nằm thô trong RAM tab, transcript nằm rõ trong `sessionStorage`. `currentUser.ts` trả `null`, `SignInView` còn rỗng. Chi tiết: `features/FEATURE_MAP.md` mục 5.
+5. ~~`features/` + `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh.~~ **Đã sinh** ở cấp 14. Bảng kiểm kê nằm ở `features/FEATURE_MAP.md`.
+
+## Bàn giao (vòng 11)
+
+1. Code + docs: xong.
+2. **Chưa commit.** Tree đang có thay đổi ở `main` — cần chủ dự án chốt hướng commit/PR.
+3. Dừng server tạm: xong (xem `.agent/evidence/council-drive.json` để chạy lại).
 
 Cập nhật: 2026-09-26. Governance: v7.4. Worktree `vi-font-fix` và các worktree khác không đụng tới; handoff cũ của `vi-font-fix` giữ nguyên lịch sử ở commit trước.
 
@@ -141,7 +203,7 @@ Test lộ ra một điều: `effectivePlan` đọc đồng hồ hệ thống bê
 8. Mã giảm giá chưa có giá trị nào được duyệt — bảng đọc từ `PAYLOS_DISCOUNT_CODES`, để trống là từ chối mọi mã.
 9. **`colorToken` trong `types.ts` vẫn chưa component nào dùng.** 4 màu persona đã quay lại orb, nhưng thẻ advisor trong app vẫn chưa dùng trường này.
 10. Logo 24px đọc ra **3 chấm nằm ngang, không phải 4 chấm trên vòng** — vì logo không xoay nên scene phẳng, node 0°/180° chiếu về chung tâm. Đã ghi trong comment CSS. Muốn đúng 4 thì phải bật lại spin hoặc dùng SVG phẳng.
-11. `.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.
+11. ~~`.agent/skills/verify-app/`, `features/`, `FEATURE_MAP.md` (rule 28.2/32) — chưa sinh, mở task riêng.~~ **Xong ở cấp 14 (2026-10-07).** `features/FEATURE_MAP.md` kiểm kê trung thực, tách rõ *đã có bằng chứng* với *chỉ có lời*; mục 5 liệt kê đúng những gì landing đang hứa mà chưa có. Skill verify-app đã **chạy thử thật**: `31/31` check qua cả ba driver.
 12. **Workflow chưa từng gọi Vercel thật.** 5/5 test pass với HTTP stub — chứng minh URL, method, header, payload, xử lý 403 và dọn file tạm. Không chứng minh Vercel nhận token hay body đúng schema. Chạy một lần sau khi có `VERCEL_TOKEN`.
 13. **`actions/checkout` đang ghim tag `@v4`, chưa phải SHA** (rule 20). Chưa "dùng thật" nên chấp nhận được, nhưng phải đổi trước lần chạy thật đầu tiên.
 14. **Còn phụ thuộc đồng nghiệp ở 3 chỗ**, không giảm được bằng workflow: (a) deploy, (b) apply migration, (c) **redeploy sau mỗi lần đổi secret** — Vercel chụp biến theo từng deployment. Muốn bỏ hẳn (c) thì cách duy nhất là thêm chủ dự án vào Vercel project.

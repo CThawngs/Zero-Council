@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ArrowRight, Eye, Layers3, Send, ShieldCheck, UsersRound, X } from 'lucide-react';
 import { modelLabel, providerLabel } from '../data/mockData';
@@ -232,7 +232,7 @@ export const SessionActiveView: React.FC = () => {
                   <h3 className="font-medium text-ink">{advisor.name}</h3>
                   <p className="mt-1 text-xs leading-relaxed text-ink-muted">{advisor.stance}</p>
                   <p className="mt-2 text-[11px] text-ink-muted">
-                    {`${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}`}
+                    {`${modelLabel(advisor.model)} · ${providerLabel(advisor.provider)}`}
                   </p>
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import {
@@ -203,7 +203,7 @@ export const SessionConcludedView: React.FC = () => {
                   <p className="mt-1 text-[11px] text-ink-muted">
                     {t.modelLabel}:{' '}
                     {advisor
-                      ? `${modelLabel(advisor.model, language)} · ${providerLabel(advisor.provider, language)}`
+                      ? `${modelLabel(advisor.model)} · ${providerLabel(advisor.provider)}`
                       : t.notImplemented}
                   </p>
                   {crossReference && (

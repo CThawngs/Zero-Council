@@ -1,3 +1,6 @@
 # Linked git worktrees live here (git worktree add). A worktree is a full checkout, so
 # `git add -A` from the main tree would otherwise stage an entire second copy of the repo.
 .worktrees/
+
+# Editor/tooling index. Rebuilt on demand, never a source of truth, and it is per-machine.
+.dsh-code-index/

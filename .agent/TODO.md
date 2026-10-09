@@ -1,4 +1,4 @@
-# TODO — Zero Council product voice (giai đoạn 2)
+﻿# TODO — Zero Council product voice (giai đoạn 2)
 
 Cập nhật: 2026-09-26. Governance: v7.4. Worktree: `.worktrees/product-voice-ui`; branch: `product-voice-ui`; base `83ee993` (`origin/main` sau PR #9 merge).
 
@@ -117,11 +117,134 @@ Supabase là của đồng nghiệp, không thuộc phạm vi task này.
 - [x] Evidence app thật (`next start -p 3200`): 18/20 kịch bản, 2 fail là **kỳ vọng test sai**, đã verify riêng (xem HANDOFF).
 - [x] `.gitignore` chặn `.zc-account.json` — file store chứa email thật, gần như lọt vào commit.
 
+## Cấp 10 — Phòng hội đồng: loop A2A bằng `@` (2026-10-05)
+
+Yêu cầu: luồng chat nhiều bot — popup chọn bot + cơ chế, chat như messenger, mỗi AI một card,
+trao lượt bằng `@`, bot được mention đọc toàn bộ lịch sử rồi đi tiếp, vòng lặp đến khi user kêu dừng.
+
+**Quyết định lượt này (chủ dự án trả lời 2026-10-05):**
+
+| Câu hỏi | Chốt |
+|---|---|
+| Engine AI | **Loop + UI với generator script trước**, xác minh workflow chạy đúng; BYOK thêm sau, thay đúng 1 export |
+| Auth | Gate local bằng `ZC_DEV_LOGIN_EMAIL` (đã có sẵn trong `currentUser.ts`) |
+| Trần loop | **3 lượt serial** như Hermes |
+| Mode "tổng hợp" | Cả nhóm trả lời nối tiếp rồi bot cuối tổng hợp |
+
+- [x] `web/src/prototype/chat/engine.ts` — routing thuần: `parseMentions` (alias bỏ dấu, mention nhiều từ, tên lạ → không resolve), `planSpeakers` (round-robin / panel), `runTurn` (queue động, handoff `@`, hard cap), `isStopDirective` (`stop @bot` giữ bot; giữa câu là prose).
+- [x] `web/src/prototype/chat/scripted.ts` — `scriptedGenerator` sinh `@handoff`/`@user` giả định; **đây là điểm duy nhất BYOK sẽ thay**.
+- [x] `tests/chat-engine.test.mjs` — 13/13 pass thật.
+- [x] `JoinRoomModal.tsx` — chọn bot (cap theo plan) + chọn mode.
+- [x] `ChatRoomView.tsx` — messenger UI, 1 bot = 1 card, composer Enter gửi / Shift+Enter xuống dòng.
+- [x] Chặn cap 2/4/8 ở `addPersona` + disable nút ở `PersonasView` (đóng lỗ hổng TODO mục "Ngoài scope").
+- [x] `tsc --noEmit` exit 0, `eslint` exit 0.
+- [~] ~~`next build` CHƯA chạy~~ → **đã chạy exit 0** ở Cấp 11.
+- [~] ~~Chưa lái app thật trên browser~~ → **đã lái, `ALL_CHECKS_PASS`** ở Cấp 11b.
+- [~] ~~13/13 pass thật~~ → bộ test này đã **bị viết lại** ở Cấp 11. Nó assert *parser*, tức là
+  chứng minh regex trên prose hoạt động — đúng thứ **không** nên làm. Số liệu cũ không còn ý nghĩa.
+
+## Cấp 11 — Engine viết lại: A2A có cấu trúc, không regex trên văn bản (2026-10-07)
+
+Yêu cầu: "A2A phải thực sự hoạt động giống như Hermes bots mode. Engine là fondation."
+
+**Vấn đề gốc:** bản trước đọc `@name` trong prose của bot để trao lượt. Sai ở tầng kiến trúc —
+regex không phân biệt được *nhắc* với *trích dẫn*, không đảm bảo tên luôn resolve, và model
+quên quy ước thì rơi về fallback im lặng. Hermes dùng `message_agent(target=...)`: tool call có cấu trúc.
+
+- [x] `engine.ts` — `BotTurn { text, handoffs, silent? }`, `BotGenerator` trả `BotTurn`. Routing đọc `handoffs`, **không** đọc prose. `WhyStop` đủ 5 nhánh: `user | silent | max-turns | budget | failed`. `TurnFailure` có kind `silent|timeout|transient|fatal`; chỉ `transient` retry đúng 1 lần.
+- [x] Queue động: handoff kéo được cố vấn **không có trong vòng đã lên lịch**, nhưng không được nhảy lên đầu hàng đã xếp.
+- [x] `buildContext`: 200 tin / 32k ký tự / excerpt 8k. Sửa bug tin quá lớn bị **âm thầm rớt** (check ngân sách chạy trước check kích thước → `continue` thay `break`).
+- [x] Ngồi yên đúng nghĩa: chỉ `silent` khi hàng cạn mà **không ai nói** (`produced === 0`). Bản cũ cắt sau 2/3 cố vấn.
+- [x] `scripted.ts` trả `BotTurn`. Đây là **điểm duy nhất** BYOK sẽ thay — engine không đổi.
+- [x] `AppContext.sendMessage` — `stoppedBy: WhyStop | null`, `failures: TurnFailure[]`, `turns` cộng dồn (trước reset mỗi lượt).
+- [x] `ChatRoomView` hiện 5 lý do dừng, mỗi cái một câu riêng; thêm 3 khoá copy EN + VI.
+
+**Bug tìm ra khi lái app thật (rule 19), không lộ ra qua test:**
+
+- [x] `stop @bot` vẫn chạy thành một lượt. Vì advisor vừa bị hold nên không còn trong roster, mention không resolve → `speakers = []` → phòng báo "No advisor answered" cho một tin **không phải câu hỏi**. Đã sửa: `stop` là lệnh thuần, không chạy vòng.
+- [x] Nhận diện directive phải dùng **roster đầy đủ**, không dùng roster đã lọc — advisor cần bị dừng thì đương nhiên không có trong roster rút gọn.
+- [x] `@all` **phải** chạy một vòng (user đang bảo hội đồng tiếp tục; im lặng mới là lỗi). Chỉ `stop` mới không chạy.
+- [x] Ràng buộc trần: `DEFAULT_MAX_TURNS = 12`, `DEFAULT_ROOM_BUDGET = 200`. **Chưa chốt với chủ dự án** — yêu cầu gốc là "vòng lặp vô tận", đang dùng trần để chặn chi phí.
+
+## Cấp 11b — Kiểm chứng thật (2026-10-07)
+
+- [x] `tests/chat-engine.test.mjs` — **25/25**. Assert **hành vi** (ai được trao lượt, khi nào vòng dừng, xử lý generator lỗi), không assert parser. Có test *"prose alone never routes"* chắc chắn thất bại dưới thiết kế cũ.
+- [x] `tests/drive-council.mjs` (mới) — lái Chrome thật qua CDP, **không thêm dependency** (Node 24 có `WebSocket` + `fetch` sẵn). `agent-browser` chưa cài; cài global là đụng máy nên không tự ý làm.
+- [x] `next build` → exit 0, `BUILD_ID` mới.
+- [x] **Lái app thật: `ALL_CHECKS_PASS`** trên `next start -p 3230`. Screenshot + JSON ở `.agent/evidence/`.
+
+| Tình huống | Kết quả thật |
+|---|---|
+| Gửi câu hỏi không mention | Pragmatist mở lượt → `@The Dreamer` → Dreamer trả lời → `@user` |
+| `@The Dreamer ...` | Dreamer mở lượt, Pragmatist **không** mở |
+| `stop @The Pragmatist` | Không cố vấn nào nói, **không** báo "nobody answered" |
+| `@all carry on` | Pragmatist quay lại, mở lượt, handoff tiếp |
+
+- [x] `tsc --noEmit` exit 0 · `eslint src` exit 0.
+- [x] Xoá scratch `.zc-*`.
+
+## Cấp 12 — BYOK: nối model thật vào seam (2026-10-07)
+
+Chủ dự án chốt: **Anthropic + OpenAI**, key gửi **thẳng từ trình duyệt** ra provider, không qua server ta.
+
+- [x] `chat/byok.ts` (mới): adapter Anthropic + OpenAI. Không SDK — `fetch` đủ cho cả hai wire format.
+- [x] Tool `message_agent(target)` — **trùng tên và shape với Hermes**. Đây là điểm nối với bản tham chiếu, không phải chi tiết tuỳ chọn.
+- [x] Key nằm trong RAM của tab, **không** storage, **không** server. Đổi lại: F5 là mất key.
+- [x] Phòng là **hỗn hợp provider**: mỗi cố vấn gọi đúng vendor của nó. Cố vấn không có key thì rơi về scripted, không làm hỏng vòng.
+- [x] Xoá `Model label A/B/C` + `Provider label A/B/C` → id thật (`claude-sonnet-4-5`, `gpt-4o`, `gpt-4o-mini`, `anthropic`, `openai`). Xoá 6 khoá i18n chết.
+- [x] Tên vendor/model là proper noun nên **không dịch** — xoá luôn lớp `modelLabel(x, language)` / `providerLabel(x, language)`.
+
+**Một quyết định thiết kế đáng ghi:** tool call **có mặt nhưng không đọc được** ≠ *không có tool call*.
+Nếu gộp hai thứ, JSON hỏng sẽ bị đọc thành "cố vấn không trao lượt" và phòng treo im lặng. Vì vậy adapter trả
+thêm cờ `attempted`; chỉ khi có tool call mà không resolve được tên thì mới đóng vòng về `user`.
+
+**Một thiếu sót trong prompt:** nhánh "không closing" ban đầu không hề nhắc `user` là một target hợp lệ.
+Cố vấn hết ý sẽ chọn bạn ngẫu nhiên thay vì trả câu hỏi về cho người, và vòng kéo dài. Đã sửa.
+
+## Cấp 12b — Kiểm chứng (2026-10-07)
+
+- [x] `tests/byok.test.mjs` — **9 test**, stub `fetch`: tool_use → `handoffs`, tool_call JSON → `handoffs`, arguments hỏng → mất handoff **nhưng giữ câu trả lời**, `[SILENT]` → pass, prose có `@name` → **không** route, lỗi HTTP → throw kèm status.
+- [x] `tsc --noEmit` 0 · `eslint src` 0 · `next build` 0 · **34/34** test.
+- [x] `tests/drive-keys.mjs` (mới) — lái Chrome thật, **14/14 pass**. Bằng chứng `.agent/evidence/council-keys.png`.
+
+Check quan trọng nhất của driver này: **nối key sai rồi bắt cố vấn trả lời.** Kết quả thật:
+
+```
+YOU What should we ship first?
+An advisor stopped working (fatal). The rest of the council is still here.
+```
+
+Không có câu scripted nào lọt. Nếu lọt, nghĩa là key bị bỏ qua và hội đồng **bịa** cố vấn — tệ hơn nhiều so với báo lỗi.
+
+**Bug tôi tự gây ra rồi bắt được:** driver đầu tiên reload trang giữa chừng, mà reload **xoá key trong RAM**, nên phòng rơi về scripted và driver vẫn báo PASS. Check `From my lens` bị lừa. Đã sửa thứ tự: vào phòng → nối key → quay lại phòng bằng điều hướng trong app, không reload.
+
+## Cấp 13 — Phòng sống sót qua reload (2026-10-07)
+
+F5 xoá sạt phòng đang họp. Với sản phẩm mà cả luận điểm là hàng chính, đó là lỗi nặng nhất còn lại.
+
+- [x] `chat/storage.ts` (mới): `sessionStorage`, native, **không thêm dependency**. Một file duy nhất chạm storage.
+- [x] Nạp ở render đầu tiên — không có nháy "phòng trống" rồi mới hiện transcript, vì nháy đó đọc ra như mất dữ liệu.
+- [x] Ghi theo `useEffect([currentRoom])`. Xoá phòng thì **xoá store**, không chỉ xoá state.
+- [x] Blob có `schema` tag: bản build cũ **không** nạp nửa vào UI mới.
+- [x] JSON hỏng, sai cấu trúc, roster rỗng, store bị chặn (private mode / quota) → đọc ra `null`, **không ném**. Phòng đang chạy không được chết vì cache.
+- [x] `tests/storage.test.mjs` — **8 test**, trong đó nửa là đường âm.
+- [x] `tests/drive-persist.mjs` (mới) — reload thật giữa chừng, **9/9 pass**. Bằng chứng `.agent/evidence/council-persist.png`.
+
+**Bug thật mà driver bắt được:** lần đầu `sessionStorage` ghi **đúng** (kiểm tra thấy schema 1, 3 tin, 2 cố vấn) — nhưng reload vẫn rơi về **landing marketing**. Vì `currentView` mặc định `'overview'`. Dữ liệu còn nguyên mà phòng bị giấu sau trang quảng cáo; tệ hơn nhiều so với mất hẳn, vì **không có gì trông như hỏng**.
+
+Sửa: đọc store **một lần** rồi lấy cả hai quyết định từ cùng một lần đọc —
+`restored ? 'chat-room' : 'overview'` và `restored ? phòng : null`.
+Hai state đọc lệch nhau là chính là lỗi này.
+
+Hai check còn lại cũng là thứ dễ làm hỏng nhất: nếu "Xoá" chỉ reset React mà quên xoá store, **phòng đã xoá sẽ tự quay lại** ở lần refresh sau — trông y hệt nút hỏng.
+
+**Trần đã ghi trong code:** `sessionStorage` là **theo tab**, chết cùng tab, không sang máy khác. Không phải backup, không phải lịch sử bền. Muốn bền thì cần auth + store thật; khi có, chỉ thay đúng file này.
+
 ## Ngoài scope
 
 - [ ] Giai đoạn 2: engine thật, provider, persistence, auth, deploy. Landing hiện mô tả hành vi chưa có code sau lưng.
 - [ ] **Auth (đồng nghiệp)**: chỉ cần làm `authenticateFromSession` trong `web/src/lib/currentUser.ts`. Mọi thứ còn lại đã dựng sẵn quanh nó.
-- [ ] Hạn mức 2/4/8 advisor vẫn là con số hiển thị, chưa có chỗ nào chặn.
+- [ ] Hạn mức 2/4/8 advisor: **đã chặn thật** ở `JoinRoomModal` + `PersonasView` + `joinRoom` (xác nhận trong browser: "2 of 2 selected").
 - [ ] `.agent/skills/verify-app/` + `features/` + `FEATURE_MAP.md` (28.2, 32.2–32.4) — chưa sinh, mở task riêng.
 
 ---
@@ -170,3 +293,11 @@ Yêu cầu lượt này (chủ dự án): nhìn được nhiều AI tranh luận
 
 - [ ] Engine thật: thay thân `runDeliberation`. Cần thêm `onContribution` để stream từng cố vấn thay vì chờ trọn vòng.
 - [ ] Bảngnghi này viết sau khi đã lái app, không phải trước. `features/` + `FEATURE_MAP.md` (28.2) vẫn chưa sinh.
+- [ ] Persistence bền: `sessionStorage` đủ cho reload nhưng **chết theo tab**. Lịch sử lâu dài cần auth + DB — vẫn chặn ở `authenticateFromSession`.
+
+## Cần bạn nhìn kỹ (rule 31.3)
+
+- **Chưa từng gọi provider thật.** Toàn bộ bằng chứng dùng key giả và HTTP stub. Chứng minh *đường nối và ánh xạ* đúng; **không** chứng minh Anthropic/OpenAI nhận request và trả tool call. Muốn chắc thì cần một key thật chạy một vòng.
+- **Key không lưu, mất khi F5.** Đây là cái giá của việc không cho server chạm vào key. Nếu muốn nhớ key thì phải chọn hoặc mã hoá phía client, hoặc để server giữ — hai đều đổi lại thứ đang được bán.
+- **Trần vòng lặp chưa chốt.** Spec gốc "vòng lặp vô tận", chủ dự án từng chốt 3 lượt. Đang `12` + trần phòng `200`. Muốn vô tận thật thì phải chặn bằng **ngân sách tiền**.
+- **Landing vẫn hứa** BYOK AES-256, hội thoại mã hoá. Giờ có key chạy thật, nhưng **không có mã hoá nào** và key sống trong RAM. `currentUser.ts` trả `null`, `SignInView` còn rỗng.

@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { DecisionFramework } from '../types';
 import { modelLabel, providerLabel } from '../data/mockData';
-import { Check, Compass, GitBranch, Layers3, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
+import { Check, Compass, GitBranch, Layers3, MessageSquareText, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
 
 export const EmptyChamberView: React.FC = () => {
-  const { startNewSession, personas, setCurrentView, t, language } = useApp();
+  const { startNewSession, openJoinRoom, personas, setCurrentView, t} = useApp();
   const [question, setQuestion] = useState('');
   const [selectedFramework, setSelectedFramework] =
     useState<DecisionFramework>('Good / Normal / Bad Scenarios');
@@ -136,7 +136,7 @@ export const EmptyChamberView: React.FC = () => {
                   <div className="min-w-0">
                     <p className="min-w-0 truncate text-sm font-medium text-ink">{persona.name}</p>
                     <p className="min-w-0 truncate text-[11px] text-ink-muted">
-                      {modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}
+                      {modelLabel(persona.model)} · {providerLabel(persona.provider)}
                     </p>
                   </div>
                 </div>
@@ -163,6 +163,18 @@ export const EmptyChamberView: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Step 5 → 6: the live room is a separate entry, because it is a separate kind of session. */}
+      <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="open-room-title">
+        <h2 id="open-room-title" className="text-sm font-semibold text-ink">
+          {t.chatTitle}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.joinBody}</p>
+        <button type="button" onClick={openJoinRoom} className="button-primary mt-4 min-h-11 w-full justify-center sm:w-auto">
+          <MessageSquareText className="h-4 w-4" aria-hidden="true" />
+          {t.joinStart}
+        </button>
+      </section>
 
       <section className="rounded-2xl border border-border bg-background/60 p-5" aria-labelledby="examples-title">
         <h2 id="examples-title" className="text-sm font-semibold text-ink">
