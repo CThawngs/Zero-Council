@@ -379,3 +379,35 @@ Muc 8 cua `features/FEATURE_MAP.md` la no da duoc tra trong luc gop PR #18. Day 
 - **Chua doc duoc link that o domain khac.** Driver dan `127.0.0.1` (cung origin) va mot URL bi CORS
   chan. Da số website se bi chan — day la han cuc, phong noi thang chu khong giau.
 - **Van chua co route doc link phia server.** Con la cau hop ban.
+
+## Cap 16 — Build khong con can mang + branch protection (2026-10-09)
+
+- [x] **Vendor font vao repo.** `next/font/google` tai Literata/Inter **luc build**; runner khong ra
+  duoc Google Fonts thì Turbopack chet. Gap 3 lan lien tiep mot lan, va 1 lan chan job 20 phut. Bay 4
+  file woff2 (106KB) — ca hai deu la VARIABLE font, mot file cover 400-600.
+- [x] Giu `unicode-range`. Bo no thi trinh duyet rot ve font he thong cho **tung chu co dau**; dung thu
+  da bi ship hai lan va anh chup man hinh cung khong thay.
+- [x] `tests/drive-font.mjs` (moi) — do bang rong chu Viet: cung mot chu o webfont va o Georgia.
+  Bang nhau nghia la webfont KHONG ve glyph do. `ALL_CHECKS_PASS`.
+- [x] **Sua bug co san tren main**: `src/proxy.ts` loai tru `svg|png|jpg|jpeg|gif|webp`, **khong co
+  `woff2`**, nen `updateSession` chuyen moi khach an danh sang `/auth` va moi request font tra ve HTML.
+  Trinh duhet tu choi, chu co dau lot xuong font he thong. Bug nay khong do thay doi nay — no da ton
+  tai tu khi auth len main.
+- [x] **Branch protection cho `main`**: `required_status_checks = ["verify"]`, `enforce_admins = true`,
+  `strict = false`. Push thang len main bi tu choi: `GH006 ... Required status check "verify" is
+  expected`. `strict = false` co chu dich: strict bat buoc branch phai up-to-date, hay sinh conflict
+  khi main vua doi — dung thu da ton tai trong luc gop PR #18.
+- [x] Gate: 160/160 test · tsc 0 · eslint 0 loi · build 0 · 3 driver `ALL_CHECKS_PASS` · CI `verify`
+  xanh tren PR #21.
+
+## Can ban nhin ky (rule 31.3)
+
+- **Khong chay duoc phep thu "build khi mat mang"** — sua `hosts` can admin. Bang chung la grep build
+  output (0 tham chieu `fonts.gstatic`/`fonts.googleapis`) + runtime (0 request Google), khong phai
+  phep thu that.
+- **Danh sach loai tru cua `src/proxy.ts` van phai them bang tay** moi loai asset moi. Comment trong
+  file da ghi ro; nen chuyen sang loai tru theo thu muc (`static|fonts|assets`) neu muon het can them.
+- **4 thong bao loi cu trong hop thu chua danh dau da doc.** Token `gh` hien khong co scope
+  `notifications` nen API tra 404. Can ban tu chay: `gh auth refresh -s notifications`.
+- **Branch protection co the chong nhung thu ban van muon lam.** Push thang len `main` bay gio bi
+  tu choi; chi con duong PR + CI xanh.
