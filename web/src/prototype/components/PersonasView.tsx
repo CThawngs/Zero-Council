@@ -1,10 +1,10 @@
-import React from 'react';
+﻿import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Cpu, LockKeyhole, PlusCircle } from 'lucide-react';
 import { modelLabel, providerLabel } from '../data/mockData';
 
 export const PersonasView: React.FC = () => {
-  const { personas, setCurrentView, t, language } = useApp();
+  const { personas, setCurrentView, canAddPersona, personaCap, t} = useApp();
 
   return (
     <div className="content-shell space-y-7">
@@ -14,8 +14,14 @@ export const PersonasView: React.FC = () => {
           <h1>{t.personasTitle}</h1>
           <p>{t.personasBody}</p>
         </div>
-        <button type="button" onClick={() => setCurrentView('new-advisor')} className="button-primary min-h-11 w-full shrink-0 justify-center sm:w-auto"><PlusCircle className="h-4 w-4" />{t.addPersona}</button>
+        <button type="button" onClick={() => setCurrentView('new-advisor')} disabled={!canAddPersona} title={!canAddPersona ? t.personaCapHint.replace('{cap}', String(personaCap)) : undefined} className="button-primary min-h-11 w-full shrink-0 justify-center disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"><PlusCircle className="h-4 w-4" />{t.addPersona}</button>
       </header>
+
+      <p className="text-xs leading-relaxed text-ink-muted">
+        {t.personaCapCount
+          .replace('{used}', String(personas.length))
+          .replace('{cap}', String(personaCap))}
+      </p>
 
       <div className="panel flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm font-medium text-ink"><Cpu className="h-4 w-4 text-brass" />{t.modelLabel}</div>
@@ -33,7 +39,7 @@ export const PersonasView: React.FC = () => {
               <span className="badge-neutral min-w-0 max-w-full break-words">{persona.archetype}</span>
             </div>
             <dl className="mt-5 space-y-4 text-sm">
-              <div><dt className="field-label">{t.modelLabel}</dt><dd className="mt-1 text-ink">{modelLabel(persona.model, language)} · {providerLabel(persona.provider, language)}</dd></div>
+              <div><dt className="field-label">{t.modelLabel}</dt><dd className="mt-1 text-ink">{modelLabel(persona.model)} · {providerLabel(persona.provider)}</dd></div>
               <div><dt className="field-label">{t.primaryLens}</dt><dd className="mt-1 break-words text-ink">{persona.stance}</dd></div>
               <div><dt className="field-label">{t.fixtureInstructions}</dt><dd className="mt-1 break-words rounded-lg border border-border bg-background/60 p-3 text-xs leading-relaxed text-ink-muted">{persona.instructions}</dd></div>
             </dl>

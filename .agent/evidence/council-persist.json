@@ -1,0 +1,51 @@
+{
+  "ranAt": "2026-10-07T16:24:30.345Z",
+  "base": "http://127.0.0.1:3232",
+  "trace": [
+    {
+      "step": "a room is in session",
+      "detail": "PASS — 2 advisor turns"
+    },
+    {
+      "step": "before-reload",
+      "detail": "{\"present\":true,\"text\":\"YOU Should we ship the billing flow first? THE PRAGMATIST Claude Sonnet 4.5 · Anthropic On \\\"Should we ship the billing flow first?\\\" — From my lens — Feasibility and safeguards — here is what I would hold the council to. @The Dreamer, this is your side of it. THE DREAMER GPT-4o · OpenAI On \\\"Should we ship the billing flow first?\\\" — From my lens — Purpose and long-term fi"
+    },
+    {
+      "step": "the room is written to the tab store",
+      "detail": "PASS — {\"written\":true,\"schema\":1,\"messages\":3,\"roster\":2}"
+    },
+    {
+      "step": "after-reload",
+      "detail": "{\"present\":true,\"text\":\"YOU Should we ship the billing flow first? THE PRAGMATIST Claude Sonnet 4.5 · Anthropic On \\\"Should we ship the billing flow first?\\\" — From my lens — Feasibility and safeguards — here is what I would hold the council to. @The Dreamer, this is your side of it. THE DREAMER GPT-4o · OpenAI On \\\"Should we ship the billing flow first?\\\" — From my lens — Purpose and long-term fi"
+    },
+    {
+      "step": "the room comes back after a reload",
+      "detail": "PASS — present: true"
+    },
+    {
+      "step": "every advisor turn is still there",
+      "detail": "PASS — 2 vs 2 before"
+    },
+    {
+      "step": "the transcript is byte-identical",
+      "detail": "PASS — exact match"
+    },
+    {
+      "step": "clear button works",
+      "detail": "PASS — clicked"
+    },
+    {
+      "step": "clearing removes the stored room too",
+      "detail": "PASS — stored = null"
+    },
+    {
+      "step": "a cleared room does not come back on reload",
+      "detail": "PASS — present: false"
+    },
+    {
+      "step": "screenshot",
+      "detail": "drive-persist.png"
+    }
+  ],
+  "failures": []
+}

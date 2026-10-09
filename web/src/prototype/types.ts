@@ -1,4 +1,4 @@
-import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
+﻿import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
 
 export type ViewType =
   | 'overview'
@@ -13,8 +13,9 @@ export type ViewType =
   | 'billing'
   | 'pricing'
   | 'privacy'
-  | 'sign-up'
-  | 'sign-in';
+| 'sign-up'
+  | 'sign-in'
+  | 'chat-room';
 
 export type Language = 'en' | 'vi';
 
@@ -36,8 +37,9 @@ export const decisionFrameworkOf = (id: FrameworkId): DecisionFramework => {
   return 'Good / Normal / Bad Scenarios';
 };
 
-export type SupportedModel = 'Model label A' | 'Model label B' | 'Model label C';
-export type ModelProvider = 'Provider label A' | 'Provider label B' | 'Provider label C';
+/** Real providers. Model ids are the wire ids sent to the provider, not display labels. */
+export type SupportedModel = 'claude-sonnet-4-5' | 'gpt-4o' | 'gpt-4o-mini';
+export type ModelProvider = 'anthropic' | 'openai';
 
 export interface AdvisorPersona {
   id: string;

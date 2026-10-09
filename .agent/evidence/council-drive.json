@@ -1,0 +1,95 @@
+{
+  "at": "2026-10-09T08:57:50.654Z",
+  "base": "http://127.0.0.1:8803",
+  "trace": [
+    {
+      "step": "navigate",
+      "detail": "Zero Council — AI decision council :: /"
+    },
+    {
+      "step": "enter",
+      "detail": "clicked"
+    },
+    {
+      "step": "reached the workspace",
+      "detail": "PASS — clicked"
+    },
+    {
+      "step": "open",
+      "detail": "room entry: clicked"
+    },
+    {
+      "step": "modal",
+      "detail": "Who sits in this room?Pick the advisors and how they take turns. You can change this by starting a new room.Advisors in this room2 of 2 selected — your plan sets how many advisors can sit in one room.The PragmatistFeasibility and safeguardsThe DreamerPurpose and long-term fitThe SkepticRisk and reve"
+    },
+    {
+      "step": "join modal appears",
+      "detail": "PASS — Who sits in this room?Pick the advisors and how they take turns. You can change this by st"
+    },
+    {
+      "step": "join",
+      "detail": "clicked"
+    },
+    {
+      "step": "room opened",
+      "detail": "PASS — clicked"
+    },
+    {
+      "step": "chat log present",
+      "detail": "PASS — log present"
+    },
+    {
+      "step": "type",
+      "detail": "typed"
+    },
+    {
+      "step": "submit",
+      "detail": "submitted"
+    },
+    {
+      "step": "transcript",
+      "detail": "YOU\n\nShould we ship the council engine before billing?\n\nTHE PRAGMATIST\nClaude Sonnet 4.5 · Anthropic\n\nOn \"Should we ship the council engine before billing?\" — From my lens — Feasibility and safeguards — here is what I would hold the council to. @The Dreamer, this is your side of it.\n\nTHE DREAMER\nGPT-4o · OpenAI\n\nOn \"Should we ship the council engine before billing?\" — From my lens — Purpose and long-term fit — here is what I would hold the council to. What would change your read on this? @user"
+    },
+    {
+      "step": "rows",
+      "detail": "[\"YOU Should we ship the council engine be\",\"THE PRAGMATIST Claude Sonnet 4.5 · Anthr\",\"THE DREAMER GPT-4o · OpenAI On \\\"Should w\"]"
+    },
+    {
+      "step": "round2",
+      "detail": " YOU @The Dreamer what do you object to? THE DREAMER GPT-4o · OpenAI On \"@The Dreamer what do you object to?\" — From my lens — Purpose and long-term fit — here is what I would hold the council to. What would change your read on this? @user"
+    },
+    {
+      "step": "a named advisor opens its turn",
+      "detail": "PASS — dreamer led, pragmatist did not"
+    },
+    {
+      "step": "exactly two user rows after two messages",
+      "detail": "PASS — saw 2"
+    },
+    {
+      "step": "stop",
+      "detail": "[]"
+    },
+    {
+      "step": "a stop directive produces no advisor turn",
+      "detail": "PASS — no advisor spoke after the stop"
+    },
+    {
+      "step": "a stop directive is not reported as \"nobody answered\"",
+      "detail": "PASS — a control message is not a failed round"
+    },
+    {
+      "step": "resume",
+      "detail": " YOU @all carry on THE PRAGMATIST Claude Sonnet 4.5 · Anthropic On \"@all carry on\" — From my lens — Feasibility and safeguards — here is what I would hold the council to. @The Dreamer, this is your side of it. THE DREAMER GPT-4o · OpenAI On \"@all carry on\" — From my lens — Purpose and long-term fit "
+    },
+    {
+      "step": "@all brings the held advisor back",
+      "detail": "PASS — pragmatist returned and answered"
+    },
+    {
+      "step": "screenshot",
+      "detail": "C:\\Users\\nguye\\OneDrive\\Documents\\Projects\\Zero-Council\\.agent\\evidence\\council-merged.png"
+    }
+  ],
+  "failures": []
+}

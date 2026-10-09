@@ -188,3 +188,43 @@ test('every placeholder used by a value exists in the copy it is interpolated in
   // A missing {name} in one language ships a literal "{name}" to that reader.
   assert.deepEqual(mismatches, []);
 });
+
+// --- Membership (PR #18) -----------------------------------------------------
+// The roster is the only source of speakers. These three came from the PR #18
+// branch, re-pointed at the engine that actually ships: `planContributions`
+// takes the member list, so an outsider cannot be asked and a member cannot
+// cross-reference somebody who was never in the room.
+
+test('only the accounts in this chat are asked, in every mode', () => {
+  const members = ['pragmatist', 'skeptic'];
+  const outsider = 'dreamer';
+  for (const mode of ['independent', 'debate', 'chain']) {
+    const speakers = planContributions(mode, members).map((shape) => shape.advisorId);
+    assert.equal(speakers.includes(outsider), false, `${mode} asked somebody outside the chat`);
+    // Exactly the members, no more. The chair is not a contribution — it is a
+    // separate field on the round, so it cannot sneak in through this list.
+    assert.deepEqual([...speakers].sort(), [...members].sort(), `${mode} produced the wrong speaker list`);
+  }
+});
+
+test('a round asked of two members carries no trace of the third', () => {
+  const members = ['pragmatist', 'skeptic'];
+  const shapes = planContributions('chain', members);
+  // Cross references are the other way a non-member could leak: an advisor
+  // rebutting or building on somebody who is not in the room.
+  for (const shape of shapes) {
+    for (const linked of [shape.rebuts, shape.buildsOn]) {
+      if (linked === null) continue;
+      assert.ok(
+        members.includes(linked),
+        `${shape.advisorId} is talking to ${linked}, who is not in this chat`
+      );
+    }
+  }
+});
+
+test('a chat with no members is refused, never answered by whoever was around', () => {
+  for (const mode of ['independent', 'debate', 'chain']) {
+    assert.deepEqual(planContributions(mode, []), [], `${mode} invented a speaker nobody added`);
+  }
+});
