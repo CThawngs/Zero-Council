@@ -15,7 +15,10 @@ import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const script = path.join(root, '.github', 'scripts', 'sync-vercel-env.sh').replace(/\\/g, '/');
-const bash = 'C:/Program Files/Git/bin/bash.exe';
+// Git Bash trên Windows, `bash` của hệ thống ở mọi nơi khác. Đường dẫn cứng
+// kiểu Windows làm CI trên ubuntu treo: spawn phát 'error' chứ không phát
+// 'close', nên promise bên dưới không bao giờ kết thúc.
+const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' : '/bin/bash';
 
 const SECRETS = {
   VERCEL_TOKEN: 'tok-secret',
@@ -38,6 +41,10 @@ const runScript = (env) =>
     let stderr = '';
     child.stdout.on('data', (d) => (stdout += d));
     child.stderr.on('data', (d) => (stderr += d));
+    // Không có listener này thì spawn thất bại (ENOENT) im lặng, promise treo,
+    // và cả job treo theo thay vì báo đỏ. Lỗi ở đây là test chết, không phải
+    // script sai — nên resolve với code khác 0 để assert của test nói thẳng.
+    child.on('error', (error) => resolve({ code: 127, stdout, stderr: `${stderr}${error.message}` }));
     child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
 
