@@ -232,6 +232,25 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
   };
 };
 
+// 1. Storage EventListener in the browser (to check for new update to storage)
+function subscribeLanguage(callback: () => void) {
+  window.addEventListener('storage', callback);
+  return () => window.removeEventListener('storage', callback);
+}
+
+// 2. Snapshot on Client (from localStorage)
+function getLanguageSnapshot(): Language {
+  try {
+    const saved = localStorage.getItem('zero_council_lang');
+    if (saved === 'en' || saved === 'vi') return saved;
+  } catch {}
+  return 'en';
+}
+// 3. Snapshot on Server (Next.js SSR default to 'en')
+function getLanguageServerSnapshot(): Language {
+  return 'en';
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Read once. The room and the view have to be decided from the SAME read, or a reload drops the
   // user on the marketing page with a live deliberation sitting unread behind it — which is worse

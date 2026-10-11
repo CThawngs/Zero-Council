@@ -28,5 +28,6 @@ trong trường hợp user click vào Google để đăng ký account -> vào da
 - [X] Gắn Đăng ký qua Email
 - [X] Gắn Đăng nhập qua Email
 - [ ] Gắn Đăng ký qua Google, yêu cầu tạo mk riêng cho Zero-Council
-- [ ] Gắn Đăng nhập qua Google
-- [ ] Gộp tài khoản nếu trùng email và Google
+- [X] Gắn Đăng nhập qua Google
+- [ ] Gắn Tạo lại mật khẩu
+- [X] Gộp tài khoản nếu trùng email và Google

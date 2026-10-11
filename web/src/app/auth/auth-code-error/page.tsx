@@ -1,16 +1,10 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, Globe2, RefreshCw } from 'lucide-react';
 import { AppProvider, useApp } from '@/prototype/context/AppContext';
-
-interface AuthErrorInfo {
-  error: string;
-  errorCode: string;
-  errorDescription: string;
-}
 
 function cleanParam(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -27,50 +21,47 @@ function cleanParam(value: string | null | undefined): string | null {
   return decoded;
 }
 
+function subscribeToHash(callback: () => void) {
+  window.addEventListener('hashchange', callback);
+  return () => window.removeEventListener('hashchange', callback);
+}
+
+function getHashSnapshot() {
+  return window.location.hash;
+}
+
+function getHashServerSnapshot() {
+  return '';
+}
+
 function AuthCodeErrorContent() {
   const searchParams = useSearchParams();
   const { t, language, setLanguage } = useApp();
-  const [mounted, setMounted] = useState(false);
-  const [errorInfo, setErrorInfo] = useState<AuthErrorInfo>({
-    error: '',
-    errorCode: '',
-    errorDescription: '',
-  });
+  const hash = useSyncExternalStore(subscribeToHash, getHashSnapshot, getHashServerSnapshot);
 
-  useEffect(() => {
-    setMounted(true);
+  // 1. Check hash fragment if present (#error=...&error_code=...&error_description=...)
+  const hashParams = hash ? new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash) : null;
 
-    // 1. Check search query params (?error=... or ?code=...)
-    let err = searchParams.get('error');
-    let code = searchParams.get('error_code') || searchParams.get('code');
-    let desc = searchParams.get('error_description') || searchParams.get('message');
+  // 2. Fall back to search query params (?error=... or ?code=...)
+  const rawErr = hashParams?.get('error') || searchParams.get('error');
+  const rawCode =
+    hashParams?.get('error_code') ||
+    hashParams?.get('code') ||
+    searchParams.get('error_code') ||
+    searchParams.get('code');
+  const rawDesc =
+    hashParams?.get('error_description') ||
+    hashParams?.get('message') ||
+    searchParams.get('error_description') ||
+    searchParams.get('message');
 
-    // 2. Check hash fragment (#error=...&error_code=...&error_description=...)
-    if (typeof window !== 'undefined' && window.location.hash) {
-      const rawHash = window.location.hash.startsWith('#')
-        ? window.location.hash.slice(1)
-        : window.location.hash;
-      const hashParams = new URLSearchParams(rawHash);
-
-      err = hashParams.get('error') || err;
-      code = hashParams.get('error_code') || hashParams.get('code') || code;
-      desc = hashParams.get('error_description') || hashParams.get('message') || desc;
-    }
-
-    setErrorInfo({
-      error: cleanParam(err) || t.authErrorDefaultMessage,
-      errorCode: cleanParam(code) || 'unexpected_failure',
-      errorDescription: cleanParam(desc) || t.authErrorDefaultDesc,
-    });
-  }, [searchParams, t]);
+  const error = cleanParam(rawErr) || t.authErrorDefaultMessage;
+  const errorCode = cleanParam(rawCode) || 'unexpected_failure';
+  const errorDescription = cleanParam(rawDesc) || t.authErrorDefaultDesc;
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'vi' : 'en');
   };
-
-  if (!mounted) {
-    return <AuthCodeErrorFallback />;
-  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 text-ink sm:px-6 lg:px-8">
@@ -101,15 +92,15 @@ function AuthCodeErrorContent() {
         <div className="space-y-3 rounded-lg border border-border/80 bg-surface/60 p-4 text-sm">
           <div>
             <span className="font-semibold text-ink-muted">{t.authErrorLabel}</span>
-            <span className="font-mono text-ink">{errorInfo.error || t.authErrorLoading}</span>
+            <span className="font-mono text-ink">{error}</span>
           </div>
           <div>
             <span className="font-semibold text-ink-muted">{t.authErrorCodeLabel}</span>
-            <span className="font-mono text-ink">{errorInfo.errorCode || t.authErrorLoading}</span>
+            <span className="font-mono text-ink">{errorCode}</span>
           </div>
           <div>
             <span className="font-semibold text-ink-muted">{t.authErrorDetailsLabel}</span>
-            <span className="text-ink break-words">{errorInfo.errorDescription || t.authErrorLoading}</span>
+            <span className="text-ink break-words">{errorDescription}</span>
           </div>
         </div>
 

@@ -1,67 +1,77 @@
 import { NextResponse } from 'next/server'
-
 import { type EmailOtpType } from '@supabase/supabase-js'
-// The client you created from the Server-Side Auth instructions
 import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
-  // Hằng cho Email & Password
-  const token_hash = searchParams.get('token_hash')
-  const type = searchParams.get('type') as EmailOtpType | null
-  // Hằng cho Google OAuth
-  const code = searchParams.get('code')
-  // if "next" is in param, use it as the redirect URL
+
+  // Determine correct origin (handle reverse proxy / load balancer headers in production)
+  const isLocalEnv = process.env.NODE_ENV === 'development'
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+  const redirectOrigin = !isLocalEnv && forwardedHost
+    ? `${forwardedProto}://${forwardedHost}`
+    : origin
+
+  // Safe redirect path validation (prevent open redirects like //evil.com)
   let next = searchParams.get('next') ?? '/'
-  if (!next.startsWith('/')) {
-    // if "next" is not a relative URL, use the default
+  if (!next.startsWith('/') || next.startsWith('//')) {
     next = '/'
   }
 
-  let errorCode = null;
-  let errorMsg = null;
+  // 1. Check if OAuth provider returned an error directly in query params
+  const oauthError = searchParams.get('error')
+  const oauthErrorCode = searchParams.get('error_code')
+  const oauthErrorDescription = searchParams.get('error_description')
 
-  // Kiểm tra tồn tại đăng ký qua Email
+  if (oauthError || oauthErrorDescription || oauthErrorCode) {
+    const errorUrl = new URL('/auth/auth-code-error', redirectOrigin)
+    if (oauthError) errorUrl.searchParams.set('error', oauthError)
+    if (oauthErrorCode) errorUrl.searchParams.set('code', oauthErrorCode)
+    if (oauthErrorDescription) errorUrl.searchParams.set('message', oauthErrorDescription)
+    return NextResponse.redirect(errorUrl.toString())
+  }
+
+  // 2. Email OTP verification (token_hash & type)
+  const token_hash = searchParams.get('token_hash')
+  const type = searchParams.get('type') as EmailOtpType | null
+
   if (token_hash && type) {
     const supabase = await createClient()
-
     const { error } = await supabase.auth.verifyOtp({
       type,
       token_hash,
     })
+
     if (!error) {
-      // redirect user to specified redirect URL or root of app
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${redirectOrigin}${next}`)
     }
 
-    errorCode = encodeURIComponent(error.code || 'unknown_error')
-    errorMsg = encodeURIComponent(error.message)
+    const errorUrl = new URL('/auth/auth-code-error', redirectOrigin)
+    errorUrl.searchParams.set('code', error.code || 'unknown_error')
+    errorUrl.searchParams.set('message', error.message)
+    return NextResponse.redirect(errorUrl.toString())
   }
 
-  // Kiểm tra tồn tại đăng ký qua Google
+  // 3. OAuth code exchange (code)
+  const code = searchParams.get('code')
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+
     if (!error) {
-      const forwardedHost = request.headers.get('x-forwarded-host') // original origin before load balancer
-      const isLocalEnv = process.env.NODE_ENV === 'development'
-      if (isLocalEnv) {
-        // we can be sure that there is no load balancer in between, so no need to watch for X-Forwarded-Host
-        return NextResponse.redirect(`${origin}${next}`)
-      } else if (forwardedHost) {
-        return NextResponse.redirect(`https://${forwardedHost}${next}`)
-      } else {
-        return NextResponse.redirect(`${origin}${next}`)
-      }
+      return NextResponse.redirect(`${redirectOrigin}${next}`)
     }
 
-    errorCode = encodeURIComponent(error.code || 'unknown_error')
-    errorMsg = encodeURIComponent(error.message)
+    const errorUrl = new URL('/auth/auth-code-error', redirectOrigin)
+    errorUrl.searchParams.set('code', error.code || 'unknown_error')
+    errorUrl.searchParams.set('message', error.message)
+    return NextResponse.redirect(errorUrl.toString())
   }
 
-  // return the user to an error page with instructions
-  if (errorCode && errorMsg)
-    return NextResponse.redirect(`${origin}/auth/auth-code-error?code=${errorCode}&message=${errorMsg}`)
-
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+  // 4. Missing both OTP tokens and OAuth code
+  const errorUrl = new URL('/auth/auth-code-error', redirectOrigin)
+  errorUrl.searchParams.set('code', 'missing_code')
+  errorUrl.searchParams.set('message', 'No authentication code or token was provided.')
+  return NextResponse.redirect(errorUrl.toString())
 }
