@@ -478,6 +478,19 @@ Phạm vi: redesign UI/UX toàn site (landing, workspace, menu, 3D, animation), 
 2. **Đừng đọc `localStorage`/`window` trong `useState` initializer của thứ được render ở cả server lẫn client.** Đó là hydration mismatch theo cách chắc chắn. `useSyncExternalStore` + `getServerSnapshot` là cách đúng.
 3. Cả hai lỗi đều im lặng hoặc chỉ báo console — không làm trang chết. Verify bằng cách **reload với localStorage đã đặt sẵn**, đó là tình huống duy nhất lộ ra mismatch.
 
+### ĐÃ XONG — rà auth (2026-10-11)
+
+- [x] **Xác nhận nhánh auth đã merge.** GitHub API: PR **#13** (email đăng nhập/ký, 2026-10-02), **#16** (redesign + Google/Discord OAuth + fix `/auth` routing, 2026-10-04), **#19** (Google OAuth + đổi luồng token, 2026-10-09). Cả 3 đều `merged`. Auth có thật, không phải vỏ.
+- [x] **Bug: `/api/*` bị proxy đá sang `/auth`.** `fetch` nhận HTML login thay vì status code, handler có 401 thật không bao giờ chạy. Sửa: bỏ `/api/` khỏi điều kiện redirect.
+- [x] **Bug: `emailRedirectTo` trỏ về `/`.** Callback route chỉ viết session cookie qua `verifyOtp` ở `/auth/callback`; gửi thẳng về `/` làm mất token, đăng ký email không vào được session. Sửa: trỏ về `/auth/callback`.
+- [x] **Phân tách landing vs workspace** theo yêu cầu chủ sản phẩm. Verify: `/` → 200 · `/dashboard` → 307→`/auth` · `POST /api/payos/create-payment` → **401 `NEED_LOGIN`** thật · `/checkout/return` → 200 (không bị đá sau khi thanh toán) · `/api/admin/users` → 401 thay vì redirect.
+- [x] Nút mua gói trên landing vẫn ràng buộc đăng nhập qua `requestCheckout()` (chưa đổi).
+
+### Bài học
+
+- **Một API route không bao giờ nên trả 307 sang trang HTML.** `fetch` sẽ nhận markup login, lỗi gốc biến mất. Auth ở tầng API phải trả status code, không redirect.
+- **Luồng OAuth/email phải khớp đường dẫn.** `redirectTo` và `emailRedirectTo` phải trỏ nơi thực sự xử lý token.
+
 ## ĐÃ XONG (verify bằng lái app thật, không phải đọc code)
 
 ### Nền tảng

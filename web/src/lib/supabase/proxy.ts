@@ -41,14 +41,23 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims()
 
   const user = data?.claims
+  const { pathname } = request.nextUrl
 
-  if (
-    !user &&
-    request.nextUrl.pathname !== "/" &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  /**
+   * Only pages are redirected. An API route has no UI to show a login form, so redirecting it
+   * turns every "you must sign in" answer into a 307 to an HTML page: `fetch` gets login markup
+   * instead of a status code, and the real handler — the one with the precise 401 — never runs.
+   * `/api/payos/create-payment` already guards itself with `currentAccount()`, so the API layer
+   * must be left alone for that guard to mean anything.
+   */
+  const isPageRequest = !pathname.startsWith('/api/')
+  const isPublicPath =
+    pathname === '/' ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/checkout')
+
+  if (isPageRequest && !user && !isPublicPath) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth'
     return NextResponse.redirect(url)
