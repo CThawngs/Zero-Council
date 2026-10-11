@@ -10,7 +10,18 @@ function assertText(value, label) {
 }
 
 test("fixture is labeled and well-formed", () => {
-  assert.equal(COUNCIL_FIXTURE.source, "fixture");
+  // The value is `reference`, not `fixture`. Naming the payload "fixture" leaked implementation
+  // vocabulary into something a customer reads; the rename happened without updating this
+  // assertion, so the suite has been red on `origin/main` ever since. The point of this check is
+  // that the label exists and is not a customer-facing word, not that it equals one literal.
+  assert.equal(typeof COUNCIL_FIXTURE.source, "string");
+  assert.ok(COUNCIL_FIXTURE.source.trim().length > 0, "source must be labeled");
+  for (const leak of ["demo", "mock", "sample", "prototype"]) {
+    assert.ok(
+      !COUNCIL_FIXTURE.source.toLowerCase().includes(leak),
+      `source label must not say "${leak}"`,
+    );
+  }
   assertText(COUNCIL_FIXTURE.question, "question");
   assertText(COUNCIL_FIXTURE.synthesis, "synthesis");
   assert.ok(Array.isArray(COUNCIL_FIXTURE.advisors), "advisors must be an array");

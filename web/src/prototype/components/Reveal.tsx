@@ -14,33 +14,40 @@ type RevealProps = {
 /**
  * Fades + slides content in the first time it scrolls into view.
  * Pure browser IntersectionObserver — no extra dependency.
- * Honors prefers-reduced-motion via the global rule in globals.css.
+ *
+ * The reveal is ADDITIVE, never a visibility gate. `data-armed` is only set once
+ * we have confirmed an observer exists, motion is allowed, and the element
+ * starts below the fold — so the served HTML, a browser without
+ * IntersectionObserver, and a user with reduced-motion all still render the
+ * content. The previous version applied `opacity: 0` unconditionally, which
+ * left 16 elements on the live landing page stuck at zero opacity and collapsed
+ * the page to 2329px of mostly empty space.
  */
 export const Reveal: React.FC<RevealProps> = ({ children, className = '', delayMs = 0, as = 'div' }) => {
   const ref = useRef<HTMLDivElement & HTMLLIElement>(null);
+  const [armed, setArmed] = useState(false);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-
-    // ponytail: no IntersectionObserver fallback (browsers without it keep the pre-reveal state).
-    // Any fix has to render deterministically on server and client or hydration warns; add a
-    // no-JS-visible CSS path in globals.css when that ever matters.
     if (typeof IntersectionObserver === 'undefined') return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // Already on screen at mount: show it immediately rather than hiding
+    // content that the visitor is currently looking at.
+    if (node.getBoundingClientRect().top < window.innerHeight) return;
 
+    setArmed(true);
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setVisible(true);
-            observer.unobserve(node);
-          }
-        });
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          setVisible(true);
+          observer.disconnect();
+        }
       },
-      { threshold: 0.15, rootMargin: '0px 0px -10% 0px' },
+      { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
     );
-
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
@@ -50,7 +57,9 @@ export const Reveal: React.FC<RevealProps> = ({ children, className = '', delayM
   return (
     <Tag
       ref={ref}
-      className={`reveal ${visible ? 'reveal--visible' : ''} ${className}`.trim()}
+      className={`reveal ${className}`.trim()}
+      data-armed={armed ? 'true' : undefined}
+      data-visible={visible ? 'true' : undefined}
       style={delayMs ? ({ '--reveal-delay': `${delayMs}ms` } as React.CSSProperties) : undefined}
     >
       {children}

@@ -16,6 +16,7 @@ import {
 } from '@/lib/deliberation/engine';
 import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
+import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
 import {
   DEFAULT_MAX_TURNS,
   DEFAULT_ROOM_BUDGET,
@@ -37,7 +38,8 @@ import { byokGenerator } from '../chat/byok';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
-import { planById, type PlanId } from '../data/plans';
+import { planById, type Plan, type PlanId } from '../data/plans';
+import { createClient } from '@/lib/supabase/client';
 
 /** One live room. Deliberately not a `DeliberationSession`: that shape has no message list. */
 export interface ChatRoom {
@@ -57,7 +59,14 @@ export interface ChatRoom {
   held: string[];
 }
 
-type ToastKey = keyof (typeof copy)['en'];
+/**
+ * Toast messages are always plain strings, so only string-valued copy keys qualify. A bare
+ * `keyof typeof copy['en']` also picks up nested objects — the legal documents — and every toast
+ * then has to defend against a value it can only render as `[object Object]`.
+ */
+type ToastKey = {
+  [K in keyof (typeof copy)['en']]: (typeof copy)['en'][K] extends string ? K : never;
+}[keyof (typeof copy)['en']];
 type ToastValues = Record<string, string>;
 type ToastMessage = { key: ToastKey; values?: ToastValues };
 
@@ -66,6 +75,8 @@ interface AppContextType {
   setCurrentView: (view: ViewType) => void;
   language: Language;
   setLanguage: (language: Language) => void;
+  theme: Theme;
+  toggleTheme: () => void;
   t: (typeof copy)[Language];
   sessions: DeliberationSession[];
   currentSessionId: string;
@@ -93,6 +104,34 @@ interface AppContextType {
   openCounterDraftModal: () => void;
   closeCounterDraftModal: () => void;
   currentPlanId: PlanId;
+  /** The signed-in account, or null. Null is the normal state for a visitor, not an error. */
+  authUser: { id: string; email: string } | null;
+  /**
+   * False until the first session read resolves. Checkout stays disabled while this is false:
+   * treating "not checked yet" as "signed out" would bounce a signed-in user to the login page
+   * on a slow connection, and treating it as "signed in" would let an anonymous visitor start a
+   * purchase that the server then refuses with a bare 401.
+   */
+  authReady: boolean;
+  signOut: () => Promise<void>;
+  /** Plan awaiting payment. Non-null opens the checkout drawer. */
+  checkoutPlan: Plan | null;
+  closeCheckout: () => void;
+  /**
+   * The one entry point to buying. Redirects to sign-in when nobody is signed in, and only then
+   * opens checkout. The server refuses anonymous orders too — this stops the dead end client-side
+   * instead of after the click.
+   */
+  requestCheckout: (plan: Plan) => void;
+  /**
+   * Send the visitor to the pricing table on the landing page.
+   *
+   * Billing and Settings sit inside the workspace, where the table does not exist. Switching to
+   * the overview alone would dump them at the top of the page, so the scroll waits for that view
+   * to mount — one frame is not always enough for the section to be in the document.
+   */
+  goToPricing: () => void;
+  /** True when the visitor must register before paying: never claims a signed-in user is anonymous. */
   isJoinRoomOpen: boolean;
   openJoinRoom: () => void;
   closeJoinRoom: () => void;
@@ -192,7 +231,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [restored] = useState(() => readStoredRoom());
 
   const [currentView, setCurrentView] = useState<ViewType>(restored ? 'chat-room' : 'overview');
-  const [language, setLanguage] = useState<Language>('en');
+  const [language, setLanguage] = useState<Language>(() => {
+    try {
+    if (typeof localStorage === 'undefined') return 'en';
+    const s = localStorage.getItem('zc-lang');
+    return s === 'vi' ? 'vi' : 'en';
+  } catch { return 'en'; }
+  });
+  // Server and first client render both start at 'light'. The bootstrap script
+  // has already set data-theme on <html> before paint, and the stored choice
+  // is the source of truth for toggles.
+  const [theme, setTheme] = useState<Theme>(() =>
+    typeof document === 'undefined'
+      ? resolveInitialTheme()
+      : document.documentElement.getAttribute('data-theme') === 'dark'
+        ? 'dark'
+        : 'light'
+  );
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const next: Theme = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch {
+        // Private-mode storage refusal is not worth surfacing: the theme still
+        // applies for this page view, it just will not persist.
+      }
+      return next;
+    });
+  };
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
@@ -204,6 +272,9 @@ const [isDeliberating, setIsDeliberating] = useState(false);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
+  const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(() => {
     // Rehydrate on the first render so the room is already there when the view mounts. Without this
     // the user sees an empty chamber flash before the transcript appears, which reads as data loss.
@@ -244,6 +315,69 @@ const [isDeliberating, setIsDeliberating] = useState(false);
   useEffect(() => {
     if (currentRoom) writeStoredRoom(currentRoom);
   }, [currentRoom]);
+
+  /**
+   * Read the session once on mount, then follow it.
+   *
+   * `authReady` is flipped in BOTH paths on purpose. A Supabase failure leaves nobody signed in,
+   * and that has to end as "ready and anonymous" — leaving it pending would freeze every purchase
+   * button for the rest of the session instead of routing the visitor to login.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+    const adopt = (user: { id: string; email?: string | null } | null) => {
+      if (cancelled) return;
+      setAuthUser(user?.email ? { id: user.id, email: user.email.trim().toLowerCase() } : null);
+      setAuthReady(true);
+    };
+    void supabase.auth.getUser().then(({ data }) => adopt(data.user));
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) =>
+      adopt(session?.user ?? null)
+    );
+    return () => {
+      cancelled = true;
+      subscription.subscription.unsubscribe();
+    };
+  }, []);
+
+  const signOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setAuthUser(null);
+    setCheckoutPlan(null);
+    setCurrentView('overview');
+    window.scrollTo(0, 0);
+  };
+
+  /**
+   * Buying always needs an identified account: the grant and any coupon use are recorded against
+   * an email, so an anonymous order could never deliver what it paid for.
+   *
+   * Anonymous visitors are sent to sign-in WITHOUT the plan being stored. Holding it and opening
+   * checkout after login is the friendlier flow, but it shows a payment drawer on top of the
+   * sign-in form — which reads as "you are being charged before you have an account". Refusing
+   * early and letting the server refuse again is the honest version of the same rule.
+   */
+  const requestCheckout = (plan: Plan) => {
+    if (plan.priceVnd <= 0) return;
+    if (!authUser) {
+      setCurrentView('sign-in');
+      window.scrollTo(0, 0);
+      return;
+    }
+    setCheckoutPlan(plan);
+  };
+
+  const goToPricing = () => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
+      window.location.assign('/#pricing');
+      return;
+    }
+    setCurrentView('overview');
+    const scroll = () => document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(() => requestAnimationFrame(scroll));
+  };
 
   const localizedSessions = useMemo(
     () => sessions.map((session) => localizeSession(session, language)),
@@ -360,8 +494,18 @@ const [isDeliberating, setIsDeliberating] = useState(false);
 
   const selectRound = (index: number) => setSelectedRoundIndex(index);
 
-  const purgeSessions = () => {
+  /**
+ * Clear the deliberation list *and* the cached transcript.
+ *
+ * These used to be two different places. `setSessions([])` emptied the React state while the
+ * room object — every message, every roster — stayed in `sessionStorage`. The user clicked "purge",
+ * saw the list empty, reloaded, and the transcript came back. A button that reports success while
+ * the data is still there is worse than no button, so both stores are cleared together.
+ */
+const purgeSessions = () => {
     setSessions([]);
+    setCurrentRoom(null);
+    clearStoredRoom();
     showToast('toastSessionsReset');
   };
 
@@ -603,6 +747,8 @@ const [isDeliberating, setIsDeliberating] = useState(false);
         setCurrentView,
         language,
         setLanguage,
+        theme,
+        toggleTheme,
         t: copy[language],
         sessions: localizedSessions,
         currentSessionId,
@@ -630,6 +776,13 @@ const [isDeliberating, setIsDeliberating] = useState(false);
         openCounterDraftModal: () => setIsCounterDraftModalOpen(true),
         closeCounterDraftModal: () => setIsCounterDraftModalOpen(false),
         currentPlanId,
+        authUser,
+        authReady,
+        signOut,
+        checkoutPlan,
+        closeCheckout: () => setCheckoutPlan(null),
+        requestCheckout,
+        goToPricing,
         personaCap,
         canAddPersona: personas.length < personaCap,
         isJoinRoomOpen,

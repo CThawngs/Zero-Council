@@ -145,3 +145,70 @@ Không tự mở route. Đây là câu hỏi đã nêu từ PR #18 và vẫn ch�
 
 - **Chưa từng gọi provider thật.** Toàn bộ bằng chứng dùng `scriptedGenerator` và key giả. Cơ chế deadline/cancel đã test bằng generator hỏng, nhưng chưa từng giết một request `fetch` thật đang bay.
 - **Chưa đọc được link thật qua mạng.** `drive-attach.mjs` dán `http://127.0.0.1/` (cùng origin) và một URL bị CORS chặn. Chưa từng đọc được một trang thật ở domain khác.
+
+---
+
+## 10. UI redesign (2026-10-11, worktree `ui-redesign-2025`)
+
+### Bản đồ view
+
+Cột `Bilingual`: ⭕ đã dịch đủ EN/VI.
+
+| View | Nguồn | File | Bilingual |
+|---|---|---|---|
+| Landing | nav | `components/OverviewView.tsx` | ⭕ |
+| Sign in | `/auth` | `components/SignInView.tsx` | ⭕ |
+| Sign up | `/auth` | `components/SignUpView.tsx` | ⭕ |
+| Sessions | nav Workspace | `components/SessionsListView.tsx` | ⭕ |
+| Council room | nav Workspace | `components/ChatRoomView.tsx` | ⭕ |
+| Advisors | nav Workspace | `components/PersonasView.tsx` | ⭕ |
+| New advisor | nav Workspace | `components/NewAdvisorView.tsx` | ⭕ |
+| Session active / concluded | session flow | `SessionActiveView.tsx`, `SessionConcludedView.tsx` | ⭕ |
+| Empty chamber | từ "Get started" | `components/EmptyChamberView.tsx` | ⭕ |
+| API keys | nav Manage | `components/ApiKeysView.tsx` | ⭕ |
+| Billing | nav Manage | `components/BillingHistoryView.tsx` | ⭕ |
+| Settings | nav Manage | `components/SettingsView.tsx` | ⭕ |
+| Legal (7 doc) | footer | `components/LegalView.tsx` | ⭕ |
+
+Nguồn điều hướng duy nhất: `prototype/navigation.ts`. Header, Sidebar và mobile panel đều render từ đó — mục đích là không còn danh sách link trôi lệch giữa 3 nơi.
+
+### Thay đổi hành vi
+
+| Việc | Trước | Sau |
+|---|---|---|
+| Nav "Pricing" | navigate sang view riêng | anchor cuộn tới `#pricing` |
+| Nút mua gói | mở checkout luôn | `requestCheckout()` → sign-in nếu chưa đăng nhập |
+| Theme toggle | không có hành vi | `data-theme` + `localStorage` + script tiền-paint |
+| Language toggle | chỉ đổi state | dịch trọn site, nhớ qua `localStorage` |
+| Footer | 2 link | nhóm Product + 7 tài liệu pháp lý + disclaimer |
+| Auth screens | hardcode English | song ngữ |
+
+### Đã xoá
+
+| File | Lý do |
+|---|---|
+| `PricingView.tsx` | Bảng giá là section của landing, không cần view riêng |
+| `PrivacyView.tsx` | Gộp vào `LegalView` dưới dạng `legal-privacy` |
+
+### Pháp lý
+
+7 tài liệu (`terms`, `privacy`, `refund`, `cookies`, `acceptable-use`, `disclaimer`, `contact`), nội dung song ngữ trong `i18n.ts` (`t.legal.*`), render chung bởi `LegalView`.
+
+**Mọi giá trị pháp lý chưa có nguồn chân lý đều để trống bằng `{{PLACEHOLDER}}`** và mỗi tài liệu có `draft: true` → hiện cảnh báo "bản nháp" cho người đọc. Cần điền trước khi công bố: tên pháp lý, mã số DN, địa chỉ, email liên hệ, tên cổng thanh toán, công cụ analytics, thời hạn hoàn tiền / lưu trữ / số ngày thông báo.
+
+### Bẫy dev: React không hydrate
+
+`next.config.ts` phải giữ `allowedDevOrigins: ["127.0.0.1", "localhost"]`.
+
+Next coi `127.0.0.1` là cross-origin với `localhost` và chặn dev resource `/_next/hmr` + client chunks. Server vẫn trả HTML server-render đầy đủ nên **trang nhìn hoàn hảo**, nhưng client bundle không chạy → React không hydrate → **mọi button mất handler**, và console chỉ hiện lỗi HMR WebSocket (`net::ERR_INVALID_HTTP_RESPONSE`), không có lỗi React nào.
+
+Cách kiểm tra trong 2 giây, không cần đoán:
+
+```js
+let n = 0;
+const walk = (el) => {
+  for (const k of Object.getOwnPropertyNames(el)) if (k.startsWith('__reactFiber$')) n++;
+  for (const c of el.children) walk(c);
+};
+walk(document.body); // 0 = không hydrate
+```

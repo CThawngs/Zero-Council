@@ -1,8 +1,8 @@
 import React from 'react';
 
-// One node per advisor, each in that persona's colour. The brass halo behind
-// the scene is the only *glow*; the node hues are identity, not decoration, and
-// they stay muted so they read as one palette next to the brass.
+// One node per advisor, each in that persona's colour. The node hues are
+// identity, not decoration — the ring and core stay in the accent family so
+// they read as the scene rather than the people.
 const NODE_COLORS = [
   'var(--color-persona-rose)',
   'var(--color-persona-sage)',
@@ -10,15 +10,18 @@ const NODE_COLORS = [
   'var(--color-persona-ochre)',
 ] as const;
 
+type CouncilOrbProps = {
+  className?: string;
+};
+
 /**
  * Decorative 3D "council orbit" for the landing page hero.
  * Pure CSS transforms — no extra dependency. Respects
  * prefers-reduced-motion via the global rule in globals.css.
  */
-export const CouncilOrb: React.FC = () => {
+export const CouncilOrb: React.FC<CouncilOrbProps> = ({ className }) => {
   return (
-    <div className="council-orb" aria-hidden="true">
-      <div className="glow" />
+    <div className={`council-orb ${className ?? ''}`.trim()} aria-hidden="true">
       <div className="council-orb__scene">
         <div className="council-orb__ring council-orb__ring--x" />
         <div className="council-orb__ring council-orb__ring--y" />

@@ -5,7 +5,7 @@ import { PLANS, planPrice } from '../data/plans';
 import { Modal } from './Modal';
 
 export const SettingsView: React.FC = () => {
-  const { language, setLanguage, setCurrentView, purgeSessions, revokeAllKeys, t } = useApp();
+  const { language, setLanguage, setCurrentView, goToPricing, purgeSessions, revokeAllKeys, t } = useApp();
   const [isPurgeOpen, setIsPurgeOpen] = useState(false);
   const [isProviderOpen, setIsProviderOpen] = useState(false);
 
@@ -55,7 +55,7 @@ export const SettingsView: React.FC = () => {
             </div>
           ))}
         </dl>
-        <button type="button" onClick={() => setCurrentView('pricing')} className="button-secondary mt-4 min-h-11">{t.pricingTitle}</button>
+        <button type="button" onClick={goToPricing} className="button-secondary mt-4 min-h-11">{t.pricingTitle}</button>
       </section>
 
       <section className="panel p-5 sm:p-6" aria-labelledby="sample-data-title">
