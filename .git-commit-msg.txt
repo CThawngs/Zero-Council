@@ -1,0 +1,28 @@
+feat(analytics): them Umami co consent, chi tai script sau khi khach dong y
+
+Analytics that measures page visits and nothing else.
+
+- Umami chon vi khong dung cookie. Verify gia tren trang chinh thuc:
+  Hobby $0/thang (100K events, 1 website, 6 thang retention), Pro $20, Business $200.
+- Script tag theo env var NEXT_PUBLIC_ANALYTICS_*. Doi provider, hay tro sang ban
+  self-host, chi can doi bien — khong sua code. Khong co env var thi khong tai gi.
+- KHONG tai script truoc khi khach dong y. Verify tren trinh duyet:
+  chua dong y -> script khong tai; "Only necessary" -> consent=denied, script khong tai;
+  dong y -> script tai dung URL + website ID.
+- Dong hop thoai ma khong chon = khong tai script. Coi im la "khong".
+
+Consent dialog:
+- Thay thong bao mot chieu bang 2 nut that: Allow analytics / Only necessary.
+  Tu choi van dung duoc moi tinh nang, nen 2 nut nang nhau, khong giu "tu choi" an.
+- visible derive tu consent === null, khong dung useState + effect (tranh
+  react-hooks/set-state-in-effect).
+
+Copy phai khop code:
+- Bo cau cu "No advertising, no tracking, no third-party analytics" — gi nay da co
+  analytics, giu lai la noi doi.
+- Cookie Policy them muc 3 "Analytics, if you allow it": ten Umami, noi ro khong
+  cookie, khong profile nhieu trang, KHONG bao gio cham cau hoi/cau tra loi.
+- Privacy "What we collect" them dong analytics.
+- .env.example them 3 bien public. Khong co secret: key Umami nam o dashboard.
+
+tsc 0, eslint 0 loi, next build 0, 2/2 test file xanh

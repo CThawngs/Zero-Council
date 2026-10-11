@@ -20,7 +20,7 @@ import { ApiKeysView } from './components/ApiKeysView';
 import { SettingsView } from './components/SettingsView';
 import { BillingHistoryView } from './components/BillingHistoryView';
 import { LegalView } from './components/LegalView';
-import { CookieNotice } from './components/CookieNotice';
+import { CookieNotice, AnalyticsLoader } from './components/CookieNotice';
 import { CheckoutDrawer } from './components/CheckoutDrawer';
 import { legalDocumentOf } from './types';
 import { SignInView } from './components/SignInView';
@@ -68,6 +68,9 @@ const ChamberContent: React.FC = () => {
       {/* Sits below the modals in the tree but above them in `z-index`, so a cookie notice can
           never cover the checkout drawer or a room the visitor is trying to use. */}
       <CookieNotice />
+      {/* Renders nothing until `consent === 'granted'`, and nothing at all when no analytics
+          endpoint is configured. Safe to leave mounted unconditionally. */}
+      <AnalyticsLoader />
       <span className="sr-only" aria-live="polite">{t.localBadge}</span>
     </div>
   );

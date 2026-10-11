@@ -452,7 +452,19 @@ Muc 8 cua `features/FEATURE_MAP.md` la no da duoc tra trong luc gop PR #18. Day 
 # TODO — UI/UX redesign (giai đoạn 3, 2026-10-11)
 
 Cập nhật: 2026-10-11. Worktree: `.worktrees/ui-redesign-2025`; branch: `ui/redesign-2025`; base `9736ce5` (`origin/main`).
-Phạm vi: redesign UI/UX toàn site (landing, workspace, menu, 3D, animation), toggle theme + ngôn ngữ, trang pháp lý, responsive.
+Phạm vi: redesign UI/UX toàn site (landing, workspace, menu, 3D, animation), toggle theme + ngôn ngữ, trang pháp lý, analytics, responsive.
+
+## ĐÃ XONG — analytics (2026-10-11)
+
+- [x] **Umami** — cookie-free. Verify giá trên trang chính thức: Hobby $0/tháng (100K events, 1 site, 6 tháng retention), Pro $20, Business $200.
+- [x] Script tag theo env var `NEXT_PUBLIC_ANALYTICS_*` → đổi provider hoặc tự host chỉ cần đổi biến, không sửa code.
+- [x] **Chỉ tải script SAU khi khách đồng ý.** Verify thật trên trình duyệt: chưa đồng ý → `analyticsScriptLoaded: false`; bấm "Only necessary" → `denied`, script không tải; đồng ý → script tải đúng URL + website ID.
+- [x] Consent thành dialog 2 nút thật: "Allow analytics" / "Only necessary". Đóng hộp thoại mà không chọn = không tải script (coi như từ chối).
+- [x] `visible` derive từ `consent === null`, không dùng `useState` + effect (tránh `set-state-in-effect`).
+- [x] Copy cập nhật khớp code: banner, Cookie Policy §3 "Analytics, if you allow it", Privacy "What we collect". Đã bỏ câu cũ *"No advertising, no tracking, no third-party analytics"* vì giờ đã có analytics.
+- [x] `.env.example` có 3 biến public + giải thích. Không có secret — key Umami nằm ở dashboard, không paste vào repo.
+- [x] Không set env var → không tải gì, site vẫn chạy bình thường.
+- [ ] **Cần chủ sản phẩm tạo tài khoản Umami và điền `NEXT_PUBLIC_ANALYTICS_WEBSITE_ID`.** Tôi không tạo được tài khoản thay bạn.
 
 ## ĐÃ XONG (verify bằng lái app thật, không phải đọc code)
 
@@ -512,12 +524,18 @@ Phạm vi: redesign UI/UX toàn site (landing, workspace, menu, 3D, animation), 
 
 ## CÒN DỞ — CẦN LÀM
 
-### Cần chủ sản phẩm quyết (chặn, tôi không tự quyết)
+### Đã xong (giữ lại để đối chiếu lượt trước)
 
-- [ ] **Branch đang track thẳng `origin/main`** — `git status -sb` cho `## ui/redesign-2025...origin/main`. Nếu `git push` bây giờ có thể đẩy thẳng lên `main`. Cần chọn: tạo branch mới, hay đổi upstream thành branch riêng? **Chưa commit, chưa push gì cả.**
-- [ ] **`draft: true` trên cả 7 trang pháp lý** — tôi giữ vì chưa có pháp nhân. Khi có pháp nhân thì đổi thành `false`, banner tự biến mất.
-- [ ] **Cookie consent banner** — đã chốt hướng "thông báo một chiều, không có nút chọn" (vì chỉ dùng cookie bắt buộc) nhưng CHƯA implement. Cần duyệt để tôi làm.
-- [ ] **7 con số thời gian trong văn bản pháp lý** — tôi tự đặt, cần chủ sản phẩm xem lại (đặc biệt hoàn tiền 14 ngày — có thể muốn 30).
+- [x] ~~**Branch đang track thẳng `origin/main`**~~ → đã `git branch --unset-upstream`, commit `b5dd235` push lên `ui/redesign-2025`, `origin/main` giữ nguyên `9736ce5`. PR: https://github.com/CThawngs/Zero-Council/pull/new/ui/redesign-2025
+- [x] ~~**Cookie consent banner**~~ → đã làm, nay là consent dialog 2 nút thật vì đã có analytics.
+- [x] ~~**7 con số thời gian trong văn bản pháp lý**~~ → đã bỏ hết theo yêu cầu chủ sản phẩm (2026-10-11), viết lại kiểu "as soon as we can" / "tuỳ ngân hàng".
+
+### Cần chủ sản phẩm làm
+
+- [ ] **Tạo tài khoản Umami miễn phí** (https://cloud.umami.is) và điền `NEXT_PUBLIC_ANALYTICS_WEBSITE_ID` vào `.env.local`. Tôi không tạo được tài khoản thay bạn. Ghi rõ: Hobby $0/tháng, 100K events/tháng, 1 website.
+- [ ] **Merge PR** `ui/redesign-2025` vào `main` sau khi review. Tôi không tự merge việc mình viết.
+- [ ] **`draft: true` trên 7 trang pháp lý** — banner đã ẩn (bạn chọn 2026-10-11) nhưng cờ còn trong `i18n.ts`. Khi có pháp nhân: bật lại bằng cách xoá `false &&` ở `LegalView.tsx:48`, hoặc đặt `draft: false` để bỏ hẳn cờ.
+- [ ] **Mốc thời gian pháp lý** — đã bỏ hết. Khi nào có người trực nên đặt lại số cụ thể (hoàn tiền 14 hay 30 ngày, thời hạn phản hồi). Hiện "càng sớm càng dễ" là cam kết mơ hồ, khách khó đòi.
 
 ### Verify lại được sau khi có web access
 

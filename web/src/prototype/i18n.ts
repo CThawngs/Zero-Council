@@ -258,13 +258,14 @@ export const copy = {
     legalEyebrow: 'Legal',
     legalDocuments: 'Legal documents',
 
-    /* Cookie notice. No accept/reject buttons because there is nothing to reject — see the
-       component doc. When analytics lands, this copy and the component both have to change. */
-    cookieNoticeTitle: 'Cookies on this site',
+    /* Consent dialog. The site measures page visits only after an explicit opt-in, and the reject
+       button genuinely stops the script from loading — see `CookieNotice.tsx`. */
+    cookieNoticeTitle: 'Cookies and analytics',
     cookieNoticeBody:
-      'We use cookies only to keep you signed in and to remember your language and theme. No advertising, no tracking, no third-party analytics.',
+      'We use cookies to keep you signed in and remember your language and theme. With your permission we also count page visits to see which pages are read. We never read your questions, your answers, or anything you type.',
     cookieNoticeLink: 'Read the cookie policy',
-    cookieNoticeDismiss: 'Got it',
+    cookieNoticeAccept: 'Allow analytics',
+    cookieNoticeNecessaryOnly: 'Only necessary',
     signOut: 'Sign out',
     planSignInToBuy: 'Sign in to buy',
 
@@ -405,6 +406,7 @@ export const copy = {
               'Account data: your email address, and the plan attached to your account.',
               'Content you submit: the questions you ask, any file or link you attach, and the responses you receive. This is what the council answers with.',
               'Technical data: which model providers your advisors call, and what that call costs, so we can bill you and debug a failure.',
+              'Analytics data: if you allow analytics, which pages you visited and where you came from. Set no cookies, build no cross-site profile, and never touch your questions or answers.',
               'We do not sell personal data, and we do not use your questions to train models.',
             ],
           },
@@ -505,9 +507,19 @@ export const copy = {
             ],
           },
           {
-            heading: '3. Turning them off',
+            heading: '3. Analytics, if you allow it',
+            body: [
+              'We count page visits so we can tell which pages are actually read. If you say no — or close this dialog without choosing — nothing is loaded and we are not told you visited.',
+              'Analytics runs on Umami, which sets no cookies and builds no profile of you across sites. It records the page, the referrer, and rough device and country.',
+              'It never sees your questions, your answers, anything you type into a form, or anything inside a deliberation. Those are the parts of this site we cannot hand over.',
+              'You can change your mind later by clearing this site\'s data in your browser, and you will be asked again.',
+            ],
+          },
+          {
+            heading: '4. Turning them off',
             body: [
               'You can delete or block cookies in your browser settings. Expect the site to forget your language, your theme and your sign-in.',
+              'Declining analytics costs you nothing. Every feature works the same either way.',
             ],
           },
         ],
@@ -993,11 +1005,12 @@ export const copy = {
     legalEyebrow: 'Pháp lý',
     legalDocuments: 'Văn bản pháp lý',
 
-    cookieNoticeTitle: 'Cookie trên trang này',
+    cookieNoticeTitle: 'Cookie và analytics',
     cookieNoticeBody:
-      'Chúng tôi chỉ dùng cookie để giữ bạn đăng nhập và ghi nhớ ngôn ngữ, giao diện của bạn. Không quảng cáo, không theo dõi, không analytics bên thứ ba.',
+      'Chúng tôi dùng cookie để giữ bạn đăng nhập và ghi nhớ ngôn ngữ, giao diện của bạn. Nếu bạn cho phép, chúng tôi còn đếm lượt xem trang để biết trang nào được đọc. Chúng tôi không bao giờ đọc câu hỏi, câu trả lời, hay bất kỳ thứ gì bạn nhập.',
     cookieNoticeLink: 'Đọc chính sách cookie',
-    cookieNoticeDismiss: 'Đã hiểu',
+    cookieNoticeAccept: 'Cho phép analytics',
+    cookieNoticeNecessaryOnly: 'Chỉ cookie bắt buộc',
     signOut: 'Đăng xuất',
     planSignInToBuy: 'Đăng nhập để mua',
 
@@ -1137,6 +1150,7 @@ export const copy = {
               'Dữ liệu tài khoản: địa chỉ email của bạn và gói dịch vụ gắn với tài khoản đó.',
               'Nội dung bạn gửi: các câu hỏi, tệp hoặc liên kết bạn đính kèm, và câu trả lời bạn nhận được. Đây chính là dữ liệu để hội đồng trả lời.',
               'Dữ liệu kỹ thuật: những nhà cung cấp mô hình mà cố vấn của bạn gọi đến, và chi phí của lượt gọi đó, để chúng tôi tính phí và gỡ lỗi khi thất bại.',
+              'Dữ liệu analytics: nếu bạn cho phép analytics, bạn đã xem trang nào và đến từ đâu. Không đặt cookie, không lập hồ sơ bạn qua nhiều trang, và không bao giờ đụng vào câu hỏi hay câu trả lời của bạn.',
               'Chúng tôi không bán dữ liệu cá nhân, và không dùng câu hỏi của bạn để huấn luyện mô hình.',
             ],
           },
@@ -1237,9 +1251,19 @@ export const copy = {
             ],
           },
           {
-            heading: '3. Tắt cookie',
+            heading: '3. Analytics, nếu bạn cho phép',
+            body: [
+              'Chúng tôi đếm lượt xem trang để biết trang nào thực sự được đọc. Nếu bạn từ chối — hoặc đóng hộp thoại mà không chọn — không có gì được tải lên và chúng tôi không biết bạn đã ghé qua.',
+              'Analytics chạy trên Umami, không đặt cookie và không lập hồ sơ bạn qua nhiều trang. Nó ghi lại trang, nguồn truy cập, và thiết bị + quốc gia ở mức tổng quát.',
+              'Nó không bao giờ thấy câu hỏi của bạn, câu trả lời, bất kỳ thứ gì bạn nhập vào biểu mẫu, hay bất kỳ nội dung nào bên trong một phiên thảo luận. Đó là những phần của trang này chúng tôi không thể đưa cho bên ngoài.',
+              'Bạn có thể đổi ý sau bằng cách xoá dữ liệu trang trong trình duyệt, và lần sau bạn sẽ được hỏi lại.',
+            ],
+          },
+          {
+            heading: '4. Tắt cookie',
             body: [
               'Bạn có thể xoá hoặc chặn cookie trong cài đặt trình duyệt. Hãy tính trước rằng trang sẽ quên ngôn ngữ, giao diện và trạng thái đăng nhập của bạn.',
+              'Từ chối analytics không mất gì cả. Mọi tính năng hoạt động như nhau dù bạn chọn gì.',
             ],
           },
         ],
