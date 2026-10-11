@@ -13,6 +13,29 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   const headerRef = useRef<HTMLElement>(null);
   const mobileNavigationRef = useRef<HTMLDivElement>(null);
   const labels = translations[language];
+  // const [user, setUser] = useState<User | null>(null);
+  // const [authLoading, setAuthLoading] = useState(true);
+
+  // // Kiểm tra trạng thái đăng nhập trên header
+  // useEffect(() => {
+  //   const supabase = createClient();
+    
+  //   supabase.auth.getUser().then(({ data }) => setUser(data.user));
+
+  //   const { data: { subscription }} = supabase.auth.onAuthStateChange((_event, session) => {
+  //     setUser(session?.user ?? null);
+  //     setAuthLoading(false);
+  //   });
+
+  //   return () => subscription.unsubscribe();
+  // }, [])
+
+  // const handleSignOut = async () => {
+  //   const supabase = createClient();
+  //   await supabase.auth.signOut();
+  //   setUser(null);
+  //   window.location.href="/";
+  // }
 
   useEffect(() => {
     if (!menuOpen) return;

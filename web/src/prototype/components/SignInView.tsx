@@ -7,11 +7,11 @@ import { Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SignInView: React.FC = () => {
-  const { setCurrentView, t } = useApp();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+    const { setCurrentView, t } = useApp();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignIn(event: FormEvent) {
     event.preventDefault();

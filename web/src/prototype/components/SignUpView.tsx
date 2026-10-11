@@ -7,12 +7,12 @@ import { CheckCircle2, Eye, EyeOff, LockKeyhole, Mail, UserPlus } from 'lucide-r
 import { AuthShowcase } from './AuthShowcase';
 
 export const SignUpView: React.FC = () => {
-  const { setCurrentView, t } = useApp();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+    const { setCurrentView, t } = useApp();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
 
   async function handleSignUp(event: FormEvent) {
     event.preventDefault();
@@ -30,10 +30,10 @@ export const SignUpView: React.FC = () => {
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
 
-    if (error) {
-      setError(error.message);
-      return;
-    }
+        if (error) {
+            setError(error.message);
+            return;
+        }
 
     setMessage(t.authCheckEmail);
   }
