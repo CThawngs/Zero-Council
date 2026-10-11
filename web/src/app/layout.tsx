@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import Script from 'next/script';
 import { THEME_BOOTSTRAP_SCRIPT } from '@/prototype/theme';
 import './globals.css';
 
@@ -21,17 +22,24 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // in globals.css, and pinning the class here would make it un-switchable.
     <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full" suppressHydrationWarning>
-        {/* Runs before first paint so a dark-theme visitor never sees a white
-            flash. Kept inline and dependency-free on purpose.
+        {/*
+          Runs before first paint so a dark-theme visitor never sees a white flash.
 
-            This MUST stay the first child of <body> and must NOT be wrapped in
-            a <head> element. The App Router forbids <head> here: React renders
-            it into the document, the HTML parser relocates the node, and the
-            hydration pass then fails for the ENTIRE tree. When that happens
-            every button on the page keeps its server HTML but loses its React
-            handler, so nothing is clickable and no error is printed — the
-            symptom is a page that looks alive and is completely inert. */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }} />
+          This must be `next/script`, NOT a bare `<script>` element. React does not execute a
+          script tag it renders, on the client or during hydration — it logs "Encountered a script
+          tag while rendering React component" and the theme is never applied before paint. That
+          is the whole purpose of this line, so the warning is not cosmetic: a bare tag silently
+          breaks the thing it was written for.
+
+          `beforeInteractive` is the strategy that does run before hydration, and Next requires
+          this exact placement — the root layout — and injects it into <head> itself. Writing our
+          own <head> here instead is not an option: the App Router renders it into the document,
+          the HTML parser relocates the node, and hydration then fails for the entire tree, which
+          shows up as a page that looks alive and is completely inert.
+        */}
+        <Script id="zc-theme-bootstrap" strategy="beforeInteractive">
+          {THEME_BOOTSTRAP_SCRIPT}
+        </Script>
         {children}
       </body>
     </html>

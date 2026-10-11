@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   AdvisorPersona,
   ApiKeyConfig,
@@ -40,7 +40,12 @@ import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storag
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
 import { createClient } from '@/lib/supabase/client';
-import { readAnalyticsConsent, type AnalyticsConsent } from '../components/CookieNotice';
+import {
+  getServerAnalyticsConsent,
+  readAnalyticsConsent,
+  subscribeAnalyticsConsent,
+  type AnalyticsConsent,
+} from '../components/CookieNotice';
 
 /** One live room. Deliberately not a `DeliberationSession`: that shape has no message list. */
 export interface ChatRoom {
@@ -119,7 +124,6 @@ interface AppContextType {
   checkoutPlan: Plan | null;
   /** `null` until the visitor answers the cookie dialog. Analytics loads only on `'granted'`. */
   consent: AnalyticsConsent | null;
-  setAnalyticsConsent: (value: AnalyticsConsent) => void;
   closeCheckout: () => void;
   /**
    * The one entry point to buying. Redirects to sign-in when nobody is signed in, and only then
@@ -281,10 +285,15 @@ const [isDeliberating, setIsDeliberating] = useState(false);
   /**
    * Non-essential cookie consent. `null` means the visitor has not been asked yet, which is
    * deliberately NOT the same as consent: analytics only loads on an explicit `'granted'`.
+   *
+   * `useSyncExternalStore` rather than `useState`, because `localStorage` does not exist on the
+   * server. A lazy `useState` initializer read the browser store while the server rendered
+   * `null`, so a visitor who had already answered got a different first client render than the
+   * server produced — React threw a hydration mismatch and re-rendered the whole tree.
+   * `getServerSnapshot` returns `null` for the server AND the first client render, so the two
+   * agree; the real value arrives on the following render, after hydration has finished.
    */
-  const [analyticsConsent, setAnalyticsConsent] = useState<AnalyticsConsent | null>(() =>
-    readAnalyticsConsent()
-  );
+  const analyticsConsent = useSyncExternalStore(subscribeAnalyticsConsent, readAnalyticsConsent, getServerAnalyticsConsent);
   const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(() => {
     // Rehydrate on the first render so the room is already there when the view mounts. Without this
@@ -792,7 +801,6 @@ const purgeSessions = () => {
         signOut,
         checkoutPlan,
         consent: analyticsConsent,
-        setAnalyticsConsent,
         closeCheckout: () => setCheckoutPlan(null),
         requestCheckout,
         goToPricing,

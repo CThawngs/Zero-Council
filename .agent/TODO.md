@@ -466,6 +466,18 @@ Phạm vi: redesign UI/UX toàn site (landing, workspace, menu, 3D, animation), 
 - [x] Không set env var → không tải gì, site vẫn chạy bình thường.
 - [ ] **Cần chủ sản phẩm tạo tài khoản Umami và điền `NEXT_PUBLIC_ANALYTICS_WEBSITE_ID`.** Tôi không tạo được tài khoản thay bạn.
 
+### ĐÃ XONG — sửa 2 lỗi runtime do chính lượt trước gây ra
+
+- [x] **`Encountered a script tag while rendering React component`** — `app/layout.tsx` đặt thẻ `<script>` thô trong body. React **không thực thi** script tag do nó render, nên theme không bao giờ được áp dụng trước first paint — tức là dòng đó vô dụng đúng thứ nó được viết để làm. Sửa: `next/script` + `strategy="beforeInteractive"`, Next tự inject vào `<head>`. Verify: `themeScriptInHead: true`, `data-theme` có giá trị.
+- [x] **`Hydration failed because the server rendered HTML didn't match the client`** — `consent` đọc `localStorage` trong `useState` initializer. Server không có `localStorage` → render `null` (dialog hiện); client đã có consent → render khác ngay từ frame đầu. Sửa: `useSyncExternalStore` với `getServerSnapshot` trả `null` cho server **và** render client đầu, nên hai bên khớp; giá trị thật tới ở render kế tiếp sau hydrate.
+- [x] Verify sau sửa: console sạch 2/2 tình huống (đã có consent / chưa có consent), 439 fiber, dialog bấm vẫn hoạt động, `denied` → script không tải.
+
+### Bài học (đã trải qua 2 lần, đừng phạm lại lần 3)
+
+1. **Thẻ `<script>` thô bên trong React component không bao giờ chạy.** Muốn chạy trước first paint thì dùng `next/script` `beforeInteractive` trong root layout. Tôi đã viết đúng cảnh báo này trong comment của chính dòng lỗi, rồi vẫn viết code sai.
+2. **Đừng đọc `localStorage`/`window` trong `useState` initializer của thứ được render ở cả server lẫn client.** Đó là hydration mismatch theo cách chắc chắn. `useSyncExternalStore` + `getServerSnapshot` là cách đúng.
+3. Cả hai lỗi đều im lặng hoặc chỉ báo console — không làm trang chết. Verify bằng cách **reload với localStorage đã đặt sẵn**, đó là tình huống duy nhất lộ ra mismatch.
+
 ## ĐÃ XONG (verify bằng lái app thật, không phải đọc code)
 
 ### Nền tảng

@@ -1,0 +1,32 @@
+fix(layout): script tag React khong chay + hydration mismatch tu localStorage
+
+Hai loi runtime, ca hai do lan truoc cua chinh toi gay ra.
+
+1. "Encountered a script tag while rendering React component"
+   app/layout.tsx dat the <script> tho trong body. React KHONG thuc thi script tag
+   no render, nen dong do dung de dat theme truoc first paint chua bao gio chay.
+   No vo dung dung thu no duoc viet de lam.
+   -> next/script + strategy="beforeInteractive". Next tu inject vao <head>.
+   Verify: themeScriptInHead true, data-theme co gia tri.
+   Docs: web/node_modules/next/dist/docs/01-app/03-api-reference/02-components/script.md
+
+2. "Hydration failed because the server rendered HTML didn't match the client"
+   consent doc localStorage trong useState initializer. Server khong co localStorage
+   -> render null (dialog hien). Client da co consent -> render khac ngay tu frame
+   dau. Mismatch chac chan.
+   -> useSyncExternalStore, getServerSnapshot tra null cho server LAN render client
+   dau nen hai ben khop; gia tri that toi o render ke tiep sau hydrate.
+   Subscribe them storage event de dong bo giua cac tab.
+
+Khong dung the <head> tu viet de lo loi 1: App Router cam, React render no vao
+document, HTML parser doi node, hydration fail toan cay.
+
+Verify (ca hai tinh huong deu console sach):
+- da co consent  -> 439 fiber, khong loi
+- chua co consent -> 439 fiber, khong loi, dialog hien, bam nut van chay,
+                     denied -> script khong tai
+
+tsc 0, eslint 0 loi, next build 0, 2/2 test file xanh
+
+Bai hoc ghi vao TODO + Notion: comment giai thich tai sao khong cuu duoc khoi
+viet lai chinh loi do — chi kiem tren app that moi cuu duoc.

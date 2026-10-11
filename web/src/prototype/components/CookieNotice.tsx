@@ -24,12 +24,42 @@ export const readAnalyticsConsent = (): AnalyticsConsent | null => {
   }
 };
 
+/**
+ * The value both the server and the first client render must agree on.
+ *
+ * `localStorage` is unreachable from the server, so the server has no answer here. Returning
+ * `null` — "not answered yet" — is the only choice that matches a first-time visitor's browser,
+ * which is what keeps the two renders identical.
+ */
+export const getServerAnalyticsConsent = (): AnalyticsConsent | null => null;
+
+const analyticsConsentListeners = new Set<() => void>();
+
+const emitAnalyticsConsentChange = () => {
+  for (const listener of analyticsConsentListeners) listener();
+};
+
+export const subscribeAnalyticsConsent = (onStoreChange: () => void): (() => void) => {
+  analyticsConsentListeners.add(onStoreChange);
+  // `storage` fires only in OTHER tabs, so it covers the case of someone who answered the dialog
+  // on their phone and then opened this site here.
+  const onExternalChange = (event: StorageEvent) => {
+    if (event.key === ANALYTICS_CONSENT_KEY) onStoreChange();
+  };
+  window.addEventListener('storage', onExternalChange);
+  return () => {
+    analyticsConsentListeners.delete(onStoreChange);
+    window.removeEventListener('storage', onExternalChange);
+  };
+};
+
 export const writeAnalyticsConsent = (value: AnalyticsConsent): void => {
   try {
     localStorage.setItem(ANALYTICS_CONSENT_KEY, value);
   } catch {
     /* blocked storage: the choice simply does not persist, and we ask again next visit */
   }
+  emitAnalyticsConsentChange();
 };
 
 /**
@@ -73,7 +103,7 @@ export const AnalyticsLoader: React.FC = () => {
  * nagged, and that also means no analytics — silence is treated as a no.
  */
 export const CookieNotice: React.FC = () => {
-  const { consent, setAnalyticsConsent, setCurrentView, t } = useApp();
+  const { consent, setCurrentView, t } = useApp();
 
   /**
    * Visibility is derived, not stored. `consent === null` means "never answered", which is the
@@ -85,8 +115,9 @@ export const CookieNotice: React.FC = () => {
   if (!visible) return null;
 
   const decide = (value: AnalyticsConsent) => {
+    // Writing to the store notifies every subscriber, which is what re-renders the dialog away
+    // and lets `AnalyticsLoader` pick up a grant in the same tick.
     writeAnalyticsConsent(value);
-    setAnalyticsConsent(value);
   };
 
   return (
