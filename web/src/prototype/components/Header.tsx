@@ -2,18 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
-import { Globe2, Menu, Settings, X } from 'lucide-react';
+import { Globe2, Menu, Moon, Sun, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
-
-const navItems = [
-  { view: 'sessions', label: 'sessions' },
-  { view: 'personas', label: 'personas' },
-  { view: 'api-keys', label: 'apiKeys' },
-  { view: 'settings', label: 'settings' },
-] as const;
+import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
 
 export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
-  const { currentView, setCurrentView, language, setLanguage, t } = useApp();
+  const { currentView, setCurrentView, language, setLanguage, theme, toggleTheme, authUser, signOut, t } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -87,68 +81,92 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
     setMenuOpen(false);
   };
 
-  // Marketing nav mixes anchors (sections of the landing page) with one real
-  // view. Anchors are used for "How it works" / "Why Zero Council" because both
-  // sections live on the landing page itself.
-  const links: { key: string; label: string; href?: string; view?: ViewType }[] = isWorkspace
-    ? navItems.map((item) => ({ key: item.view, label: labels.nav[item.label], view: item.view }))
-    : [
-        { key: 'how-it-works', label: labels.nav.howItWorks, href: '#how-it-works' },
-        { key: 'why-zero-council', label: labels.nav.whyZeroCouncil, href: '#why-zero-council' },
-        { key: 'pricing', label: labels.nav.pricing, view: 'pricing' },
-      ];
+  // All three destinations are sections of the landing page, so none of them is a
+  // "current page" — `aria-current` would be a lie for each of them.
+  const links = MARKETING_NAV.map((item) => ({
+    key: item.labelKey,
+    label: labels.nav[item.labelKey],
+    href: item.href,
+  }));
 
-  // Anchors have no "current page" state; reading window.location.hash here
-  // would differ between server render and client, so only views get aria-current.
-  const isCurrent = (link: { href?: string; view?: ViewType }) => !link.href && link.view === currentView;
+  /**
+   * Scroll to a landing section, leaving any other view first.
+   *
+   * On a workspace view the section is not in the document at all, so querying it finds nothing
+   * and the click silently does nothing. Switching to the overview and scrolling on the next frame
+   * is what makes the link mean the same thing from anywhere in the app.
+   */
+  const goToSection = (href: string) => {
+    setMenuOpen(false);
+    const scroll = () => document.querySelector(href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (currentView === 'overview') {
+      scroll();
+      return;
+    }
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
+      // `assign`, not `href = ...`: the lint rule for react-compiler immutability rejects
+      // assigning a property on `location`, and the rule for Next routing flags it too. Same
+      // navigation, no suppression comment needed.
+      window.location.assign(`/${href}`);
+      return;
+    }
+    setCurrentView('overview');
+    requestAnimationFrame(() => requestAnimationFrame(scroll));
+  };
 
   return (
-    <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border/80 bg-background/92 backdrop-blur-xl">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-brass/70 to-transparent" />
+    <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
         <button type="button" onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
           <span className="brand-mark">
             <CouncilOrb />
           </span>
-          <span className="block whitespace-nowrap font-serif text-xl tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
+          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
         </button>
 
-        <nav className="header-nav hidden min-w-0 items-center gap-1 lg:flex" aria-label={t.primaryNavigation}>
-          {links.map((link) =>
-            link.href ? (
-              <a key={link.key} href={link.href} className="nav-link whitespace-nowrap">
+        {!isWorkspace && (
+          <nav className="header-nav hidden min-w-0 items-center gap-1 lg:flex" aria-label={t.primaryNavigation}>
+            {links.map((link) => (
+              <a key={link.key} href={link.href} onClick={(event) => { event.preventDefault(); goToSection(link.href); }} className="nav-link whitespace-nowrap">
                 {link.label}
               </a>
-            ) : (
-              <button
-                key={link.key}
-                type="button"
-                onClick={() => navigate(link.view as ViewType)}
-                aria-current={isCurrent(link) ? 'page' : undefined}
-                className={`nav-link whitespace-nowrap ${isCurrent(link) ? 'nav-link-active' : ''}`}
-              >
-                {link.label}
-              </button>
-            ),
-          )}
-        </nav>
+            ))}
+          </nav>
+        )}
 
         <div className="flex items-center gap-1.5">
-          <button type="button" onClick={changeLanguage} className="icon-button header-compact-control min-w-11" aria-label={`${language === 'en' ? t.switchToVietnamese : t.switchToEnglish} (${language})`} title={language === 'en' ? 'Tiếng Việt' : 'English'}>
-            <Globe2 className="h-4 w-4" aria-hidden="true" />
-            <span className="text-[10px] font-semibold uppercase">{language}</span>
+          <button type="button" onClick={changeLanguage} className="icon-button header-compact-control min-w-16 gap-2 px-3" aria-label={`${language === 'en' ? t.switchToVietnamese : t.switchToEnglish} (${language})`} title={language === 'en' ? 'Tiếng Việt' : 'English'}>
+            <Globe2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <span className="text-sm font-extrabold uppercase leading-none">{language}</span>
           </button>
 
-          {/* TEMP */}
-          <button type='button' onClick={() => setCurrentView('sign-in')} className="button-secondary header-cta">{labels.nav.signIn}</button>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="icon-button min-w-16 gap-2 px-3"
+            aria-label={theme === 'dark' ? t.themeToLight : t.themeToDark}
+            title={theme === 'dark' ? t.themeToLight : t.themeToDark}
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+          </button>
 
-          {isWorkspace && (
-            <button type="button" onClick={() => navigate('settings')} className="icon-button header-settings min-w-11" aria-label={labels.nav.settings}>
-              <Settings className="h-4 w-4" />
-            </button>
+          {!isWorkspace && !authUser && (
+            <button type="button" onClick={() => navigate('sign-in')} className="button-secondary header-cta">{labels.nav.signIn}</button>
           )}
           {!isWorkspace && (
-            <button type="button" onClick={() => navigate('empty-chamber')} className="button-primary header-cta">{labels.nav.getStarted}</button>
+            <button type="button" onClick={() => (authUser ? navigate('empty-chamber') : navigate('sign-in'))} className="button-primary header-cta">
+              {labels.nav.getStarted}
+            </button>
+          )}
+          {authUser && (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="button-secondary header-cta max-w-[13rem] truncate"
+              title={authUser.email}
+            >
+              {t.signOut}
+            </button>
           )}
           <button ref={menuButtonRef} type="button" className="icon-button header-menu min-w-11" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-controls="mobile-navigation" aria-label={menuOpen ? t.close : t.menu}>
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -158,23 +176,62 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
 
       {menuOpen && (
         <div id="mobile-navigation" ref={mobileNavigationRef} className="mobile-navigation-panel border-t border-border bg-surface p-3 shadow-2xl">
-          <nav className="mx-auto grid max-w-[1600px] gap-1" aria-label={t.mobileNavigation}>
-            {links.map((link) =>
-              link.href ? (
-                <a key={link.key} href={link.href} onClick={() => setMenuOpen(false)} className="nav-link justify-between">
+          {isWorkspace ? (
+            <WorkspaceMenu onNavigate={navigate} onClose={() => setMenuOpen(false)} />
+          ) : (
+            <nav className="mx-auto grid max-w-[1600px] gap-1" aria-label={t.mobileNavigation}>
+              {links.map((link) => (
+                <a key={link.key} href={link.href} onClick={(event) => { event.preventDefault(); goToSection(link.href); }} className="nav-link justify-between">
                   {link.label}
                 </a>
-              ) : (
-                <button key={link.key} type="button" onClick={() => navigate(link.view as ViewType)} aria-current={isCurrent(link) ? 'page' : undefined} className={`nav-link justify-between ${isCurrent(link) ? 'nav-link-active' : ''}`}>
-                  {link.label}
-                  {isCurrent(link) && <span aria-hidden="true">•</span>}
+              ))}
+              {authUser && (
+                <button type="button" onClick={() => { setMenuOpen(false); void signOut(); }} className="nav-link justify-between">
+                  {t.signOut}
                 </button>
-              ),
-            )}
-          </nav>
+              )}
+            </nav>
+          )}
           <p className="mx-auto mt-3 max-w-[1600px] border-t border-border/70 pt-3 text-[11px] leading-relaxed text-ink-muted">{t.boundaryShort}</p>
         </div>
       )}
     </header>
+  );
+};
+
+/**
+ * Mobile panel for signed-in screens. Renders the SAME grouped array the
+ * desktop sidebar renders, so the two can never drift — the failure that left
+ * the old mobile menu without `Council room` and `Billing`.
+ */
+const WorkspaceMenu: React.FC<{ onNavigate: (view: ViewType) => void; onClose: () => void }> = ({ onNavigate, onClose }) => {
+  const { currentView, language, openJoinRoom, t } = useApp();
+  const labels = translations[language];
+
+  return (
+    <div className="mx-auto grid max-w-[1600px] gap-4">
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          openJoinRoom();
+        }}
+        className="button-primary w-full"
+      >
+        {labels.nav.newDeliberation}
+      </button>
+      <nav className="grid gap-1" aria-label={t.mobileNavigation}>
+        {WORKSPACE_NAV.map((group) => (
+          <div key={group.labelKey}>
+            <p className="nav-group-label">{labels.navGroup[group.labelKey]}</p>
+            {group.items.map(({ view, labelKey, icon: Icon }) => (
+              <button key={view} type="button" onClick={() => onNavigate(view)} aria-current={currentView === view ? 'page' : undefined} className={`sidebar-link ${currentView === view ? 'sidebar-link-active' : ''}`}>
+                <Icon className="h-4 w-4" aria-hidden="true" /> {labels.nav[labelKey]}
+              </button>
+            ))}
+          </div>
+        ))}
+      </nav>
+    </div>
   );
 };

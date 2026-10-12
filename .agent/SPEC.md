@@ -39,14 +39,18 @@ Giao diện sản phẩm song ngữ EN/VI cấu trúc quyết định khó: đ�
 - Clipboard copy chỉ chạy sau user action và chỉ báo success sau khi `navigator.clipboard.writeText()` resolve.
 - Native `<dialog>`: `showModal()`, `close()`, Escape, backdrop coordinate check, focus return; explicit close button có accessible name.
 - Tương tác dùng native hover/focus/cursor feedback; motion CSS-only và bị tắt qua `prefers-reduced-motion`.
-- Header responsive: dưới 40rem chỉ giữ language/menu; 40–64rem thêm CTA (public) hoặc settings icon (workspace) và menu; từ 64rem hiện desktop nav và ẩn menu.
-- Header public chỉ có một chủ đề tối — không có nút bật/tắt theme và không có biến palette `html.light`. Một control trông như có tác dụng nhưng không có hành vi thật là bug.
+- Header responsive: dưới 40rem chỉ giữ language/theme/menu; 40–64rem thêm CTA (public) hoặc settings icon (workspace) và menu; từ 64rem hiện desktop nav và ẩn menu.
+- Theme toggle là control thật: `data-theme="light"|"dark"` trên `<html>`, giá trị đọc từ `localStorage` key `zc-theme` bởi script tiền-paint trong `app/layout.tsx` để không nháy trắng. `AppContext` giữ state và `toggleTheme()`. Ánh xạ màu nằm ở `:root` (light) và `[data-theme='dark']` trong `globals.css`. Trước đây control này tồn tại nhưng không có hành vi — đã sửa 2026-10-11.
+- Language toggle chuyển ngay không reload, đọc `localStorage` key `zc-lang`; `AppContext` khởi tạo state từ key này. Toàn bộ copy đã dịch, kể cả màn hình sign-in/sign-up.
+- Ba link marketing trong nav đều là anchor trên landing (`#how-it-works`, `#why-zero-council`, `#pricing`). Pricing không còn là view riêng: bảng giá nằm ở section `#pricing`, mua hàng mở `CheckoutDrawer` tại chỗ.
+- Mua gói bắt buộc đăng nhập: `requestCheckout(plan)` chuyển tới sign-in khi `authUser` null, không mở drawer thanh toán. Server `POST /api/payos/create-payment` từ chối anonymous với 401 `NEED_LOGIN` — hai lớp độc lập.
+- Trang pháp lý: 7 tài liệu (`terms`, `privacy`, `refund`, `cookies`, `acceptable-use`, `disclaimer`, `contact`) render bởi một `LegalView`, nội dung song ngữ trong `i18n.ts`. Mọi thông tin pháp lý chưa có nguồn chân lý để trống bằng placeholder `{{...}}` và đánh dấu `draft: true` để hiện cảnh báo.
+- Font tự host bằng `@font-face` viết tay trong `globals.css` (`Inter Local`, `Nunito Local`) với `unicode-range` latin + vietnamese. KHÔNG dùng `next/font/google`: nó gọi mạng lúc build và làm CI fail khi runner offline.
+- `@theme` trong `globals.css` ánh xạ `--font-sans`/`--font-serif` trực tiếp tới tên family đã khai báo; fallback là các font có dấu tiếng Việt (`ui-sans-serif`, `system-ui`, `Segoe UI` cho sans; `Georgia`, `Times New Roman` cho serif) để webfont bị chặn vẫn hiển thị dấu đúng thay vì thay glyph từng ký tự.
 - Mobile navigation panel là disclosure panel `position:absolute` dưới header, `max-height: calc(100dvh - 76px)`, `overflow-y:auto`, `overscroll-behavior:contain`; focus trap giới hạn trong panel, Escape đóng và trả focus về menu button, pointerdown ngoài header đóng panel.
 - Layout chống overflow: `.content-shell width: min(100%, 72rem)`, modal dùng `calc(100% - gutter)` (không `100vw` vì scrollbar), mọi flex/grid con dài dùng `min-w-0` + `truncate`/`break-words`, icon dùng `shrink-0`.
 - Input/select/textarea giữ `font-size: 1rem` để iOS không zoom khi focus.
-- Font nạp qua `next/font/google` trong `web/src/app/fonts.ts`: `Inter` cho sans, `Literata` cho serif, cả hai với `subsets: ['latin', 'vietnamese']` và `display: 'swap'`. Font tự self-host ở build nên runtime không có request ra ngoài origin. Literata thay Fraunces vì Fraunces là serif "vintage" xử lý dấu tiếng Việt xếp chồng (ậ/ễ/ở) kém.
-- `@theme` trong `globals.css` trỏ `--font-sans`/`--font-serif` vào CSS variable của `next/font`; fallback là các font có dấu tiếng Việt (`ui-sans-serif`, `system-ui`, `Segoe UI` cho sans; `Georgia`, `Times New Roman` cho serif) để webfont bị chặn vẫn hiển thị dấu đúng thay vì thay glyph từng ký tự.
-- Hero chỉ có một hào quang: `.glow` dùng `radial-gradient(circle, rgba(201,162,75,0.22) 0%, rgba(201,162,75,0.06) 45%, rgba(201,162,75,0) 70%)`. Không accent màu thứ hai cạnh nó; node của `CouncilOrb` cùng hue brass, phân cấp bằng opacity.
+- Hero không dùng `.glow` brass nữa: hero hiện là grid hai cột với stage 3D `.stage-3d`, các card nổi `.float-card` và badge `.toggle-pill`. Màu nhấn nằm ở biến `--tint-*` (violet/blue/green/orange/pink/yellow), không phải một accent brass duy nhất.
 
 ## Tiêu chí chấp nhận
 
@@ -107,7 +111,8 @@ Lượt này khác giai đoạn 1 ở một điểm phải nói rõ: chủ dự 
 - Risk: copy làm giả production, localization stale, hydration mismatch, dialog focus regression, unsupported claims.
 - Risk responsive: unlayered component CSS (`.button-primary`, `.icon-button`) đè Tailwind layered utilities nên `hidden`/`sm:inline-flex` bị bỏ qua — dùng semantic class unlayered riêng (`.header-cta`, `.header-settings`, `.header-menu`) với `display` tường minh trong media query.
 - Risk font: khai báo tên font mà không nạp file thật khiến browser fallback từng ký tự. Recovery: dùng `next/font` với `subsets` chứa `vietnamese` và fallback có dấu; đã đo bề rộng để xác nhận glyph VI do webfont vẽ.
-- Risk font: `next/font/google` cần mạng lúc build để tải và cache font. Nếu build offline không có cache, build fail — recovery: dùng `next/font/local` với file đặt sẵn trong repo, không thêm dependency.
+- Risk font: KHÔNG dùng `next/font/google` — nó gọi mạng lúc build và đã làm CI fail 3 lần khi runner offline. Dùng `@font-face` tự host trong `globals.css`.
+- Risk dev: `next.config.ts` phải giữ `allowedDevOrigins: ["127.0.0.1", "localhost"]`. Next coi `127.0.0.1` là cross-origin với `localhost` và chặn dev resource; server vẫn trả HTML server-render đầy đủ nên trang nhìn bình thường nhưng React không hydrate, mọi button mất handler, console chỉ hiện lỗi HMR WebSocket. Thêm `--port` khác không giải quyết được.
 - Risk hydration: extension trình duyệt (Grammarly) chèn attribute vào `<body>` (`data-gr-ext-installed`, `cz-shortcut-listen`). Recovery: `suppressHydrationWarning` trên `<body>`; không được dùng nó để che lỗi render của app.
 - Recovery: revert PR/commit trên branch task; không reset/stash/xóa thay đổi worktree khác.
 

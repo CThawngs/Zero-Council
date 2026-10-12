@@ -15,7 +15,7 @@ export const Toast: React.FC = () => {
     values.provider = providerLabel(values.provider as ModelProvider);
   }
   const message = toastMessage
-    ? copy[language][toastMessage.key].replace(/\{(\w+)\}/g, (_, name: string) => values?.[name] ?? '')
+    ? (copy[language][toastMessage.key] as string).replace(/\{(\w+)\}/g, (_, name: string) => values?.[name] ?? '')
     : null;
 
   return (

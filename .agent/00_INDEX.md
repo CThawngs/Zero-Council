@@ -4,11 +4,12 @@ Governance: v7.4. Cập nhật: 2026-09-26.
 
 ## Workspace hiện tại
 
-- Task worktree: `.worktrees/product-voice-ui`
-- Branch: `product-voice-ui`
-- Base: `83ee993` (`origin/main` sau PR #9 merge)
+- Task worktree: `.worktrees/ui-redesign-2025`
+- Branch: `ui/redesign-2025` (cập nhật 2026-10-11; trước đó là `product-voice-ui`)
+- Base: `9736ce5` (`origin/main`)
+- **Cảnh báo:** branch đang track thẳng `origin/main`. Push lúc này có thể đẩy thẳng lên `main` — cần chủ sản phẩm chọn hướng trước khi push.
 - Remote: `https://github.com/CThawngs/Zero-Council.git`
-- Main checkout và các worktree khác (`responsive-polish`, `ui-ux-local-mock`, `feature-prototype-ui-integration`, `vi-font-fix`, `governance-v74`) không sửa/xóa.
+- Main checkout và các worktree khác (`responsive-polish`, `ui-ux-local-mock`, `feature-prototype-ui-integration`, `vi-font-fix`, `governance-v74`, `product-voice-ui`) không sửa/xóa.
 
 ## File agent
 
@@ -23,8 +24,9 @@ Governance: v7.4. Cập nhật: 2026-09-26.
 - `/` là giao diện sản phẩm song ngữ chạy trong browser, state ở React/browser memory. Copy dùng giọng sản phẩm; kết quả hội đồng vẫn gắn nhãn minh họa.
 - `/fixture` chỉ hiển thị văn bản minh họa cố định.
 - `/api/council` là fixed content route; giao diện `/` không gọi route này.
-- Không có AI, provider request, auth, credential, payment, analytics, persistence hoặc deploy — UI nói rõ là "chưa có trong bản này".
-- Provider/model chỉ là nhãn giao diện; paid/auth surfaces không được provision.
+- **Cập nhật 2026-10-11:** có auth thật (Supabase), có thanh toán (payOS, chặn anonymous 401 `NEED_LOGIN`), có theme toggle + ngôn ngữ thật, có 7 trang pháp lý. Một số mục dưới đây viết cho giai đoạn trước, xem `.agent/TODO.md` mục "UI/UX redesign" cho bức tranh mới nhất.
+- Không có analytics, persistence server hoặc deploy.
+- Provider/model chỉ là nhãn giao diện; paid/auth surfaces được provision.
 - Copy người dùng không được phân tích; mọi walkthrough dùng nội dung minh họa cố định.
 - Không thêm dependency mới; `lucide-react` là dependency icon duy nhất.
 - Responsive hiện tại: header CTA/settings từ 40rem, menu panel dưới 64rem, desktop nav từ 64rem; content shell dùng `min(100%, 72rem)`; modal dùng `calc(100% - gutter)` thay `100vw`.

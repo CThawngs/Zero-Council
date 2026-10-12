@@ -1,0 +1,33 @@
+fix(auth): API bi proxy danh sang trang login + emailRedirectTo tro ve /
+
+Rà lại toàn bộ auth. Xac nhan Auth + Supabase DA merge qua 3 PR:
+#13 (email sign-in/up, 02-10), #16 (redesign + Google/Discord OAuth + fix /auth
+routing, 04-10), #19 (Google OAuth + doi luong token, 09-10).
+
+Hai bug tim ra:
+
+1. /api/* bi proxy danh sang /auth
+   src/lib/supabase/proxy.ts chuyen huong MOI request khong dang nhap, ke ca API
+   route. fetch nhan HTML trang login thay vi status code, va handler that — cho
+   401 NEED_LOGIN chu chay — khong bao gio chay. Thanh toan bi chan vo hinh.
+   -> chi redirect page request, bo /api/ khoi dieu kien. Them /checkout vao danh
+      sach cong khai de return URL sau thanh toan khong bi day ra login.
+
+2. emailRedirectTo tro ve / thay vi /auth/callback
+   Supabase gui link xac nhan toi emailRedirectTo, va session cookie chi duoc ghi
+   o handler verifyOtp trong /auth/callback. Tro thang ve / lam mat token: khong
+   cookie, khong session, trang load nhu chua dang ky bao gio.
+
+Phan tach landing vs workspace theo yeu cau chu san pham. Verify bang cach
+goi thang bang PowerShell (khong doan):
+  /                              200  landing mo cho khach
+  /dashboard                     307 -> /auth   workspace bat login
+  POST /api/payos/create-payment  401 {"error":"NEED_LOGIN"}  401 that, khong con bi day
+  /checkout/return               200  khong bi day sau khi thanh toan
+  /api/admin/users               401 thay vi redirect
+  GET /auth                      200
+  GET /auth/callback             307 (route xu ly token)
+
+Nut mua go tren landing van rang buoc dang nhap qua requestCheckout(), khong doi.
+
+tsc 0, eslint 0 loi, next build 0, 2/2 test file xanh

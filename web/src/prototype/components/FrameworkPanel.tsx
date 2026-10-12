@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { Copy } from '../i18n';
+import type { Copy, CopyStringKey } from '../i18n';
 import type { DeliberationSession } from '../types';
 import {
   clampScale,
@@ -21,7 +21,7 @@ interface Props {
   t: Copy;
 }
 
-const HAT_LABEL: Record<HatId, keyof Copy> = {
+const HAT_LABEL: Record<HatId, CopyStringKey> = {
   white: 'hatWhite',
   red: 'hatRed',
   black: 'hatBlack',
@@ -30,7 +30,7 @@ const HAT_LABEL: Record<HatId, keyof Copy> = {
   blue: 'hatBlue',
 };
 
-const HAT_BODY: Record<HatId, keyof Copy> = {
+const HAT_BODY: Record<HatId, CopyStringKey> = {
   white: 'hatWhiteBody',
   red: 'hatRedBody',
   black: 'hatBlackBody',
@@ -39,14 +39,14 @@ const HAT_BODY: Record<HatId, keyof Copy> = {
   blue: 'hatBlueBody',
 };
 
-const CRITERION_LABEL: Record<MatrixCriterionId, keyof Copy> = {
+const CRITERION_LABEL: Record<MatrixCriterionId, CopyStringKey> = {
   cost: 'matrixCriterionCost',
   speed: 'matrixCriterionSpeed',
   risk: 'matrixCriterionRisk',
   reversibility: 'matrixCriterionReversibility',
 };
 
-const OPTION_LABEL: Record<MatrixOptionId, keyof Copy> = {
+const OPTION_LABEL: Record<MatrixOptionId, CopyStringKey> = {
   optionA: 'matrixOptionA',
   optionB: 'matrixOptionB',
   optionC: 'matrixOptionC',
@@ -115,7 +115,7 @@ const MatrixPanel: React.FC<Props> = ({ round, t }) => {
       (MATRIX_CRITERION_IDS.reduce((acc, criterionId) => ({ ...acc, [criterionId]: 0 }), {}) as never),
   }));
   const { rows, maxTotal, winnerId } = scoreMatrix(criteria, options);
-  const label = (key: keyof Copy) => t[key];
+  const label = (key: CopyStringKey) => t[key];
 
   return (
     <>
@@ -197,7 +197,7 @@ const MatrixPanel: React.FC<Props> = ({ round, t }) => {
   );
 };
 
-const PANEL_LABEL: Record<Round['framework'], keyof Copy> = {
+const PANEL_LABEL: Record<Round['framework'], CopyStringKey> = {
   scenarios: 'scenariosLabel',
   hats: 'hatsLabel',
   matrix: 'matrixLabel',

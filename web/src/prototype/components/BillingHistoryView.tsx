@@ -7,7 +7,7 @@ import { planById, planPrice } from '../data/plans';
 const CURRENT_PLAN = planById('free');
 
 export const BillingHistoryView: React.FC = () => {
-  const { setCurrentView, t, language } = useApp();
+  const { setCurrentView, goToPricing, t, language } = useApp();
   return (
     <div className="content-shell max-w-3xl space-y-7">
       <button type="button" onClick={() => setCurrentView('overview')} className="button-quiet -ml-3"><ArrowLeft className="h-4 w-4" />{t.back}</button>
@@ -19,7 +19,7 @@ export const BillingHistoryView: React.FC = () => {
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
           {t.planAdvisors.replace('{count}', String(CURRENT_PLAN.maxActiveAdvisors))}
         </p>
-        <button type="button" onClick={() => setCurrentView('pricing')} className="button-secondary mt-5 min-h-11">{t.pricingTitle}</button>
+        <button type="button" onClick={goToPricing} className="button-secondary mt-5 min-h-11">{t.pricingTitle}</button>
       </section>
 
       <section className="panel flex gap-4 p-5 sm:p-7"><ReceiptText className="h-6 w-6 shrink-0 text-brass" /><div><h2 className="font-serif text-xl text-ink">{t.billingEmpty}</h2><p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.billingNote}</p></div></section>

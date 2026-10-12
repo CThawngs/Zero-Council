@@ -1,4 +1,4 @@
-﻿import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
+import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
 
 export type ViewType =
   | 'overview'
@@ -11,11 +11,37 @@ export type ViewType =
   | 'api-keys'
   | 'settings'
   | 'billing'
-  | 'pricing'
-  | 'privacy'
+  | LegalView
 | 'sign-up'
   | 'sign-in'
   | 'chat-room';
+
+/**
+ * Legal documents, one view each.
+ *
+ * `'pricing'` used to be a view of its own. It is gone: the pricing table is a section of the
+ * landing page, and buying opens the checkout drawer from there. A separate pricing screen meant
+ * the visitor left the page to find out what things cost, then had to find their way back.
+ */
+export const LEGAL_DOCUMENTS = [
+  'terms',
+  'privacy',
+  'refund',
+  'cookies',
+  'acceptable-use',
+  'disclaimer',
+  'contact',
+] as const;
+
+export type LegalDocument = (typeof LEGAL_DOCUMENTS)[number];
+
+export type LegalView = `legal-${LegalDocument}`;
+
+export const legalViewOf = (document: LegalDocument): LegalView => `legal-${document}`;
+
+/** The document a view renders, or null when the view is not a legal page. */
+export const legalDocumentOf = (view: ViewType): LegalDocument | null =>
+  view.startsWith('legal-') ? (view.slice('legal-'.length) as LegalDocument) : null;
 
 export type Language = 'en' | 'vi';
 

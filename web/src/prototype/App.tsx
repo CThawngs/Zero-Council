@@ -19,15 +19,17 @@ import { NewAdvisorView } from './components/NewAdvisorView';
 import { ApiKeysView } from './components/ApiKeysView';
 import { SettingsView } from './components/SettingsView';
 import { BillingHistoryView } from './components/BillingHistoryView';
-import { PrivacyView } from './components/PrivacyView';
-import { PricingView } from './components/PricingView';
+import { LegalView } from './components/LegalView';
+import { CookieNotice, AnalyticsLoader } from './components/CookieNotice';
+import { CheckoutDrawer } from './components/CheckoutDrawer';
+import { legalDocumentOf } from './types';
 import { SignInView } from './components/SignInView';
 import { SignUpView } from './components/SignUpView';
 
 const ChamberContent: React.FC = () => {
-  const { currentView, t } = useApp();
+  const { currentView, t, checkoutPlan, closeCheckout } = useApp();
   const mainRef = useRef<HTMLElement>(null);
-  const isPublicPage = currentView === 'overview' || currentView === 'privacy' || currentView === 'pricing' || currentView === 'sign-in' || currentView === 'sign-up';
+  const isPublicPage = currentView === 'overview' || legalDocumentOf(currentView) !== null || currentView === 'sign-in' || currentView === 'sign-up';
 
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
@@ -50,17 +52,25 @@ const ChamberContent: React.FC = () => {
           {currentView === 'api-keys' && <ApiKeysView />}
           {currentView === 'settings' && <SettingsView />}
           {currentView === 'billing' && <BillingHistoryView />}
-          {currentView === 'pricing' && <PricingView />}
-          {currentView === 'privacy' && <PrivacyView />}
+          {legalDocumentOf(currentView) && <LegalView />}
 {currentView === 'sign-up' && <SignUpView />}
           {currentView === 'sign-in' && <SignInView />}
           {currentView === 'chat-room' && <ChatRoomView />}
         </main>
       </div>
       {isPublicPage && <Footer />}
+      {/* The plan survives the trip to the sign-in page, so a visitor who clicks "Sign in to buy"
+          comes back to a checkout that is already filled in. */}
+      <CheckoutDrawer plan={checkoutPlan} onClose={closeCheckout} />
       <CounterDraftModal />
       <JoinRoomModal />
       <Toast />
+      {/* Sits below the modals in the tree but above them in `z-index`, so a cookie notice can
+          never cover the checkout drawer or a room the visitor is trying to use. */}
+      <CookieNotice />
+      {/* Renders nothing until `consent === 'granted'`, and nothing at all when no analytics
+          endpoint is configured. Safe to leave mounted unconditionally. */}
+      <AnalyticsLoader />
       <span className="sr-only" aria-live="polite">{t.localBadge}</span>
     </div>
   );

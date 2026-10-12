@@ -1,4 +1,4 @@
-﻿# TODO — Zero Council product voice (giai đoạn 2)
+# TODO — Zero Council product voice (giai đoạn 2)
 
 Cập nhật: 2026-09-26. Governance: v7.4. Worktree: `.worktrees/product-voice-ui`; branch: `product-voice-ui`; base `83ee993` (`origin/main` sau PR #9 merge).
 
@@ -446,3 +446,160 @@ Muc 8 cua `features/FEATURE_MAP.md` la no da duoc tra trong luc gop PR #18. Day 
 - **PR #19 van con tren main voi cau truc token/DB khong duoc kiem chung.** File `0003` bay da tinh
   idempotent nen no khong con lam hong gi, nhung phan `zc_users` / trigger `on_auth_user_created` thi
   chua co test nao chay tren DB that.
+
+---
+
+# TODO — UI/UX redesign (giai đoạn 3, 2026-10-11)
+
+Cập nhật: 2026-10-11. Worktree: `.worktrees/ui-redesign-2025`; branch: `ui/redesign-2025`; base `9736ce5` (`origin/main`).
+Phạm vi: redesign UI/UX toàn site (landing, workspace, menu, 3D, animation), toggle theme + ngôn ngữ, trang pháp lý, analytics, responsive.
+
+## ĐÃ XONG — analytics (2026-10-11)
+
+- [x] **Umami** — cookie-free. Verify giá trên trang chính thức: Hobby $0/tháng (100K events, 1 site, 6 tháng retention), Pro $20, Business $200.
+- [x] Script tag theo env var `NEXT_PUBLIC_ANALYTICS_*` → đổi provider hoặc tự host chỉ cần đổi biến, không sửa code.
+- [x] **Chỉ tải script SAU khi khách đồng ý.** Verify thật trên trình duyệt: chưa đồng ý → `analyticsScriptLoaded: false`; bấm "Only necessary" → `denied`, script không tải; đồng ý → script tải đúng URL + website ID.
+- [x] Consent thành dialog 2 nút thật: "Allow analytics" / "Only necessary". Đóng hộp thoại mà không chọn = không tải script (coi như từ chối).
+- [x] `visible` derive từ `consent === null`, không dùng `useState` + effect (tránh `set-state-in-effect`).
+- [x] Copy cập nhật khớp code: banner, Cookie Policy §3 "Analytics, if you allow it", Privacy "What we collect". Đã bỏ câu cũ *"No advertising, no tracking, no third-party analytics"* vì giờ đã có analytics.
+- [x] `.env.example` có 3 biến public + giải thích. Không có secret — key Umami nằm ở dashboard, không paste vào repo.
+- [x] Không set env var → không tải gì, site vẫn chạy bình thường.
+- [ ] **Cần chủ sản phẩm tạo tài khoản Umami và điền `NEXT_PUBLIC_ANALYTICS_WEBSITE_ID`.** Tôi không tạo được tài khoản thay bạn.
+
+### ĐÃ XONG — sửa 2 lỗi runtime do chính lượt trước gây ra
+
+- [x] **`Encountered a script tag while rendering React component`** — `app/layout.tsx` đặt thẻ `<script>` thô trong body. React **không thực thi** script tag do nó render, nên theme không bao giờ được áp dụng trước first paint — tức là dòng đó vô dụng đúng thứ nó được viết để làm. Sửa: `next/script` + `strategy="beforeInteractive"`, Next tự inject vào `<head>`. Verify: `themeScriptInHead: true`, `data-theme` có giá trị.
+- [x] **`Hydration failed because the server rendered HTML didn't match the client`** — `consent` đọc `localStorage` trong `useState` initializer. Server không có `localStorage` → render `null` (dialog hiện); client đã có consent → render khác ngay từ frame đầu. Sửa: `useSyncExternalStore` với `getServerSnapshot` trả `null` cho server **và** render client đầu, nên hai bên khớp; giá trị thật tới ở render kế tiếp sau hydrate.
+- [x] Verify sau sửa: console sạch 2/2 tình huống (đã có consent / chưa có consent), 439 fiber, dialog bấm vẫn hoạt động, `denied` → script không tải.
+
+### Bài học (đã trải qua 2 lần, đừng phạm lại lần 3)
+
+1. **Thẻ `<script>` thô bên trong React component không bao giờ chạy.** Muốn chạy trước first paint thì dùng `next/script` `beforeInteractive` trong root layout. Tôi đã viết đúng cảnh báo này trong comment của chính dòng lỗi, rồi vẫn viết code sai.
+2. **Đừng đọc `localStorage`/`window` trong `useState` initializer của thứ được render ở cả server lẫn client.** Đó là hydration mismatch theo cách chắc chắn. `useSyncExternalStore` + `getServerSnapshot` là cách đúng.
+3. Cả hai lỗi đều im lặng hoặc chỉ báo console — không làm trang chết. Verify bằng cách **reload với localStorage đã đặt sẵn**, đó là tình huống duy nhất lộ ra mismatch.
+
+### ĐÃ XONG — rà auth (2026-10-11)
+
+- [x] **Xác nhận nhánh auth đã merge.** GitHub API: PR **#13** (email đăng nhập/ký, 2026-10-02), **#16** (redesign + Google/Discord OAuth + fix `/auth` routing, 2026-10-04), **#19** (Google OAuth + đổi luồng token, 2026-10-09). Cả 3 đều `merged`. Auth có thật, không phải vỏ.
+- [x] **Bug: `/api/*` bị proxy đá sang `/auth`.** `fetch` nhận HTML login thay vì status code, handler có 401 thật không bao giờ chạy. Sửa: bỏ `/api/` khỏi điều kiện redirect.
+- [x] **Bug: `emailRedirectTo` trỏ về `/`.** Callback route chỉ viết session cookie qua `verifyOtp` ở `/auth/callback`; gửi thẳng về `/` làm mất token, đăng ký email không vào được session. Sửa: trỏ về `/auth/callback`.
+- [x] **Phân tách landing vs workspace** theo yêu cầu chủ sản phẩm. Verify: `/` → 200 · `/dashboard` → 307→`/auth` · `POST /api/payos/create-payment` → **401 `NEED_LOGIN`** thật · `/checkout/return` → 200 (không bị đá sau khi thanh toán) · `/api/admin/users` → 401 thay vì redirect.
+- [x] Nút mua gói trên landing vẫn ràng buộc đăng nhập qua `requestCheckout()` (chưa đổi).
+
+### Bài học
+
+- **Một API route không bao giờ nên trả 307 sang trang HTML.** `fetch` sẽ nhận markup login, lỗi gốc biến mất. Auth ở tầng API phải trả status code, không redirect.
+- **Luồng OAuth/email phải khớp đường dẫn.** `redirectTo` và `emailRedirectTo` phải trỏ nơi thực sự xử lý token.
+
+## ĐÃ XONG (verify bằng lái app thật, không phải đọc code)
+
+### Nền tảng
+
+- [x] Bỏ `<head>` trong `app/layout.tsx` (App Router cấm) → hydration không còn vỡ.
+- [x] `next.config.ts` thêm `allowedDevOrigins: ["127.0.0.1", "localhost"]` — đây là nguyên nhân gốc khiến **mọi button chết** (Next chặn dev resource → React không hydrate → 0 fiber, console chỉ hiện lỗi HMR WebSocket). Xem mục "Bẫy dev" cuối file.
+- [x] `localStorage` guard trong `useState` initializer của `AppContext`.
+
+### Theme + ngôn ngữ
+
+- [x] Theme toggle thật: `data-theme` + `localStorage` key `zc-theme` + script tiền-paint (không nháy trắng).
+- [x] Language toggle thật: dịch trọn site, nhớ qua `localStorage` key `zc-lang`.
+- [x] Dịch hết chỗ hardcode EN: `SignInView`, `SignUpView`, `AuthShowcase`, hero badges, footer.
+
+### Điều hướng + pricing
+
+- [x] Nav "Pricing" → anchor cuộn tới `#pricing` (không rời landing). Cả 3 link marketing giờ là anchor.
+- [x] Xoá `PricingView.tsx` — bảng giá là section của landing.
+- [x] `goToPricing()` cho Billing + Settings.
+- [x] Mua gói bắt buộc đăng nhập: `requestCheckout()` chuyển sign-in khi chưa đăng nhập; KHÔNG mở drawer thanh toán cho khách vãng lai. Server đã chặn sẵn (`create-payment` trả 401 `NEED_LOGIN`).
+- [x] Xoá `PrivacyView.tsx` → gộp vào `LegalView` (`legal-privacy`).
+
+### Trang pháp lý
+
+- [x] 7 tài liệu: Terms / Privacy / Refund / Cookies / Acceptable Use / Disclaimer / Contact, song ngữ, render chung bởi `LegalView`.
+- [x] Footer có nhóm Product + Legal + disclaimer.
+- [x] Loại bỏ toàn bộ placeholder `{{...}}` (chủ sản phẩm không có pháp nhân → bỏ các field đó, không bịa).
+- [x] Email liên hệ: `nguyenchithang2804@gmail.com` (4 trang, cả EN/VI).
+- [x] Mốc thời gian tự đặt: hoàn 14 ngày · phản hồi 5 ngày làm việc · chuyển khoản 7 ngày · lưu trữ 12 tháng → **đã sửa thành "trong tab"** (xem dưới) · dữ liệu 15 ngày · báo đổi điều 30 ngày · hỗ trợ 3 ngày.
+- [x] Bỏ tham chiếu luật VN, bỏ tên payOS → "nhà cung cấp dịch vụ thanh toán".
+
+### Sửa lỗi hứa sai (văn bản vs code)
+
+- [x] **Privacy Policy nói dối về retention.** Cũ: "kept 12 months". Thật: `sessionStorage` (`chat/storage.ts:83`) chết khi đóng tab. Đã sửa cả EN + VI.
+- [x] **`purgeSessions` nói dối.** Cũ chỉ `setSessions([])` (RAM), transcript còn trong `sessionStorage`. Đã thêm `clearStoredRoom()` + `setCurrentRoom(null)`.
+- [x] **Thêm mục xuyên biên giới** (Privacy §3a): nêu đích danh Anthropic + OpenAI (verify từ `byok.ts:145,189`), nói rõ dữ liệu đi thẳng từ browser ra ngoài VN, không dẫn luật cụ thể.
+- [x] Test mới `web/tests/storage-clear.test.mjs` → 3 pass / 0 fail, chứng minh `clearStoredRoom` thực sự xoá khỏi store.
+
+### Responsive
+
+- [x] Sửa tràn ngang 26px ở 768px (`.blob` decorative) → thêm `overflow-x: clip` vào `.stage` trong `globals.css`.
+- [x] Sửa nút legal bị bóp 1–2 ký tự mỗi dòng ở mobile (`flex-1` trong hàng wrap → grid).
+- [x] Verify không tràn ngang ở 375 / 390 / 768 / 1440.
+
+### Docs
+
+- [x] `.agent/SPEC.md` — bỏ mô tả `next/font`/Literata cũ, thêm theme toggle, legal, `allowedDevOrigins`.
+- [x] `features/FEATURE_MAP.md` — thêm mục 10: bản đồ view + bảng thay đổi hành vi + bẫy hydrate.
+
+### Verify cuối lượt này
+
+- [x] `tsc --noEmit` → exit 0. `eslint src` → 0 lỗi, 5 cảnh báo. `next build` → exit 0.
+- [x] Trình duyệt: Privacy Policy `stillSays12Months: false`, `mentionsCrossBorder: true`, 7 mục.
+
+---
+
+## CÒN DỞ — CẦN LÀM
+
+### Đã xong (giữ lại để đối chiếu lượt trước)
+
+- [x] ~~**Branch đang track thẳng `origin/main`**~~ → đã `git branch --unset-upstream`, commit `b5dd235` push lên `ui/redesign-2025`, `origin/main` giữ nguyên `9736ce5`. PR: https://github.com/CThawngs/Zero-Council/pull/new/ui/redesign-2025
+- [x] ~~**Cookie consent banner**~~ → đã làm, nay là consent dialog 2 nút thật vì đã có analytics.
+- [x] ~~**7 con số thời gian trong văn bản pháp lý**~~ → đã bỏ hết theo yêu cầu chủ sản phẩm (2026-10-11), viết lại kiểu "as soon as we can" / "tuỳ ngân hàng".
+
+### Cần chủ sản phẩm làm
+
+- [ ] **Tạo tài khoản Umami miễn phí** (https://cloud.umami.is) và điền `NEXT_PUBLIC_ANALYTICS_WEBSITE_ID` vào `.env.local`. Tôi không tạo được tài khoản thay bạn. Ghi rõ: Hobby $0/tháng, 100K events/tháng, 1 website.
+- [ ] **Merge PR** `ui/redesign-2025` vào `main` sau khi review. Tôi không tự merge việc mình viết.
+- [ ] **`draft: true` trên 7 trang pháp lý** — banner đã ẩn (bạn chọn 2026-10-11) nhưng cờ còn trong `i18n.ts`. Khi có pháp nhân: bật lại bằng cách xoá `false &&` ở `LegalView.tsx:48`, hoặc đặt `draft: false` để bỏ hẳn cờ.
+- [ ] **Mốc thời gian pháp lý** — đã bỏ hết. Khi nào có người trực nên đặt lại số cụ thể (hoàn tiền 14 hay 30 ngày, thời hạn phản hồi). Hiện "càng sớm càng dễ" là cam kết mơ hồ, khách khó đòi.
+
+### Verify lại được sau khi có web access
+
+- [ ] **Quy định cookie consent** — chưa verify được. Tôi thử 9 đường (web_search tool, web_fetch tool, DDG API/HTML/lite, Bing, Wikipedia, 4 SearXNG) đều thất bại: 402 hết credit, DNS fail, bot challenge, hoặc kết quả sai (Bing trả "Block Blast" cho query GDPR — không đáng tin). Cần verify lại bằng nguồn chính thống.
+- [ ] **Câu chữ §3a xuyên biên giới** — tên provider (Anthropic, OpenAI) lấy từ code nên chắc, nhưng câu chữ pháp lý nên cho luật sư xem.
+- [ ] **Nếu có tài khoản test** — test luồng mua hàng SAU khi đăng nhập thật (cần Supabase + payOS key thật). Hiện chỉ verify được phần chặn khách vãng lai.
+
+### Lỗi có sẵn trên `origin/main` (không phải do lượt này)
+
+- [ ] **`web/tests/council-fixture.test.mjs` đang FAIL** — `Expected values to be strictly equal: 'reference'`. Đã verify bằng `git status` + `git diff origin/main`: file này không do tôi sửa, không khác gì `origin/main`. Lỗi có sẵn từ trước. **Không đụng vào** nhưng repo đang đỏ ở đó.
+
+### Ghi chú hạ tầng
+
+- [ ] **`package.json` không có script `test`.** Test chạy được nhưng phải gõ tay: `node --experimental-strip-types --test tests\storage-clear.test.mjs`. Cần thêm script `test` không?
+
+---
+
+## BẪY DEV: React không hydrate (2026-10-11, tốn nhiều giờ)
+
+**Triệu chứng:** trang Next.js nhìn hoàn hảo, không button nào bấm được, console **không có lỗi React**, chỉ có lỗi HMR WebSocket (`net::ERR_INVALID_HTTP_RESPONSE`).
+
+**Nguyên nhân gốc:** `next.config.ts` thiếu `allowedDevOrigins`. Next coi `127.0.0.1` là cross-origin với `localhost` và chặn dev resource `/_next/hmr` + client chunks. Server vẫn trả HTML server-render đầy đủ nên trang nhìn bình thường, nhưng client bundle không chạy → React không hydrate → mọi button mất handler. Config này **cần restart dev server**.
+
+**Cách kiểm trong 2 giây, không đoán:**
+```js
+let n = 0;
+const walk = (el) => {
+  for (const k of Object.getOwnPropertyNames(el)) if (k.startsWith('__reactFiber$')) n++;
+  for (const c of el.children) walk(c);
+};
+walk(document.body); // 0 = không hydrate
+```
+
+**Bài học:** khi "trông bình thường nhưng không tương tác được" → đo trạng thái runtime, đọc log dev server, đừng sửa mã rồi reload lặp lại. Lượt này đoán sai ~10 vòng (thêm reload, dựng native listener thủ công, đổi ref, đổi kích thước icon) trước khi đếm được fiber.
+
+## Can ban nhin ky (rule 31.3) — lượt redesign
+
+- **Chưa commit, chưa push.** Branch track thẳng `origin/main`, đẩy lên có thể lên `main`. Chờ chủ sản phẩm chọn hướng.
+- **Cookie banner chưa làm** (đã chốt hướng, chờ duyệt để code).
+- **Câu chữ pháp lý chưa qua luật sư.** Đặc biệt §3a xuyên biên giới và 7 con số thời gian.
+- **`draft: true` còn trên 7 trang** — cố ý, chờ có pháp nhân.
+- **Test `council-fixture` đỏ từ trước**, không do lượt này.
