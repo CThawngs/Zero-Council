@@ -60,6 +60,16 @@ export async function GET(request: Request) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      // Check redirect user to set a dedicated password for Zero-Council
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const isGoogleOnly = user?.app_metadata?.providers?.includes('google') &&
+      !user.app_metadata?.providers?.includes('email')
+
+      if (isGoogleOnly) {
+        return NextResponse.redirect(`${redirectOrigin}/auth`)
+      }
+
       return NextResponse.redirect(`${redirectOrigin}${next}`)
     }
 

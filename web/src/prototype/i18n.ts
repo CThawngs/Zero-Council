@@ -298,8 +298,14 @@ export const copy = {
     authCheckEmail: 'Check your email for a confirmation link.',
     authSignInPending: 'Redirecting to your council…',
 
+    authSetPasswordEyebrow: 'Set Password',
+    authSetPasswordTitle: 'Setup a new password',
+    authSetPasswordBody: 'Forgot your password or just signed in for the first time with a Google Account',
+
     authShowcaseTitle: 'A council, not a single opinion',
     authShowcaseBody:
+      'Convene a handful of AI advisors, each with its own model and point of view, before you commit to a decision.',
+    authShowcaseSubtitle:
       'Convene a handful of AI advisors, each with its own model and point of view, before you commit to a decision.',
     authShowcaseFeature1Title: 'Multiple advisors, one conversation',
     authShowcaseFeature1Body: 'Each model argues its own corner — parallel takes or a live back-and-forth, your call.',
@@ -849,14 +855,6 @@ export const copy = {
     continueWithDiscord: 'Continue with Discord',
     orSignUp: 'Or Sign Up',
     orSignIn: 'Or Sign In',
-    authShowcaseTitle: 'A council, not a single opinion',
-    authShowcaseSubtitle: 'Convene a handful of AI advisors, each with its own model and point of view, before you commit to a decision.',
-    authShowcaseFeature1Title: 'Multiple advisors, one conversation',
-    authShowcaseFeature1Body: 'Each model argues its own corner — parallel takes or a live back-and-forth, your call.',
-    authShowcaseFeature2Title: 'Your own API keys',
-    authShowcaseFeature2Body: 'Bring keys from any provider. You pick the models, you see the cost.',
-    authShowcaseFeature3Title: 'Good / baseline / risk, mapped out',
-    authShowcaseFeature3Body: 'Every recommendation branches into the scenarios behind it, not just a verdict.',
     authErrorTitle: 'Authentication Failed',
     authErrorSubtitle: 'We encountered an issue while verifying your credentials.',
     authErrorLabel: 'Error: ',
@@ -1083,9 +1081,15 @@ export const copy = {
     authCheckEmail: 'Kiểm tra email để xác nhận đăng ký.',
     authSignInPending: 'Đang chuyển tới hội đồng của bạn…',
 
+    authSetPasswordEyebrow: 'Tạo mật khẩu',
+    authSetPasswordTitle: 'Thiết lập mật khẩu mới',
+    authSetPasswordBody: 'Dùng khi bạn quên mật khẩu hoặc lần đầu đăng nhập bằng Tài khoản Google',
+
     authShowcaseTitle: 'Một hội đồng, không phải một ý kiến',
     authShowcaseBody:
       'Triệu tập vài cố vấn AI, mỗi cố vấn có mô hình và góc nhìn riêng, trước khi bạn chốt một quyết định.',
+    authShowcaseSubtitle:
+      'Triệu tập nhiều cố vấn AI, mỗi cố vấn có mô hình và góc nhìn riêng, trước khi bạn chốt quyết định.',
     authShowcaseFeature1Title: 'Nhiều cố vấn, một cuộc trò chuyện',
     authShowcaseFeature1Body: 'Mỗi mô hình bảo vệ một lập luận riêng — các góc nhìn song song hoặc tranh luận trực tiếp, bạn chọn.',
     authShowcaseFeature2Title: 'Khoá API của bạn',
@@ -1636,14 +1640,6 @@ export const copy = {
     continueWithDiscord: 'Tiếp tục với Discord',
     orSignUp: 'Hoặc Đăng ký',
     orSignIn: 'Hoặc Đăng nhập',
-    authShowcaseTitle: 'Một hội đồng, không chỉ một ý kiến đơn lẻ',
-    authShowcaseSubtitle: 'Triệu tập nhiều cố vấn AI, mỗi cố vấn có mô hình và góc nhìn riêng, trước khi bạn chốt quyết định.',
-    authShowcaseFeature1Title: 'Nhiều cố vấn, chung một cuộc trao đổi',
-    authShowcaseFeature1Body: 'Mỗi mô hình bảo vệ góc nhìn riêng — nhận định song song hoặc đối thoại trực tiếp, tùy bạn chọn.',
-    authShowcaseFeature2Title: 'Dùng khóa API của chính bạn',
-    authShowcaseFeature2Body: 'Sử dụng khóa từ bất kỳ nhà cung cấp nào. Bạn tự chọn mô hình, tự theo dõi chi phí.',
-    authShowcaseFeature3Title: 'Dự liệu thuận lợi / trung tính / rủi ro',
-    authShowcaseFeature3Body: 'Mỗi khuyến nghị đều phân nhánh thành các kịch bản thực tế, không chỉ là phán quyết đơn thuần.',
     authErrorTitle: 'Xác thực thất bại',
     authErrorSubtitle: 'Đã xảy ra sự cố trong quá trình xác minh thông tin đăng nhập của bạn.',
     authErrorLabel: 'Lỗi: ',
