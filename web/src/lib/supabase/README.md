@@ -24,7 +24,7 @@ trong trường hợp user click vào Google để đăng ký account -> vào da
 ### Các khó khăn trong quá trình làm email:
 - Supabase chỉ hỗ trợ 2 email / 1 giờ. Không thể chỉnh email mà không có SMTP custom nên không thể dùng workflow gửi code cho người dùng, chỉ có workflow link mặc định.
 - Resend chỉ hỗ trợ email test (onboarding@resend.dev) với tài khoản chính chủ đăng ký dịch vụ resend.
-=> Dùng tạm Supabase để ít nhất có nhiều người dùng được.
+=> Dùng tạm Supabase để ít nhất có nhiều người dùng được và không thể sử dụng phương thức gửi code để verify người dùng.
 
 ## TODO
 - [X] Init Supabase
@@ -33,5 +33,5 @@ trong trường hợp user click vào Google để đăng ký account -> vào da
 - [X] Gắn Đăng nhập qua Email
 - [X] Gắn Đăng ký qua Google, yêu cầu tạo mk riêng cho Zero-Council
 - [X] Gắn Đăng nhập qua Google
-- [ ] Gắn Tạo lại mật khẩu
+- [X] Gắn Tạo lại mật khẩu
 - [X] Gộp tài khoản nếu trùng email và Google
