@@ -23,8 +23,6 @@ import { LegalView } from './components/LegalView';
 import { CookieNotice, AnalyticsLoader } from './components/CookieNotice';
 import { CheckoutDrawer } from './components/CheckoutDrawer';
 import { legalDocumentOf } from './types';
-import { SignInView } from './components/SignInView';
-import { SignUpView } from './components/SignUpView';
 
 const ChamberContent: React.FC = () => {
   const { currentView, t, checkoutPlan, closeCheckout } = useApp();
@@ -53,8 +51,8 @@ const ChamberContent: React.FC = () => {
           {currentView === 'settings' && <SettingsView />}
           {currentView === 'billing' && <BillingHistoryView />}
           {legalDocumentOf(currentView) && <LegalView />}
-{currentView === 'sign-up' && <SignUpView />}
-          {currentView === 'sign-in' && <SignInView />}
+          {/* {currentView === 'sign-up' && <SignUpView />}
+          {currentView === 'sign-in' && <SignInView />} */}
           {currentView === 'chat-room' && <ChatRoomView />}
         </main>
       </div>

@@ -44,6 +44,10 @@ export async function GET(request: Request) {
     })
 
     if (!error) {
+      // Riêng luồng tạo mật khẩu chuyển về /auth
+      if (type === 'recovery')
+        return NextResponse.redirect(`${redirectOrigin}/auth`);
+
       return NextResponse.redirect(`${redirectOrigin}${next}`)
     }
 

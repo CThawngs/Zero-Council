@@ -13,29 +13,6 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   const headerRef = useRef<HTMLElement>(null);
   const mobileNavigationRef = useRef<HTMLDivElement>(null);
   const labels = translations[language];
-  // const [user, setUser] = useState<User | null>(null);
-  // const [authLoading, setAuthLoading] = useState(true);
-
-  // // Kiểm tra trạng thái đăng nhập trên header
-  // useEffect(() => {
-  //   const supabase = createClient();
-    
-  //   supabase.auth.getUser().then(({ data }) => setUser(data.user));
-
-  //   const { data: { subscription }} = supabase.auth.onAuthStateChange((_event, session) => {
-  //     setUser(session?.user ?? null);
-  //     setAuthLoading(false);
-  //   });
-
-  //   return () => subscription.unsubscribe();
-  // }, [])
-
-  // const handleSignOut = async () => {
-  //   const supabase = createClient();
-  //   await supabase.auth.signOut();
-  //   setUser(null);
-  //   window.location.href="/";
-  // }
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -83,11 +60,14 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   }, [menuOpen]);
 
   const navigate = (view: ViewType) => {
+    if ((view === 'sign-in' || view === 'sign-up' || view === 'set-password') && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth'))
+      window.location.href = '/auth';
+
     // /auth is a separate route with its own, isolated app state. It only
     // ever renders the sign-in/sign-up views, so switching to any other view
     // there leaves the page blank. Send those clicks back to the real home
     // page instead of changing local state that nothing on this route reads.
-    if (view !== 'sign-in' && view !== 'sign-up' && typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
+    if (view !== 'sign-in' && view !== 'sign-up' && view !== 'set-password' && typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
       window.location.href = '/';
       return;
     }

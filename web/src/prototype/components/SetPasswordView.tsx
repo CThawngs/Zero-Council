@@ -1,19 +1,54 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
+import { Eye, EyeOff, LockKeyhole, Mail, RefreshCw, Save } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SetPasswordView: React.FC = () => {
     const { t } = useApp();
-    const [email, setEmail] = useState('');
+    const [email, setEmail] = useState(''); 
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
 
-  async function handleSignIn(event: FormEvent) {
+    const [loading, setLoading] = useState(true);
+    const [isValidToken, setIsValidToken] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    // Lắng nghe sự kiện khôi phục mật khẩu / xác thực từ URL
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || session) {
+        if (session?.user?.email) {
+          setEmail(session.user.email);
+        }
+        setIsValidToken(true);
+        setLoading(false);
+      }
+    });
+
+    // Timeout 3s dự phòng trường hợp liên kết lỗi/hết hạn không kích hoạt auth state
+    const timer = setTimeout(() => {
+      setLoading((prevLoading) => {
+        if (prevLoading) {
+          setIsValidToken(false);
+          return false;
+        }
+        return false;
+      });
+    }, 3000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
+  }, []);
+
+  
+  async function handleNewSetPassword(event: FormEvent) {
     event.preventDefault();
     setError('');
 
@@ -27,12 +62,10 @@ export const SetPasswordView: React.FC = () => {
       return;
     }
 
-    // A full navigation, not a client-side route change: the workspace reads the session on
-    // mount, so only a fresh load turns the visitor into a signed-in user. Pushing a route would
-    // leave the same page rendering as if nobody were logged in.
     window.location.href = '/';
   }
 
+  
   return (
     <div className="grid min-h-[calc(100vh-76px)] lg:grid-cols-2">
       <AuthShowcase />
@@ -47,17 +80,37 @@ export const SetPasswordView: React.FC = () => {
             <p>{t.authSetPasswordBody}</p>
           </header>
 
-          <form onSubmit={handleSignIn} className="panel space-y-5 p-5 sm:p-7">
+          { /* TRẠNG THÁI 1: Đang load */
+            loading ? (
+            <div className="panel flex flex-col items-center justify-center p-8 space-y-3 text-center">
+              <RefreshCw className="h-6 w-6 animate-spin text-ink-muted" />
+              <p className="text-sm text-ink-muted">{t.authValidatingLink}</p>
+            </div>
+          ) : isValidToken ? (
+            /* TRẠNG THÁI 2: Link không hợp lệ / Hết hạn */
+            <div className="panel p-6 text-center space-y-4">
+              <p className="text-red-500 font-medium">{t.authInvalidTokenTitle}</p>
+              <p className="text-sm text-ink-muted">{t.authInvalidTokenBody}</p>
+              <a 
+                href="/auth"
+                className="button-primary inline-flex items-center justify-center min-h-10 px-4 w-full"
+              >
+                {t.authResendEmailAction}
+              </a>
+            </div>
+          ) : (
+            /* TRẠNG THÁI 3: Các yêu cầu hợp lệ */
+          <form onSubmit={handleNewSetPassword} className="panel space-y-5 p-5 sm:p-7">
             <label className="field">
               <span className="field-label">{t.authEmail}</span>
               <div className="relative">
                 <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
                 <input
                   type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={email ? email : ''}
                   placeholder="you@example.com"
                   required
+                  readOnly
                   style={{ paddingLeft: '2.25rem' }}
                   autoComplete="email"
                 />
@@ -89,12 +142,13 @@ export const SetPasswordView: React.FC = () => {
             </label>
 
             <button type="submit" className="button-primary min-h-11 w-full justify-center">
-              <LogIn className="h-4 w-4" />
-              {t.authSignInAction}
+              <Save className="h-4 w-4" />
+              {t.authUpdatePassword}
             </button>
 
             {error && <p className="field-error" role="alert">{error}</p>}
           </form>
+          )}
         </div>
       </div>
     </div>

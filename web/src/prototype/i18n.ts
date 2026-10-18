@@ -302,6 +302,16 @@ export const copy = {
     authSetPasswordTitle: 'Setup a new password',
     authSetPasswordBody: 'Forgot your password or just signed in for the first time with a Google Account',
 
+    authForgotPasswordLink: 'Forgot Password?',
+    authEmailRequiredError: 'Please enter your email address before resetting your password.',
+    authGenericError: 'An error occurred, please try again.',
+
+    authValidatingLink: 'Validating reset password link...',
+    authInvalidTokenTitle: '⚠️ Invalid or expired link.',
+    authInvalidTokenBody: 'Please request a new email to continue.',
+    authResendEmailAction: 'Request new email',
+    authUpdatePassword: 'Update',
+
     authShowcaseTitle: 'A council, not a single opinion',
     authShowcaseBody:
       'Convene a handful of AI advisors, each with its own model and point of view, before you commit to a decision.',
@@ -1078,12 +1088,22 @@ export const copy = {
     authOrSignIn: 'Hoặc đăng nhập',
     authShowPassword: 'Hiện mật khẩu',
     authHidePassword: 'Ẩn mật khẩu',
-    authCheckEmail: 'Kiểm tra email để xác nhận đăng ký.',
+    authCheckEmail: 'Kiểm tra email để lấy đường dẫn xác nhận.',
     authSignInPending: 'Đang chuyển tới hội đồng của bạn…',
 
     authSetPasswordEyebrow: 'Tạo mật khẩu',
     authSetPasswordTitle: 'Thiết lập mật khẩu mới',
     authSetPasswordBody: 'Dùng khi bạn quên mật khẩu hoặc lần đầu đăng nhập bằng Tài khoản Google',
+
+    authForgotPasswordLink: 'Quên mật khẩu?',
+    authEmailRequiredError: 'Vui lòng nhập địa chỉ email của bạn trước khi đặt lại mật khẩu.',
+    authGenericError: 'Có lỗi xảy ra, vui lòng thử lại.',
+
+    authValidatingLink: 'Đang xác thực liên kết đặt lại mật khẩu...',
+    authInvalidTokenTitle: '⚠️ Liên kết không hợp lệ hoặc đã hết hạn.',
+    authInvalidTokenBody: 'Vui lòng yêu cầu gửi lại email để tiếp tục.',
+    authResendEmailAction: 'Yêu cầu gửi lại email',
+    authUpdatePassword: 'Cập nhật',
 
     authShowcaseTitle: 'Một hội đồng, không phải một ý kiến',
     authShowcaseBody:

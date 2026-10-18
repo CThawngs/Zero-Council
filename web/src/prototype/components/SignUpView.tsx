@@ -30,10 +30,10 @@ export const SignUpView: React.FC = () => {
       options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     });
 
-        if (error) {
-            setError(error.message);
-            return;
-        }
+    if (error) {
+        setError(error.message);
+        return;
+    }
 
     setMessage(t.authCheckEmail);
   }
@@ -84,6 +84,7 @@ export const SignUpView: React.FC = () => {
 
             <label className="field">
               <span className="field-label">{t.authPassword}</span>
+              
               <div className="relative">
                 <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
                 <input
