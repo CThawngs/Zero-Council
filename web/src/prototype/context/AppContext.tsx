@@ -241,21 +241,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentView, setCurrentView] = useState<ViewType>(restored ? 'chat-room' : 'overview');
   const [language, setLanguage] = useState<Language>(() => {
     try {
-    if (typeof localStorage === 'undefined') return 'en';
-    const s = localStorage.getItem('zc-lang');
-    return s === 'vi' ? 'vi' : 'en';
-  } catch { return 'en'; }
+      if (typeof localStorage === 'undefined') return 'en';
+      const s = localStorage.getItem('zc-lang');
+      return s === 'vi' ? 'vi' : 'en';
+    } catch { return 'en'; }
   });
-  // Server and first client render both start at 'light'. The bootstrap script
-  // has already set data-theme on <html> before paint, and the stored choice
-  // is the source of truth for toggles.
-  const [theme, setTheme] = useState<Theme>(() =>
-    typeof document === 'undefined'
-      ? resolveInitialTheme()
-      : document.documentElement.getAttribute('data-theme') === 'dark'
+
+  // Both server and initial client render start at 'light' so the HTML
+  // matches and hydration succeeds.  The bootstrap script has already set
+  // `data-theme` on <html> before paint, so the user never sees a flash.
+  // After mount the effect below reads the real attribute and adopts it.
+  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
+
+  useEffect(() => {
+    const actual =
+      document.documentElement.getAttribute('data-theme') === 'dark'
         ? 'dark'
-        : 'light'
-  );
+        : 'light';
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTheme((prev) => (prev === actual ? prev : actual));
+  }, []);
+
   const toggleTheme = () => {
     setTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark';
@@ -269,13 +276,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
   };
+
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
-const [isDeliberating, setIsDeliberating] = useState(false);
+  const [isDeliberating, setIsDeliberating] = useState(false);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);

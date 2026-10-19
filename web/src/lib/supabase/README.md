@@ -9,7 +9,6 @@
 Nói chung callback route.ts sẽ xử lý việc trao đổi thông tin (token) giữa server và client, và lưu vào cookies khi đăng ký / đăng nhập
 
 ## Workflow cho Authentication:
-
 User register -> user login bằng pass vừa tạo -> vào dashboard. user quên pass -> nhập email để gửi code rồi nhập code để verify tạo pass mới -> quay lại login để login bằng pass mới
 email chắc dùng của resend
 
@@ -22,11 +21,17 @@ trong trường hợp user click vào Google để đăng ký account -> vào da
 - trường hợp 1: A đăng ký account bằng Google -> tạo account thành công -> buộc phải tạo password -> truy cập vào dashboad. Lần sau có đăng nhập bằng tay (không thông qua Google) -> hệ thống verify email và password như bình thường -> truy cập vào dashboard.
 - trường hợp 2: B đăng ký account bằng tay -> tạo account thành công -> truy cập vào dashboard -> lần sau đăng nhập bằng Google -> hệ thống verify và merge vào account đã tạo trước đó (vì trùng email) -> mọi lịch sử chat, mọi data của account đã tạo trước đó đều hiển thị như bình thường vì đã merge
 
+### Các khó khăn trong quá trình làm email:
+- Supabase chỉ hỗ trợ 2 email / 1 giờ. Không thể chỉnh email mà không có SMTP custom nên không thể dùng workflow gửi code cho người dùng, chỉ có workflow link mặc định.
+- Resend chỉ hỗ trợ email test (onboarding@resend.dev) với tài khoản chính chủ đăng ký dịch vụ resend.
+=> Dùng tạm Supabase để ít nhất có nhiều người dùng được và không thể sử dụng phương thức gửi code để verify người dùng.
+
 ## TODO
 - [X] Init Supabase
 - [X] Tạo Clients
 - [X] Gắn Đăng ký qua Email
 - [X] Gắn Đăng nhập qua Email
-- [ ] Gắn Đăng ký qua Google, yêu cầu tạo mk riêng cho Zero-Council
-- [ ] Gắn Đăng nhập qua Google
-- [ ] Gộp tài khoản nếu trùng email và Google
+- [X] Gắn Đăng ký qua Google, yêu cầu tạo mk riêng cho Zero-Council
+- [X] Gắn Đăng nhập qua Google
+- [X] Gắn Tạo lại mật khẩu
+- [X] Gộp tài khoản nếu trùng email và Google

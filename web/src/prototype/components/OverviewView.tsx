@@ -43,7 +43,7 @@ export const OverviewView: React.FC = () => {
     <div className="mx-auto w-full max-w-6xl space-y-20 py-8 sm:py-12">
       {/* Hero: headline + CTA on the left, 3D council stage on the right. */}
       <section className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:gap-14">
-        <div>
+        <div className="w-full">
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-3.5 py-1.5 text-xs font-bold text-ink">
             <Sparkles className="h-3.5 w-3.5 text-[var(--tint-violet)]" aria-hidden="true" />
             <span className="text-ink-muted">{t.overviewEyebrow}</span>
@@ -82,7 +82,7 @@ export const OverviewView: React.FC = () => {
           <div className="blob blob--blue -top-6 -left-6 h-48 w-48" aria-hidden="true" />
           <div className="blob blob--orange -bottom-6 -right-6 h-48 w-48" aria-hidden="true" />
 
-          <div className="relative h-[26rem] w-[26rem]">
+          <div className="relative w-full max-w-[20rem] sm:max-w-[26rem] aspect-square">
             <CouncilOrb className="z-10" />
 
             {/* Floating pill 1: live state indicator. */}
