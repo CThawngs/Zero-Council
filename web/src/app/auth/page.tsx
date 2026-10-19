@@ -21,41 +21,30 @@ function AuthContent() {
     useEffect(() => {
         const supabase = createClient();
 
-        // 1. Lắng nghe sự kiện thay đổi trạng thái xác thực từ Supabase
-        // Mọi sự kiện như PASSWORD_RECOVERY từ URL hash sẽ tự động kích hoạt callback này
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        // Lắng nghe tất cả sự kiện Auth (bao gồm cả khi vừa load trang nhận token hoặc session)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            // 1. Nếu là luồng reset password từ email
             if (event === 'PASSWORD_RECOVERY') {
                 setCurrentView('set-password');
+                return;
             }
-        });
 
-        // 2. Kiểm tra thông tin người dùng hiện tại
-        async function checkUser() {
-            const { data: { user } } = await supabase.auth.getUser();
-
-            if (user) {
-                // Kiểm tra xem người dùng chỉ mới đăng nhập bằng Google và chưa có email/password
-                const providers = user.app_metadata?.providers || [];
-                const isGoogleOnly = providers.includes('google') && !providers.includes('email');
-
-                if (isGoogleOnly) {
+            // 2. Nếu đã có session (ví dụ Google OAuth)
+            if (session?.user) {
+                const providers = session.user.app_metadata?.providers || [];
+                if (providers.includes('google') && !providers.includes('email')) {
                     setCurrentView('set-password');
                     return;
                 }
             }
 
-            // Mặc định đặt view ban đầu thành sign-in nếu không ở trạng thái đặc biệt
-            if (currentView !== 'sign-up' && currentView !== 'sign-in' && currentView !== 'set-password') {
-                setCurrentView('sign-in');
-            }
-        }
-
-        checkUser();
+            // 3. Các trường hợp còn lại mặc định về sign-in
+            setCurrentView((currentView === 'sign-in' || currentView === 'sign-up') ? currentView : 'sign-in');
+        });
 
         return () => {
             subscription.unsubscribe();
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
