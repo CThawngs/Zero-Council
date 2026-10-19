@@ -86,7 +86,7 @@ export const SetPasswordView: React.FC = () => {
               <RefreshCw className="h-6 w-6 animate-spin text-ink-muted" />
               <p className="text-sm text-ink-muted">{t.authValidatingLink}</p>
             </div>
-          ) : isValidToken ? (
+          ) : !isValidToken ? (
             /* TRẠNG THÁI 2: Link không hợp lệ / Hết hạn */
             <div className="panel p-6 text-center space-y-4">
               <p className="text-red-500 font-medium">{t.authInvalidTokenTitle}</p>

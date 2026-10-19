@@ -57,7 +57,7 @@ export const SignInView: React.FC = () => {
 
     const supabase = await createClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth`,
     });
 
     if (error)
@@ -105,7 +105,7 @@ export const SignInView: React.FC = () => {
                 <button
                 type="button"
                 onClick={resetPassword}
-                className="max-w-fit field-label !text-brass hover:underline disabled:opacity-50"
+                className="max-w-fit field-label text-brass! hover:underline disabled:opacity-50"
                 >
                   {t.authForgotPasswordLink}
                 </button>
