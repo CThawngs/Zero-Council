@@ -55,21 +55,15 @@ export const SignInView: React.FC = () => {
       return;
     }
 
-    try {
-      const supabase = await createClient();
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth`,
-      });
+    const supabase = await createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth`,
+    });
 
-      if (error)
-        setError(error.message);
+    if (error)
+      setError(error.message);
 
-      setMessage(t.authCheckEmail);
-    } catch (err: any) {
-      setError(err?.message || t.authGenericError);
-    } finally {
-    }
-    
+    setMessage(t.authCheckEmail);
   }
 
   return (

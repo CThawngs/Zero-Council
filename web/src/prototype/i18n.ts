@@ -335,7 +335,7 @@ export const copy = {
     framework1Tag: '3 Perspectives',
     framework2Tag: '6 Thinking Hats',
     framework3Tag: 'Weighted Matrix',
-    heroAdvisorsPerSession: '4-8 AI advisors per session',
+    heroAdvisorsPerSession: '2-8 AI advisors per session',
     legalDraftNotice:
       'Draft document. These terms describe how we behave, but the operator behind this service has not published its registered details yet. Treat this as a statement of intent, not a final contract.',
     legal: {
@@ -1130,7 +1130,7 @@ export const copy = {
     framework1Tag: '3 góc nhìn',
     framework2Tag: '6 chiếc mũ tư duy',
     framework3Tag: 'Ma trận có trọng số',
-    heroAdvisorsPerSession: '4-8 cố vấn AI mỗi phiên',
+    heroAdvisorsPerSession: '2-8 cố vấn AI mỗi phiên',
     legalDraftNotice:
       'Văn bản bản nháp. Các nội dung dưới đây mô tả cách chúng tôi sẽ hành xử, nhưng đơn vị vận hành phía sau dịch vụ chưa công bố thông tin đăng ký. Hãy hiểu đây là tuyên bố hướng, chưa phải hợp đồng cuối cùng.',
     legal: {
