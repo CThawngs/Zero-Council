@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Eye, EyeOff, LockKeyhole, Mail, RefreshCw, Save } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
+import { useRouter } from 'next/router';
 
 export const SetPasswordView: React.FC = () => {
     const { t } = useApp();
@@ -53,13 +54,34 @@ export const SetPasswordView: React.FC = () => {
     setError('');
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.updateUser({
-        password: password,
-    });
 
-    if (error) {
-      setError(error.message);
-      return;
+    // Kiểm tra đang làm ràng buộc mật khẩu hay tạo lại mật khẩu
+    const { data: {session} } = await supabase.auth.getSession();
+    const isGoggleOnly = session?.user.app_metadata.providers?.includes('email') ? true : false;
+
+    if (isGoggleOnly) {
+      await supabase.auth.signOut({
+        scope: 'local'
+      });
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        setError(error.message);
+        return;
+      }
+    } else {
+      const { error } = await supabase.auth.updateUser({
+        password: password,
+      });
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
     }
 
     window.location.href = '/';

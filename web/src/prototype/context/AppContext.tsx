@@ -305,7 +305,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
-const [isDeliberating, setIsDeliberating] = useState(false);
+  const [isDeliberating, setIsDeliberating] = useState(false);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
@@ -393,9 +393,12 @@ const [isDeliberating, setIsDeliberating] = useState(false);
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope: 'local'
+    });
     setAuthUser(null);
     setCheckoutPlan(null);
+    window.location.href = '/';
     setCurrentView('overview');
     window.scrollTo(0, 0);
   };
