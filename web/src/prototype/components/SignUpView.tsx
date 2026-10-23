@@ -27,7 +27,12 @@ export const SignUpView: React.FC = () => {
       // `emailRedirectTo`, and the session cookie is only written by the handler in
       // `/auth/callback` (`verifyOtp`). Sending the user straight to `/` drops the token: no
       // cookie, no session, and the page loads as if the sign-up never happened.
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      options: { 
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        data: {
+          has_password: true,
+        }
+      },
     });
 
     if (error) {

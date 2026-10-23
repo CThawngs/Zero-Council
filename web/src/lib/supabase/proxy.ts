@@ -65,12 +65,11 @@ export async function updateSession(request: NextRequest) {
 
   // Check force user to set a dedicated password for Zero-Council
   if (user) {
-    const isGoogleOnly = user.app_metadata?.providers?.includes('google') &&
-    !user.app_metadata?.providers?.includes('email')
+    const hasPassword = user.user_metadata?.has_password === true;
 
     const path = request.nextUrl.pathname;
 
-    if (isGoogleOnly && path !== '/auth') {
+    if (!hasPassword && path !== '/auth') {
       return NextResponse.redirect(new URL('/auth', request.url))
     }
   }
