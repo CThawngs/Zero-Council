@@ -63,6 +63,18 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Check force user to set a dedicated password for Zero-Council
+  if (user) {
+    const isGoogleOnly = user.app_metadata?.providers?.includes('google') &&
+    !user.app_metadata?.providers?.includes('email')
+
+    const path = request.nextUrl.pathname;
+
+    if (isGoogleOnly && path !== '/auth') {
+      return NextResponse.redirect(new URL('/auth', request.url))
+    }
+  }
+  
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:

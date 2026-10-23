@@ -245,8 +245,38 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
   };
 };
 
+ feature/council-complete-sync
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+/**
+ * Unimplemted code to allow
+ * server access to localStorage
+ */
+// 1. Storage EventListener in the browser (to check for new update to storage)
+function subscribeLanguage(callback: () => void) {
+  window.addEventListener('storage', callback);
+  return () => window.removeEventListener('storage', callback);
+}
+
+// 2. Snapshot on Client (from localStorage)
+function getLanguageSnapshot(): Language {
+  try {
+    const saved = localStorage.getItem('zero_council_lang');
+    if (saved === 'en' || saved === 'vi') return saved;
+  } catch {}
+  return 'en';
+}
+// 3. Snapshot on Server (Next.js SSR default to 'en')
+function getLanguageServerSnapshot(): Language {
+  return 'en';
+}
+
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Read once. The room and the view have to be decided from the SAME read, or a reload drops the
+  // user on the marketing page with a live deliberation sitting unread behind it — which is worse
+  // than losing the room, because nothing looks broken.
+  const [restored] = useState(() => readStoredRoom());
+ main
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
@@ -268,6 +298,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [language, setLanguageState] = useState<Language>('en');
   useIsomorphicLayoutEffect(() => {
     try {
+ feature/council-complete-sync
       if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
     } catch {
       // Storage blocked: stay on the default.
@@ -291,6 +322,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useIsomorphicLayoutEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
   }, []);
+
+    if (typeof localStorage === 'undefined') return 'en';
+    const s = localStorage.getItem('zc-lang');
+    return s === 'vi' ? 'vi' : 'en';
+  } catch { return 'en'; }
+  });
+
+  // Both server and initial client render start at 'light' so the HTML
+  // matches and hydration succeeds.  The bootstrap script has already set
+  // `data-theme` on <html> before paint, so the user never sees a flash.
+  // After mount the effect below reads the real attribute and adopts it.
+  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
+
+  useEffect(() => {
+    const actual =
+      document.documentElement.getAttribute('data-theme') === 'dark'
+        ? 'dark'
+        : 'light';
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setTheme((prev) => (prev === actual ? prev : actual));
+  }, []);
+
+ main
   const toggleTheme = () => {
     setTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark';

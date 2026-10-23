@@ -7,6 +7,8 @@ import { Header } from '@/prototype/components/Header';
 import { Toast } from '@/prototype/components/Toast';
 import { SignUpView } from '@/prototype/components/SignUpView';
 import { SignInView } from '@/prototype/components/SignInView';
+import { SetPasswordView } from '@/prototype/components/SetPasswordView';
+import { createClient } from '@/lib/supabase/client';
 
 function AuthContent() {
     const { currentView, setCurrentView, t } = useApp();
@@ -17,10 +19,32 @@ function AuthContent() {
     // so currentView always starts at its default ('overview'). Point it at
     // the sign-in form the first time this page mounts.
     useEffect(() => {
-        if (currentView !== 'sign-in' && currentView !== 'sign-up') {
-            setCurrentView('sign-in');
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        const supabase = createClient();
+
+        // Lắng nghe tất cả sự kiện Auth (bao gồm cả khi vừa load trang nhận token hoặc session)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            // 1. Nếu là luồng reset password từ email
+            if (event === 'PASSWORD_RECOVERY') {
+                setCurrentView('set-password');
+                return;
+            }
+
+            // 2. Nếu đã có session (ví dụ Google OAuth)
+            if (session?.user) {
+                const providers = session.user.app_metadata?.providers || [];
+                if (providers.includes('google') && !providers.includes('email')) {
+                    setCurrentView('set-password');
+                    return;
+                }
+            }
+
+            // 3. Các trường hợp còn lại mặc định về sign-in
+            setCurrentView((currentView === 'sign-in' || currentView === 'sign-up') ? currentView : 'sign-in');
+        });
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     return (
@@ -28,16 +52,17 @@ function AuthContent() {
             <a href="#main-content" className="skip-link">{t.skipToContent}</a>
             <Header isWorkspace={!isPublicPage} />
             <div className="flex min-h-screen flex-1 pt-[76px]">
-            <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
-                {currentView === 'sign-up' && <SignUpView/>}
-                {currentView === 'sign-in' && <SignInView/>}
-            </main>
+                <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
+                    {currentView === 'sign-up' && <SignUpView />}
+                    {currentView === 'sign-in' && <SignInView />}
+                    {currentView === 'set-password' && <SetPasswordView />}
+                </main>
             </div>
             {isPublicPage && <Footer />}
             <Toast />
             <span className="sr-only" aria-live="polite">{t.localBadge}</span>
         </div>
-    )
+    );
 }
 
 export default function Authentication() {
@@ -46,4 +71,4 @@ export default function Authentication() {
             <AuthContent />
         </AppProvider>
     );
-};
+}

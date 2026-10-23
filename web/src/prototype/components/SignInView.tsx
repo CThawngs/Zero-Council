@@ -3,15 +3,18 @@
 import { createClient } from '@/lib/supabase/client';
 import { FormEvent, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SignInView: React.FC = () => {
-  const { setCurrentView, t } = useApp();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+    const { setCurrentView, t } = useApp();
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
+    const [message, setMessage] = useState('');
+    const [error, setError] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+
+    // Cân nhắc thêm trạng thái time out mỗi lần nhấn reset password
 
   async function handleSignIn(event: FormEvent) {
     event.preventDefault();
@@ -42,6 +45,26 @@ export const SignInView: React.FC = () => {
     // On success Supabase redirects the browser to the provider and back to /auth/callback,
     // so there is nothing else to do here.
   };
+
+  async function resetPassword() {
+    setError('');
+    setMessage('');
+
+    if (!email) {
+      setError(t.authEmailRequiredError);
+      return;
+    }
+
+    const supabase = await createClient();
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth`,
+    });
+
+    if (error)
+      setError(error.message);
+
+    setMessage(t.authCheckEmail);
+  }
 
   return (
     <div className="grid min-h-[calc(100vh-76px)] lg:grid-cols-2">
@@ -74,8 +97,20 @@ export const SignInView: React.FC = () => {
               </div>
             </label>
 
-            <label className="field">
-              <span className="field-label">{t.authPassword}</span>
+            <div className="field">
+              <div className='flex justify-between'>
+                <span className="field-label">{t.authPassword}</span>
+
+                {/* Đặt lại mk */}
+                <button
+                type="button"
+                onClick={resetPassword}
+                className="max-w-fit field-label text-brass! hover:underline disabled:opacity-50"
+                >
+                  {t.authForgotPasswordLink}
+                </button>
+              </div>
+              
               <div className="relative">
                 <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
                 <input
@@ -96,13 +131,19 @@ export const SignInView: React.FC = () => {
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
-            </label>
+            </div>
 
             <button type="submit" className="button-primary min-h-11 w-full justify-center">
               <LogIn className="h-4 w-4" />
               {t.authSignInAction}
             </button>
 
+            {message && (
+              <div className="flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink">
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
+                <span>{message}</span>
+              </div>
+            )}
             {error && <p className="field-error" role="alert">{error}</p>}
 
             <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-ink-muted">
