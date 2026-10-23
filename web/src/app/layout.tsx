@@ -8,6 +8,10 @@ export const metadata: Metadata = {
   title: 'Zero Council — AI decision council',
   description:
     'Convene multiple AI advisors — each with a distinct model and perspective — to think through your decision before you commit.',
+  // Chrome's translate bar reads this. The app ships its own English/Vietnamese (see i18n.ts), and
+  // machine translation rewrites text nodes that React is still holding, which crashes it with
+  // "Failed to execute 'removeChild' on 'Node'" the next time that text changes.
+  other: { google: 'notranslate' },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -20,7 +24,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // what made the build depend on a network call.
     // `dark` is deliberately absent: the theme is driven by [data-theme='dark']
     // in globals.css, and pinning the class here would make it un-switchable.
-    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="en" translate="no" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full" suppressHydrationWarning>
         {/*
           Runs before first paint so a dark-theme visitor never sees a white flash.

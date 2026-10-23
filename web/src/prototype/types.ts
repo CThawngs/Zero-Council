@@ -14,7 +14,8 @@ export type ViewType =
   | LegalView
 | 'sign-up'
   | 'sign-in'
-  | 'chat-room';
+  | 'chat-room'
+  | 'room-summary';
 
 /**
  * Legal documents, one view each.
