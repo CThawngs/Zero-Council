@@ -14,8 +14,12 @@ export type ViewType =
   | LegalView
   | 'sign-up'
   | 'sign-in'
+ feature/council-complete-sync
+  | 'chat-room'
+  | 'room-summary';
   | 'set-password'
   | 'chat-room';
+ main
 
 /**
  * Legal documents, one view each.
