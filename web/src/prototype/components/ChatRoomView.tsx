@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { planById } from '../data/plans';
-import { AlertCircle, ArrowUp, Link2, Maximize2, Minimize2, Square, Trash2, X } from 'lucide-react';
+import { AlertCircle, ArrowUp, ClipboardList, Link2, Maximize2, Minimize2, Square, Trash2, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { USER_HANDLE } from '../chat/engine';
 
@@ -44,7 +44,7 @@ const initialsOf = (name: string): string => {
   return letters.join('').toUpperCase();
 };
 
-const Avatar: React.FC<{ name: string; color: string; size?: 'sm' | 'md' }> = ({ name, color, size = 'md' }) => (
+export const Avatar: React.FC<{ name: string; color: string; size?: 'sm' | 'md' }> = ({ name, color, size = 'md' }) => (
   <span
     aria-hidden="true"
     className={`flex shrink-0 select-none items-center justify-center rounded-full border font-serif font-semibold text-ink ${
@@ -64,6 +64,7 @@ export const ChatRoomView: React.FC = () => {
     currentRoom,
     sendMessage,
     stopRoom,
+    wrapUpRoom,
     clearRoom,
     attachLink,
     removePending,
@@ -225,6 +226,18 @@ export const ChatRoomView: React.FC = () => {
               <Square className="h-4 w-4" aria-hidden="true" />
               {t.chatStop}
             </button>
+            {/* Stop stays what it was — it only aborts a round in flight and is disabled otherwise.
+                Ending the meeting is a different intent, so it gets its own button. */}
+            <button
+              type="button"
+              onClick={wrapUpRoom}
+              disabled={!currentRoom.messages.some((message) => message.authorId !== USER_HANDLE)}
+              title={t.chatWrapUpHint}
+              className="button-secondary min-h-11 justify-center disabled:opacity-45"
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t.chatWrapUp}</span>
+            </button>
             <button type="button" onClick={clearRoom} className="button-quiet min-h-11 justify-center">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               <span className="sr-only sm:not-sr-only">{t.chatClear}</span>
@@ -267,6 +280,11 @@ export const ChatRoomView: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {roster[0] && (
+                <p className="mt-5 max-w-md text-xs leading-relaxed text-ink-muted">
+                  {t.chatOrderHint.replace('{name}', roster[0].name)}
+                </p>
+              )}
             </div>
           )}
           {currentRoom.messages.map((message) => {
