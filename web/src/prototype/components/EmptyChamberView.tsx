@@ -5,7 +5,7 @@ import { modelLabel, providerLabel } from '../data/mockData';
 import { Check, Compass, GitBranch, Layers3, MessageSquareText, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
 
 export const EmptyChamberView: React.FC = () => {
-  const { startNewSession, openJoinRoom, personas, personaCap, setCurrentView, t} = useApp();
+  const { startNewSession, openJoinRoom, personas, setCurrentView, t} = useApp();
   const [question, setQuestion] = useState('');
   const [selectedFramework, setSelectedFramework] =
     useState<DecisionFramework>('Good / Normal / Bad Scenarios');
@@ -31,24 +31,11 @@ export const EmptyChamberView: React.FC = () => {
     },
   ];
 
-  // Untouched means "the first few the plan allows"; once the user picks, their choice wins. Ids that
-  // no longer exist (an advisor deleted on the personas page) drop out instead of seating a ghost.
-  const [picked, setPicked] = useState<string[] | null>(null);
-  const selectedIds = (picked ?? personas.slice(0, personaCap).map((persona) => persona.id)).filter((id) =>
-    personas.some((persona) => persona.id === id)
-  );
-  const atCap = selectedIds.length >= personaCap;
-  const togglePersona = (id: string) => {
-    setPicked(selectedIds.includes(id) ? selectedIds.filter((item) => item !== id) : atCap ? selectedIds : [...selectedIds, id]);
-  };
-
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const normalizedQuestion = question.trim();
     if (!normalizedQuestion) return;
-    const chosen = personas.filter((persona) => selectedIds.includes(persona.id));
-    if (chosen.length === 0) return;
-    startNewSession(normalizedQuestion, selectedFramework, chosen);
+    startNewSession(normalizedQuestion, selectedFramework);
   };
 
   return (
@@ -135,55 +122,30 @@ export const EmptyChamberView: React.FC = () => {
             </button>
           </div>
           <ul className="grid gap-3 sm:grid-cols-3">
-            {personas.map((persona) => {
-              const isSelected = selectedIds.includes(persona.id);
-              const isLocked = !isSelected && atCap;
-              return (
-                <li key={persona.id}>
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={isSelected}
-                    aria-disabled={isLocked}
-                    onClick={() => togglePersona(persona.id)}
-                    className={`flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass ${
-                      isSelected ? 'border-brass bg-brass/10' : 'border-border bg-background/70 hover:border-brass/50'
-                    } ${isLocked ? 'opacity-50' : ''}`}
-                  >
-                    <span className="flex min-w-0 items-center gap-2.5">
-                      <span
-                        className="h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: persona.colorHex }}
-                        aria-hidden="true"
-                      />
-                      <span className="min-w-0">
-                        <span className="block min-w-0 truncate text-sm font-medium text-ink">{persona.name}</span>
-                        <span className="block min-w-0 truncate text-[11px] text-ink-muted">
-                          {modelLabel(persona.model)} · {providerLabel(persona.provider)}
-                        </span>
-                      </span>
-                    </span>
-                    <span
-                      className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                        isSelected ? 'border-brass bg-brass text-background' : 'border-border'
-                      }`}
-                      aria-hidden="true"
-                    >
-                      {isSelected && <Check className="h-3.5 w-3.5" />}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
+            {personas.map((persona) => (
+              <li
+                key={persona.id}
+                className="flex min-w-0 items-center justify-between gap-3 rounded-xl border border-border bg-background/70 p-3"
+              >
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: persona.colorHex }}
+                    aria-hidden="true"
+                  />
+                  <div className="min-w-0">
+                    <p className="min-w-0 truncate text-sm font-medium text-ink">{persona.name}</p>
+                    <p className="min-w-0 truncate text-[11px] text-ink-muted">
+                      {modelLabel(persona.model)} · {providerLabel(persona.provider)}
+                    </p>
+                  </div>
+                </div>
+                <span className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-ink-muted">
+                  {t.notImplemented}
+                </span>
+              </li>
+            ))}
           </ul>
-          <p className="text-xs leading-relaxed text-ink-muted" role="status">
-            <span>
-              {selectedIds.length === 0
-                ? t.pickAtLeastOne
-                : t.advisorsPicked.replace('{count}', String(selectedIds.length)).replace('{cap}', String(personaCap))}
-            </span>
-            {atCap && personas.length > personaCap && <span> {t.chatCapNote.replace('{cap}', String(personaCap))}</span>}
-          </p>
         </section>
 
         <div className="flex flex-col gap-4 border-t border-border pt-6 sm:flex-row sm:items-center sm:justify-between">
@@ -193,7 +155,7 @@ export const EmptyChamberView: React.FC = () => {
           </p>
           <button
             type="submit"
-            disabled={!question.trim() || selectedIds.length === 0}
+            disabled={!question.trim()}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
           >
             <Compass className="h-4 w-4" aria-hidden="true" />

@@ -39,13 +39,11 @@ export const scriptedGenerator =
   (request: ChatTurnRequest): BotTurn => {
     if (alwaysSilent?.(request)) return { text: SILENT_TOKEN, handoffs: [], silent: true };
 
-    const { bot, history, waiting, handoffTargets, isClosing, language } = request;
+    const { bot, history, waiting, isClosing, language } = request;
     const opener = OPENERS[language](lensOf(bot));
     const lastUser = [...history].reverse().find((message) => message.authorId === USER_HANDLE);
     const echo = lastUser ? `On "${lastUser.body.slice(0, 120)}" — ` : '';
-    // `waiting` first (the round's own order), then anyone the engine will still accept a handoff to —
-    // which is what lets two scripted advisors keep passing the floor back and forth.
-    const next = waiting[0] ?? handoffTargets?.[0] ?? null;
+    const next = waiting[0] ?? null;
     const nextName = displayName(roster, next?.id ?? null);
 
     // Closing hands back to the user: no handoff, and the prose names them so the UI can mark it.

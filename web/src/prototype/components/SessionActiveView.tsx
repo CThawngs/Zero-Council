@@ -19,7 +19,7 @@ const MODE_DESCRIPTION: Record<CommunicationMode, 'modeIndependentBody' | 'modeD
 export const SessionActiveView: React.FC = () => {
   const {
     currentSession,
-    startCouncilChat,
+    setCurrentView,
     openFrameworkModal,
     setCurrentMode,
     runRound,
@@ -31,16 +31,6 @@ export const SessionActiveView: React.FC = () => {
     language,
   } = useApp();
   const [draft, setDraft] = useState('');
-
-  // The page above is where the user sets up how the council talks; this is where the council starts
-  // talking. Independent answers map to the panel (everyone answers, one summary); debate and chain
-  // both need advisors to hear each other, which is what round-robin turn-taking is.
-  const getRecommendation = () =>
-    startCouncilChat(
-      currentSession.title,
-      currentSession.advisors,
-      currentSession.mode === 'independent' ? 'panel' : 'round-robin'
-    );
 
   const frameworkLabel = {
     'Good / Normal / Bad Scenarios': t.scenarioTitle,
@@ -91,7 +81,7 @@ export const SessionActiveView: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={getRecommendation}
+              onClick={() => setCurrentView('session-concluded')}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
             >
               {t.conclude}
@@ -259,7 +249,7 @@ export const SessionActiveView: React.FC = () => {
       <div className="flex justify-end">
         <button
           type="button"
-          onClick={getRecommendation}
+          onClick={() => setCurrentView('session-concluded')}
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:w-auto"
         >
           {t.conclude}
