@@ -98,7 +98,7 @@ interface Credentials {
 
 /** What each advisor is told about themselves and the room. Kept short: the transcript is the context. */
 const systemPrompt = (request: ChatTurnRequest, persona: string | undefined): string => {
-  const roster = (request.handoffTargets ?? request.waiting).map((bot) => `- ${bot.name}`).join('\n');
+  const roster = request.waiting.map((bot) => `- ${bot.name}`).join('\n');
   const closing = request.isClosing
     ? 'You have the floor last in this round. Answer the human directly, then call message_agent with target "user".'
     : // Always offer the human as a target. Without this an advisor who has run out of objections
@@ -259,8 +259,7 @@ export const byokGenerator =
 
     if (!text || text === SILENT_TOKEN) return { text: '', handoffs: [], silent: true };
 
-    const candidates = request.handoffTargets ?? request.waiting;
-    const roster = candidates.length ? candidates : [request.bot];
+    const roster = request.waiting.length ? request.waiting : [request.bot];
     const handoffs = target ? resolveTarget(target, roster) : [];
     // The advisor tried to hand the floor but the target cannot be read or does not resolve. Closing
     // back to the human is the recoverable outcome; dropping it would stall the room on a name no

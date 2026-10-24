@@ -9,7 +9,6 @@ import { Toast } from './components/Toast';
 import { CounterDraftModal } from './components/CounterDraftModal';
 import { JoinRoomModal } from './components/JoinRoomModal';
 import { ChatRoomView } from './components/ChatRoomView';
-import { RoomSummaryView } from './components/RoomSummaryView';
 import { OverviewView } from './components/OverviewView';
 import { EmptyChamberView } from './components/EmptyChamberView';
 import { SessionActiveView } from './components/SessionActiveView';
@@ -55,7 +54,6 @@ const ChamberContent: React.FC = () => {
           {/* {currentView === 'sign-up' && <SignUpView />}
           {currentView === 'sign-in' && <SignInView />} */}
           {currentView === 'chat-room' && <ChatRoomView />}
-          {currentView === 'room-summary' && <RoomSummaryView />}
         </main>
       </div>
       {isPublicPage && <Footer />}
