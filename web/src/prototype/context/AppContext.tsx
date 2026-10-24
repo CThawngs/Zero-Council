@@ -247,35 +247,8 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
-/**
- * Unimplemted code to allow
- * server access to localStorage
- */
-// 1. Storage EventListener in the browser (to check for new update to storage)
-function subscribeLanguage(callback: () => void) {
-  window.addEventListener('storage', callback);
-  return () => window.removeEventListener('storage', callback);
-}
-
-// 2. Snapshot on Client (from localStorage)
-function getLanguageSnapshot(): Language {
-  try {
-    const saved = localStorage.getItem('zero_council_lang');
-    if (saved === 'en' || saved === 'vi') return saved;
-  } catch {}
-  return 'en';
-}
-// 3. Snapshot on Server (Next.js SSR default to 'en')
-function getLanguageServerSnapshot(): Language {
-  return 'en';
-}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Read once. The room and the view have to be decided from the SAME read, or a reload drops the
-  // user on the marketing page with a live deliberation sitting unread behind it — which is worse
-  // than losing the room, because nothing looks broken.
-  const [restored] = useState(() => readStoredRoom());
-  
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -292,14 +265,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
   // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
   // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
-  const [language, setLanguage] = useState<Language>('en');
-
+  const [language, setLanguageState] = useState<Language>('en');
   useIsomorphicLayoutEffect(() => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('zc-lang') !== null) {
-      setLanguage(localStorage.getItem('zc-lang') === 'en' ? 'en' : 'vi');
+    try {
+      if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
+    } catch {
+      // Storage blocked: stay on the default.
     }
   }, []);
-
+  const setLanguage = (next: Language) => {
+    setLanguageState(next);
+    try {
+      localStorage.setItem('zc-lang', next);
+    } catch {
+      // Private mode: the choice still applies for this page view, it just will not persist.
+    }
+  };
   // The first client render has to match the server's, and the server cannot know the visitor's theme,
   // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
   // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun
@@ -310,7 +291,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useIsomorphicLayoutEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
   }, []);
-
   const toggleTheme = () => {
     setTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark';
@@ -330,7 +310,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
-  const [isDeliberating, setIsDeliberating] = useState(false);
+const [isDeliberating, setIsDeliberating] = useState(false);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
@@ -423,12 +403,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut({
-      scope: 'local'
-    });
+    await supabase.auth.signOut();
     setAuthUser(null);
     setCheckoutPlan(null);
-    window.location.href = '/';
     setCurrentView('overview');
     window.scrollTo(0, 0);
   };
