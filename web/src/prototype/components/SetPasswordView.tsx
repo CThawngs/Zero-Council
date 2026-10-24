@@ -54,9 +54,12 @@ export const SetPasswordView: React.FC = () => {
 
     const supabase = await createClient();
     const { error } = await supabase.auth.updateUser({
-        password: password,
-    });
-
+      password: password,
+      data: {
+        has_password: true,
+      }
+    })
+    
     if (error) {
       setError(error.message);
       return;

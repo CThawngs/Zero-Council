@@ -12,10 +12,10 @@ export type ViewType =
   | 'settings'
   | 'billing'
   | LegalView
-  | 'sign-up'
+| 'sign-up'
   | 'sign-in'
-  | 'set-password'
-  | 'chat-room';
+  | 'chat-room'
+  | 'room-summary';
 
 /**
  * Legal documents, one view each.
