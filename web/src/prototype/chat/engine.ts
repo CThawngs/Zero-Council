@@ -50,14 +50,6 @@ export const CONTEXT_SINGLE_EXCERPT = 8_000;
  */
 export const DEFAULT_MAX_TURNS = 12;
 
-/**
- * How many times each advisor may speak for ONE user message when advisors keep handing the floor to
- * each other (round-robin only). Hermes calls these "serial rounds": a message buys at most three,
- * then the last speaker hands back to the human. `runTurn` defaults to 1 so every existing caller and
- * test keeps the single-pass behaviour; the app opts in.
- */
-export const COUNCIL_ROUNDS = 3;
-
 /** Total advisor turns for the whole room, independent of how many messages the user sends. */
 export const DEFAULT_ROOM_BUDGET = 200;
 
@@ -134,12 +126,6 @@ export interface ChatTurnRequest {
   history: ChatMessage[];
   /** Advisors still queued this round. The generator may address any of them. */
   waiting: ChatBot[];
-  /**
-   * Advisors the engine will actually accept a handoff to right now. With one pass this is `waiting`;
-   * with several rounds it also includes advisors who already spoke and still have a turn left, so a
-   * generator that only read `waiting` could never hand the floor back and the loop would not loop.
-   */
-  handoffTargets?: ChatBot[];
   /** True when this is the last scheduled turn: the advisor is expected to close back to the user. */
   isClosing: boolean;
   /** The user's words this round, for adapters that build a separate instruction block. */
@@ -161,11 +147,6 @@ export interface RunTurnInput {
   userMessage: ChatMessage;
   generate: BotGenerator;
   maxTurns?: number;
-  /**
-   * Turns each advisor may take for this one message (default 1). Only round-robin loops: a panel is
-   * defined as everyone answering once and the last one closing, so it ignores this.
-   */
-  rounds?: number;
   roomBudget?: number;
   language?: 'en' | 'vi';
   /** Advisors already spent in this room; drives the `budget` stop reason. */
@@ -386,7 +367,6 @@ export const runTurn = async ({
   userMessage,
   generate,
   maxTurns = DEFAULT_MAX_TURNS,
-  rounds = 1,
   roomBudget = DEFAULT_ROOM_BUDGET,
   language = 'en',
   turnsUsed = 0,
@@ -419,12 +399,6 @@ export const runTurn = async ({
   // A queue rather than an index into `speakers`: an advisor pulled in by a handoff is not
   // necessarily one this round had scheduled, and dropping that reply would lose the A2A handoff.
   const queue = [...speakers];
-  const effectiveRounds = mode === 'panel' ? 1 : Math.max(1, Math.floor(rounds));
-  const turnsBy = new Map<string, number>();
-  const countTurn = (id: string) => turnsBy.set(id, (turnsBy.get(id) ?? 0) + 1);
-  // Ceiling for this message when advisors loop. The advisor holding the last allowed turn is told to
-  // close back to the human, which is what makes the loop end in a question instead of a cut-off.
-  const turnBudget = Math.min(maxTurns, roster.length * effectiveRounds, roomBudget - turnsUsed);
   const failures: TurnFailure[] = [];
   const spoken: string[] = [];
   let produced = 0;
@@ -445,21 +419,11 @@ export const runTurn = async ({
     }
 
     const bot = queue.shift() as ChatBot;
-    const isClosing = (mode === 'panel' && queue.length === 0) || (effectiveRounds > 1 && spoken.length + 1 >= turnBudget);
-    // Everyone after this advisor in join order who still has a turn, so the floor goes round the table
-    // rather than always back to the first seat.
-    const fromHere = roster.findIndex((other) => other.id === bot.id);
-    const handoffTargets =
-      effectiveRounds > 1
-        ? [...roster.slice(fromHere + 1), ...roster.slice(0, fromHere)].filter(
-            (other) => other.id !== bot.id && (turnsBy.get(other.id) ?? 0) < effectiveRounds
-          )
-        : [...queue];
+    const isClosing = mode === 'panel' && queue.length === 0;
     const request: ChatTurnRequest = {
       bot,
       history: buildContext(messages),
       waiting: [...queue],
-      handoffTargets,
       isClosing,
       prompt: userMessage.body,
       language,
@@ -514,7 +478,6 @@ export const runTurn = async ({
       // scheduled advisor still gave up their place. The round is not judged until the queue
       // drains, so one silent advisor does not cut off the advisors behind them.
       spoken.push(bot.id);
-      countTurn(bot.id);
       continue;
     }
     const message: ChatMessage = {
@@ -526,11 +489,10 @@ export const runTurn = async ({
     messages.push(message);
     onTurn?.(message);
     spoken.push(bot.id);
-    countTurn(bot.id);
     produced += 1;
 
     for (const id of dedupe(turn.handoffs)) {
-      if (id === bot.id || id === USER_HANDLE || (turnsBy.get(id) ?? 0) >= effectiveRounds) continue;
+      if (id === bot.id || id === USER_HANDLE || spoken.includes(id)) continue;
       const target = roster.find((other) => other.id === id);
       if (target && !queue.some((waiting) => waiting.id === id)) queue.push(target);
     }

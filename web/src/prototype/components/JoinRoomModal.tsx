@@ -83,7 +83,7 @@ export const JoinRoomModal: React.FC = () => {
       <fieldset className="space-y-3">
         <legend className="field-label">{t.joinRoster}</legend>
         <p id="join-cap-hint" className="text-xs leading-relaxed text-ink-muted">
-          {t.joinCap.replace('{used}', String(selected.length)).replace('{cap}', String(cap))} {t.joinOrderHint}
+          {t.joinCap.replace('{used}', String(selected.length)).replace('{cap}', String(cap))}
         </p>
         <ul className="grid gap-2 sm:grid-cols-2" aria-describedby="join-cap-hint">
           {personas.map((persona) => {
@@ -111,17 +111,7 @@ export const JoinRoomModal: React.FC = () => {
                     <span className="block min-w-0 truncate text-sm font-medium text-ink">{persona.name}</span>
                     <span className="block min-w-0 truncate text-[11px] text-ink-muted">{persona.stance}</span>
                   </span>
-                  {isSelected && (
-                    // The number IS the speaking order: the first advisor picked answers first when the
-                    // user does not @mention anyone. Showing it here is how that rule is discoverable.
-                    <span
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold"
-                      style={{ color: 'var(--color-accent-ink)' }}
-                      aria-label={`${selected.indexOf(persona.id) + 1}`}
-                    >
-                      {selected.indexOf(persona.id) + 1}
-                    </span>
-                  )}
+                  {isSelected && <Check className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />}
                 </button>
               </li>
             );
