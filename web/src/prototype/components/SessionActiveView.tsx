@@ -164,16 +164,13 @@ export const SessionActiveView: React.FC = () => {
           </div>
         ) : (
           <form onSubmit={submit} className="rounded-2xl border border-border bg-surface p-5">
-            <label htmlFor="follow-up-question" className="field-label">
-              {t.followUpLabel}
-            </label>
             <textarea
               id="follow-up-question"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               placeholder={t.followUpPlaceholder}
               rows={3}
-              className="field"
+              className="w-full resize-y rounded-xl border border-border bg-background px-4 py-3 text-sm leading-relaxed text-ink placeholder:text-ink-muted/60 focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/20"
             />
             <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-ink-muted">
