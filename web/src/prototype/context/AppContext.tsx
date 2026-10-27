@@ -38,6 +38,7 @@ import {
 import { byokGenerator } from '../chat/byok';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
+import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
@@ -668,21 +669,32 @@ const purgeSessions = () => {
   const attachFiles = async (files: File[]) => {
     if (files.length === 0) return;
     setIsReadingFile(true);
+    // Counted locally: `currentRoom` is a snapshot and would not see the images added in this loop.
+    let images = (currentRoom?.pending ?? []).filter((item) => item.kind === 'image' && !item.problem).length;
     try {
       for (const file of files) {
+        const image = isImageFile(file);
         const attachment: ChatAttachment = {
           // The random suffix matters: several files picked at once share the same millisecond.
           id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          kind: 'file',
+          kind: image ? 'image' : 'file',
           name: file.name,
           // Nothing to open: the bytes stay in the browser. Non-empty because the request check
           // in lib/deliberation/plan.ts rejects an attachment with no href.
-          href: `file:${file.name}`,
+          href: `${image ? 'image' : 'file'}:${file.name}`,
         };
         try {
-          const reading = await readFileInBrowser(file);
-          attachment.text = reading.text;
-          if (reading.truncated) attachment.truncated = true;
+          if (image) {
+            if (images >= MAX_IMAGES_PER_MESSAGE) {
+              throw new UnreadableFileError(`At most ${MAX_IMAGES_PER_MESSAGE} images per message.`);
+            }
+            attachment.dataUrl = (await readImageInBrowser(file)).dataUrl;
+            images += 1;
+          } else {
+            const reading = await readFileInBrowser(file);
+            attachment.text = reading.text;
+            if (reading.truncated) attachment.truncated = true;
+          }
         } catch (error) {
           attachment.problem = error instanceof UnreadableFileError ? error.reason : String(error);
         }

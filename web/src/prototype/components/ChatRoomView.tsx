@@ -2,8 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { planById } from '../data/plans';
-import { AlertCircle, ArrowUp, ClipboardList, FileText, Link2, Maximize2, Minimize2, Paperclip, Square, Trash2, X } from 'lucide-react';
+import { AlertCircle, ArrowUp, ClipboardList, FileText, ImageIcon, Link2, Maximize2, Minimize2, Paperclip, Square, Trash2, X } from 'lucide-react';
 import { ACCEPT_ATTRIBUTE } from '../chat/read-file-web';
+import { IMAGE_EXTENSIONS } from '../chat/read-image-web';
+import type { ChatAttachment } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
 import { CouncilOrb } from './CouncilOrb';
 import { USER_HANDLE } from '../chat/engine';
@@ -45,6 +47,20 @@ const initialsOf = (name: string): string => {
   const letters = (words.length > 0 ? words : [name]).slice(0, 2).map((word) => word.charAt(0));
   return letters.join('').toUpperCase();
 };
+
+/** Icon for one attachment; an image that still has its bytes shows itself instead. */
+export const AttachmentGlyph = ({ attachment, className }: { attachment: ChatAttachment; className: string }) => {
+  if (attachment.kind === 'image' && attachment.dataUrl) {
+    // A data URL held in memory: next/image has nothing to optimise here.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={attachment.dataUrl} alt="" className="h-7 w-7 shrink-0 rounded object-cover" />;
+  }
+  if (attachment.kind === 'image') return <ImageIcon className={className} aria-hidden="true" />;
+  if (attachment.kind === 'file') return <FileText className={className} aria-hidden="true" />;
+  return <Link2 className={className} aria-hidden="true" />;
+};
+
+const FILE_INPUT_ACCEPT = `${ACCEPT_ATTRIBUTE},${IMAGE_EXTENSIONS.join(',')}`;
 
 export const Avatar: React.FC<{ name: string; color: string; size?: 'sm' | 'md' }> = ({ name, color, size = 'md' }) => (
   <span
@@ -319,11 +335,10 @@ export const ChatRoomView: React.FC = () => {
                             : 'border-border bg-background/60 text-ink-muted'
                       }`}
                     >
-                      {attachment.kind === 'file' ? (
-                        <FileText className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isUser && !attachment.problem ? '' : 'text-brass'}`} aria-hidden="true" />
-                      ) : (
-                        <Link2 className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isUser && !attachment.problem ? '' : 'text-brass'}`} aria-hidden="true" />
-                      )}
+                      <AttachmentGlyph
+                        attachment={attachment}
+                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isUser && !attachment.problem ? '' : 'text-brass'}`}
+                      />
                       <span className="min-w-0 break-all">
                         <span className={`font-medium ${isUser && !attachment.problem ? '' : 'text-ink'}`}>{attachment.name}</span>{' '}
                         {attachmentStatus(attachment, t)}
@@ -416,11 +431,7 @@ export const ChatRoomView: React.FC = () => {
                         : 'border-brass/40 bg-brass/10 text-ink-muted'
                     }`}
                   >
-                    {attachment.kind === 'file' ? (
-                      <FileText className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
-                    ) : (
-                      <Link2 className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
-                    )}
+                    <AttachmentGlyph attachment={attachment} className="h-3.5 w-3.5 shrink-0 text-brass" />
                     <span className="min-w-0 truncate">
                       <span className="font-medium text-ink">{attachment.name}</span>{' '}
                       {attachmentStatus(attachment, t)}
@@ -429,7 +440,7 @@ export const ChatRoomView: React.FC = () => {
                       type="button"
                       onClick={() => removePending(attachment.id)}
                       disabled={isRunning}
-                      aria-label={attachment.kind === 'file' ? t.chatAttachFileRemove : t.chatAttachRemove}
+                      aria-label={attachment.kind === 'link' ? t.chatAttachRemove : t.chatAttachFileRemove}
                       className="shrink-0 rounded-full p-0.5 text-ink-muted transition hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:opacity-45"
                     >
                       <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -501,7 +512,7 @@ export const ChatRoomView: React.FC = () => {
                   name="chat-file"
                   type="file"
                   multiple
-                  accept={ACCEPT_ATTRIBUTE}
+                  accept={FILE_INPUT_ACCEPT}
                   className="hidden"
                   tabIndex={-1}
                   onChange={(event) => {

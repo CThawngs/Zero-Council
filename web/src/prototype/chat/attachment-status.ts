@@ -12,10 +12,13 @@ interface StatusCopy {
   chatAttachmentRead: string;
   chatAttachmentUnread: string;
   chatAttachmentTruncated: string;
+  chatImageAttached: string;
 }
 
 export const attachmentStatus = (attachment: ChatAttachment, copy: StatusCopy): string => {
   if (attachment.problem) return copy.chatAttachmentUnread.replace('{reason}', attachment.problem);
+  // An image is not "read" as text: the model looks at it. Never claim more than "attached".
+  if (attachment.kind === 'image') return copy.chatImageAttached;
   if (attachment.truncated) {
     return copy.chatAttachmentTruncated.replace('{chars}', (attachment.text?.length ?? 0).toLocaleString());
   }

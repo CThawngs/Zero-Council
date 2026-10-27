@@ -1,10 +1,10 @@
 import React from 'react';
-import { ArrowLeft, Copy, FileText, Link2, Plus } from 'lucide-react';
+import { ArrowLeft, Copy, Plus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
-import { Avatar } from './ChatRoomView';
+import { Avatar, AttachmentGlyph } from './ChatRoomView';
 
 /**
  * What the council said, in one page, after the user ends the meeting.
@@ -223,11 +223,7 @@ export const RoomSummaryView: React.FC = () => {
                 key={attachment.id}
                 className="flex items-start gap-2 rounded-xl border border-border bg-surface px-4 py-3 text-xs leading-relaxed text-ink-muted"
               >
-                {attachment.kind === 'file' ? (
-                  <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
-                ) : (
-                  <Link2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
-                )}
+                <AttachmentGlyph attachment={attachment} className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brass" />
                 <span className="min-w-0 break-all">
                   <span className="font-medium text-ink">{attachment.name}</span>{' '}
                   {attachmentStatus(attachment, t)}

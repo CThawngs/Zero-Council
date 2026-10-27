@@ -96,6 +96,12 @@ export interface ChatAttachment {
   text?: string;
   /** True when the source had more text than was kept. `text` is then only the beginning. */
   truncated?: boolean;
+  /**
+   * An image, as a downscaled JPEG data URL, kept in memory only. It is what the model sees, and
+   * it is NOT persisted: a few of these would blow the sessionStorage quota and the write that
+   * fails is the one that saves the whole room. See `storage.ts`.
+   */
+  dataUrl?: string;
   /** Why it could not be read, in words safe to show a user. */
   problem?: string;
 }

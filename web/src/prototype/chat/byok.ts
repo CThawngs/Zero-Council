@@ -12,6 +12,7 @@
  * No SDK: `fetch` is enough for both wire formats and the repo has a no-new-dependency rule.
  */
 
+import { splitDataUrl } from './read-image-web.ts';
 import { SILENT_TOKEN, USER_HANDLE, aliasTable, findMentions, type BotGenerator, type BotTurn, type ChatBot, type ChatTurnRequest } from './engine.ts';
 
 export type ProviderId = 'anthropic' | 'openai';
@@ -112,8 +113,15 @@ const systemPrompt = (request: ChatTurnRequest, persona: string | undefined): st
   const pinned = (request.attachments ?? [])
     .map((attachment) => {
       // A file has no address worth printing; a link does.
-      const label = attachment.kind === 'file' ? `${attachment.name} (uploaded file)` : `${attachment.name} (${attachment.href})`;
+      const label =
+        attachment.kind === 'file'
+          ? `${attachment.name} (uploaded file)`
+          : attachment.kind === 'image'
+            ? `${attachment.name} (uploaded image)`
+            : `${attachment.name} (${attachment.href})`;
       if (attachment.problem) return `- ${label}: NOT read — ${attachment.problem}`;
+      // The picture itself travels with the human's last message, not as text in this prompt.
+      if (attachment.kind === 'image') return `- ${label}: attached to the human's last message — look at it directly.`;
       // Said out loud, or the council would argue from the first pages as if they were the whole.
       const cut = attachment.truncated ? ' [only the beginning was kept; the rest is missing]' : '';
       return `- ${label}${cut}:\n${attachment.text ?? ''}`;
@@ -142,10 +150,64 @@ const systemPrompt = (request: ChatTurnRequest, persona: string | undefined): st
   ].join('\n');
 };
 
-const toAnthropicMessages = (request: ChatTurnRequest) =>
-  request.history.map((message) => ({
-    role: message.authorId === USER_HANDLE ? 'user' : 'assistant',
+interface ImagePart {
+  mediaType: string;
+  base64: string;
+}
+
+/** Images that can actually be sent: the bytes are present and the data URL is well formed. */
+const imagesOf = (request: ChatTurnRequest): ImagePart[] =>
+  (request.attachments ?? []).flatMap((attachment) => {
+    if (attachment.kind !== 'image' || attachment.problem || !attachment.dataUrl) return [];
+    const part = splitDataUrl(attachment.dataUrl);
+    return part ? [part] : [];
+  });
+
+/**
+ * Neutral shape; each provider turns it into its own wire format.
+ *
+ * Images ride only on the human's LATEST message. An earlier picture is not re-sent every turn: it
+ * would be billed again for every advisor, and the advisors' own replies already carry what they
+ * made of it — the same rule that pins link and file text to one message.
+ */
+const toMessages = (request: ChatTurnRequest) => {
+  const images = imagesOf(request);
+  const lastUser = images.length
+    ? request.history.map((message) => message.authorId).lastIndexOf(USER_HANDLE)
+    : -1;
+  return request.history.map((message, index) => ({
+    role: message.authorId === USER_HANDLE ? ('user' as const) : ('assistant' as const),
     content: message.authorId === USER_HANDLE ? message.body : `${message.authorId}: ${message.body}`,
+    images: index === lastUser ? images : [],
+  }));
+};
+
+const toAnthropicMessages = (request: ChatTurnRequest) =>
+  toMessages(request).map(({ role, content, images }) => ({
+    role,
+    content: images.length
+      ? [
+          ...images.map((image) => ({
+            type: 'image' as const,
+            source: { type: 'base64' as const, media_type: image.mediaType, data: image.base64 },
+          })),
+          { type: 'text' as const, text: content },
+        ]
+      : content,
+  }));
+
+const toOpenAiMessages = (request: ChatTurnRequest) =>
+  toMessages(request).map(({ role, content, images }) => ({
+    role,
+    content: images.length
+      ? [
+          { type: 'text' as const, text: content },
+          ...images.map((image) => ({
+            type: 'image_url' as const,
+            image_url: { url: `data:${image.mediaType};base64,${image.base64}` },
+          })),
+        ]
+      : content,
   }));
 
 const requestAnthropic = async (credentials: Credentials, request: ChatTurnRequest, persona: string | undefined) => {
@@ -204,7 +266,7 @@ const requestOpenAi = async (credentials: Credentials, request: ChatTurnRequest,
       max_completion_tokens: 1024,
       messages: [
         { role: 'system', content: systemPrompt(request, persona) },
-        ...toAnthropicMessages(request).map((m) => ({ role: m.role, content: m.content })),
+        ...toOpenAiMessages(request),
       ],
       tools: [
         {
