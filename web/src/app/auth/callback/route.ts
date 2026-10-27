@@ -68,7 +68,7 @@ export async function GET(request: Request) {
       const { data: { user } } = await supabase.auth.getUser();
       
       const isGoogleOnly = user?.app_metadata?.providers?.includes('google') &&
-      !user.app_metadata?.providers?.includes('email')
+      user.user_metadata?.has_password !== true;
 
       if (isGoogleOnly) {
         return NextResponse.redirect(`${redirectOrigin}/auth`)
