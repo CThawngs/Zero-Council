@@ -127,6 +127,8 @@ Mục 8 là nợ đã được trả. Số ở mục này là **sau** khi nó đ
 | **Streaming** — tin nhắn hiện ngay khi từng cố vấn trả lời | ✅ `onTurn` | `each advisor appears as it answers` |
 | **Đính kèm link** — đọc 1 lần lúc ghim, mang theo tin nhắn | ✅ | 3 test · `drive-attach.mjs` `ALL_CHECKS_PASS` |
 | `read-link-web.ts` — tầng đọc link phía browser | ✅ 7 test | `tests/read-link-web.test.mjs` |
+| **Đính kèm file** (txt/md/csv/tsv/json/log, docx, pptx, xlsx, pdf) — nút kẹp giấy, kéo-thả, dán; đọc 1 lần lúc ghim, trong browser | ⚠️ 12 test cho txt/docx/pptx/xlsx; **PDF chưa chạy thử** | `tests/read-file-web.test.mjs`; `read-file-web.ts`, `attachment-status.ts` |
+| **Đính kèm ảnh** (png/jpg/webp/gif/heic) — thu nhỏ ≤1568px, nén JPEG, gửi dạng ảnh cho Anthropic/OpenAI | ⚠️ 8 test cho phần thuần + wire format; **bước canvas chưa chạy thử trong browser** | `tests/attach-image.test.mjs`; `read-image-web.ts`, `byok.ts` |
 
 Test: **160/160** (trước: 122). Build 0 · `tsc` 0 · eslint 0 lỗi.
 
@@ -212,3 +214,21 @@ const walk = (el) => {
 };
 walk(document.body); // 0 = không hydrate
 ```
+
+## Đính kèm file (thêm sau mục 5)
+
+**Trần đã biết, không phải lỗi:**
+- Không đọc `.doc` / `.ppt` / `.xls` đời cũ — báo "lưu thành .docx/.pptx/.xlsx".
+- PDF scan / ảnh không có lớp chữ → báo thẳng, **chưa có OCR**.
+- xlsx: ngày tháng ra số serial; không đọc công thức, chỉ giá trị đã lưu.
+- Mỗi file tối đa 10 MB; chỉ giữ `MAX_FILE_TEXT = 30 000` ký tự đầu, chip + prompt ghi rõ "bị cắt".
+- Văn bản ghim đi trong prompt của **mỗi advisor ở mỗi lượt**, trên key BYOK của user — file dài là tốn tiền nhân với số advisor × số lượt.
+- PDF cần `unpdf` (thêm vào `web/package.json`), nạp lazy. **Chạy `pnpm install` rồi `pnpm build`** trước khi tin phần PDF.
+- Nội dung file được coi là dữ liệu: prompt dặn advisor không làm theo chỉ thị nằm trong file.
+
+**Ảnh — trần đã biết:**
+- Tối đa 4 ảnh/tin nhắn; ảnh chỉ đi kèm tin nhắn của người dùng **ngay lúc gửi**, các lượt sau không gửi lại (tránh trả tiền lại cho mỗi advisor).
+- Ảnh được vẽ lại qua canvas và nén JPEG: xoá EXIF (có thể chứa GPS), nền trong suốt thành trắng, GIF động chỉ lấy khung đầu.
+- **Ảnh không được lưu vào sessionStorage** (một ảnh vài trăm KB, vượt hạn mức sẽ làm mất cả phòng). Tải lại trang: ảnh đã gửi mất bản xem trước; ảnh chưa gửi bị đánh dấu "cần gắn lại".
+- Cần model có vision. Hai provider hiện có (Claude Sonnet 4.5, GPT-4o / 4o mini) đều có; thêm provider mới phải kiểm tra điều này.
+- HEIC chỉ đọc được ở trình duyệt tự giải mã được (Safari); không có OCR riêng — model tự nhìn ảnh.

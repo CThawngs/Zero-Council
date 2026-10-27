@@ -18,6 +18,8 @@ function AuthContent() {
     // This route has its own fresh AppProvider (separate from the main app),
     // so currentView always starts at its default ('overview'). Point it at
     // the sign-in form the first time this page mounts.
+
+    // Route ràng buộc
     useEffect(() => {
         const supabase = createClient();
 
@@ -29,17 +31,14 @@ function AuthContent() {
                 return;
             }
 
-            // 2. Nếu đã có session (ví dụ Google OAuth)
-            if (session?.user) {
-                const providers = session.user.app_metadata?.providers || [];
-                if (providers.includes('google') && !providers.includes('email')) {
-                    setCurrentView('set-password');
-                    return;
-                }
+            // 2. Nếu đã có session nhưng chưa có mật khẩu
+            if (session?.user && session.user.user_metadata?.has_password !== true) {
+                setCurrentView('set-password');
+                return;
             }
 
             // 3. Các trường hợp còn lại mặc định về sign-in
-            setCurrentView((currentView === 'sign-in' || currentView === 'sign-up') ? currentView : 'sign-in');
+            setCurrentView((currentView === 'sign-up' || currentView === 'set-password') ? currentView : 'sign-in');
         });
 
         return () => {

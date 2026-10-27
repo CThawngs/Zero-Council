@@ -23,6 +23,9 @@ interface StoredAttachment {
   name: string;
   href: string;
   text?: string;
+  truncated?: boolean;
+  /** Declared so the type matches `ChatAttachment`, but never written: see `withoutImageBytes`. */
+  dataUrl?: string;
   problem?: string;
 }
 
@@ -51,6 +54,19 @@ interface StoredRoom {
 }
 
 /**
+ * Image bytes are never written. sessionStorage holds about 5 MB for the whole origin, one photo
+ * can be a megabyte, and a `setItem` that exceeds the quota fails for the WHOLE room — so an
+ * attached picture would cost the human the entire conversation on the next reload.
+ */
+const withoutImageBytes = <T extends { dataUrl?: string }>(attachments: T[] | undefined): T[] | undefined =>
+  attachments?.map((attachment) => {
+    if (attachment.dataUrl === undefined) return attachment;
+    const copy = { ...attachment };
+    delete copy.dataUrl;
+    return copy;
+  });
+
+/**
  * Parses defensively. Anything unreadable returns null so the user lands in a fresh room rather
  * than a crash: a corrupt cache is not worth failing a page over.
  */
@@ -65,6 +81,13 @@ export const readStoredRoom = (): StoredRoom | null => {
     // Pinned-but-unsent attachments live in the room: reloading must not silently drop what the
     // user had just attached, which is how it was lost before this field existed.
     if (!Array.isArray(parsed.pending)) return null;
+    // An unsent image lost its bytes with the reload. Say so on the chip, so it is re-attached
+    // rather than sent as a picture the council never sees. (An already-sent one keeps its chip.)
+    parsed.pending = parsed.pending.map((attachment) =>
+      attachment.kind === 'image' && !attachment.problem
+        ? { ...attachment, problem: 'The image was not kept when the page reloaded. Attach it again.' }
+        : attachment
+    );
     // A room with no advisors cannot produce a round; treat it as absent rather than as an error.
     if (parsed.roster.length === 0) return null;
     return parsed;
@@ -80,7 +103,13 @@ export const writeStoredRoom = (room: RoomToStore): void => {
   try {
     // The schema tag is written here, not by the caller, so a caller can never store a blob that
     // claims a version it does not have.
-    window.sessionStorage.setItem(KEY, JSON.stringify({ schema: SCHEMA, ...room }));
+    const stored = {
+      schema: SCHEMA,
+      ...room,
+      messages: room.messages.map((message) => ({ ...message, attachments: withoutImageBytes(message.attachments) })),
+      pending: withoutImageBytes(room.pending) ?? [],
+    };
+    window.sessionStorage.setItem(KEY, JSON.stringify(stored));
   } catch {
     // A full or blocked store (private mode, quota) must not break the room that is running.
   }

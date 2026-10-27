@@ -1,3 +1,20 @@
+# Đính kèm ảnh
+
+Mở rộng đính kèm file sang ảnh. Code: `chat/read-image-web.ts`, `toMessages` trong `chat/byok.ts`, `withoutImageBytes` trong `chat/storage.ts`, `AttachmentGlyph` trong `ChatRoomView.tsx`.
+Evidence: `node --test tests/attach-image.test.mjs` 8/8 (kích thước, data URL, payload Anthropic/OpenAI, ảnh không vào sessionStorage).
+**Chưa kiểm chứng:** bước canvas/`createImageBitmap` (cần browser thật), việc provider thật nhận payload, `tsc`/`lint`/`next build`. Lint có thể cảnh báo `<img>` — đã tắt dòng đó bằng comment vì là data URL trong bộ nhớ.
+
+---
+
+# Đính kèm file (txt/docx/pptx/xlsx/pdf)
+
+Mở rộng đính kèm link sang file, đọc trong browser (không endpoint upload — cùng lý do như `read-link-web.ts`).
+Code: `chat/read-file-web.ts`, `chat/attachment-status.ts`, `attachFiles` trong `AppContext`, UI ở `ChatRoomView`.
+Evidence: `node --test tests/read-file-web.test.mjs` 12/12; docx/pptx/xlsx cũng đọc đúng file do python-docx/pptx/openpyxl tạo (kể cả slide bị đảo thứ tự).
+**Chưa kiểm chứng:** `tsc`/`lint`/`next build` và PDF (`unpdf`) — môi trường soạn không có `node_modules` và không có mạng. Chưa lái app thật (rule 19), chưa chạy `drive-attach.mjs`.
+
+---
+
 # LƯỢT 11 — Engine viết lại: A2A có cấu trúc (2026-10-07)
 
 Lượt này viết lại `engine.ts` từ đầu. Phần cũ của HANDOFF (lượt 9, billing/coupon) giữ nguyên.

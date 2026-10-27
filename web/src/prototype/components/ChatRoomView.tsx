@@ -2,7 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { planById } from '../data/plans';
-import { AlertCircle, ArrowUp, Link2, Maximize2, Minimize2, Square, Trash2, X } from 'lucide-react';
+import { AlertCircle, ArrowUp, ClipboardList, FileText, ImageIcon, Link2, Maximize2, Minimize2, Paperclip, Square, Trash2, X } from 'lucide-react';
+import { ACCEPT_ATTRIBUTE } from '../chat/read-file-web';
+import { IMAGE_EXTENSIONS } from '../chat/read-image-web';
+import type { ChatAttachment } from '../chat/engine';
+import { attachmentStatus } from '../chat/attachment-status';
 import { CouncilOrb } from './CouncilOrb';
 import { USER_HANDLE } from '../chat/engine';
 
@@ -44,7 +48,21 @@ const initialsOf = (name: string): string => {
   return letters.join('').toUpperCase();
 };
 
-const Avatar: React.FC<{ name: string; color: string; size?: 'sm' | 'md' }> = ({ name, color, size = 'md' }) => (
+/** Icon for one attachment; an image that still has its bytes shows itself instead. */
+export const AttachmentGlyph = ({ attachment, className }: { attachment: ChatAttachment; className: string }) => {
+  if (attachment.kind === 'image' && attachment.dataUrl) {
+    // A data URL held in memory: next/image has nothing to optimise here.
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={attachment.dataUrl} alt="" className="h-7 w-7 shrink-0 rounded object-cover" />;
+  }
+  if (attachment.kind === 'image') return <ImageIcon className={className} aria-hidden="true" />;
+  if (attachment.kind === 'file') return <FileText className={className} aria-hidden="true" />;
+  return <Link2 className={className} aria-hidden="true" />;
+};
+
+const FILE_INPUT_ACCEPT = `${ACCEPT_ATTRIBUTE},${IMAGE_EXTENSIONS.join(',')}`;
+
+export const Avatar: React.FC<{ name: string; color: string; size?: 'sm' | 'md' }> = ({ name, color, size = 'md' }) => (
   <span
     aria-hidden="true"
     className={`flex shrink-0 select-none items-center justify-center rounded-full border font-serif font-semibold text-ink ${
@@ -64,11 +82,14 @@ export const ChatRoomView: React.FC = () => {
     currentRoom,
     sendMessage,
     stopRoom,
+    wrapUpRoom,
     clearRoom,
     attachLink,
+    attachFiles,
     removePending,
     isRoomBusy,
     isReadingLink,
+    isReadingFile,
     personas,
     setCurrentView,
     currentPlanId,
@@ -78,6 +99,8 @@ export const ChatRoomView: React.FC = () => {
   const [link, setLink] = useState('');
   const logRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragging, setDragging] = useState(false);
   // "Expanded" lifts the room out of the page and over the whole window, so a long debate has room.
   const [expanded, setExpanded] = useState(false);
   // The link field stays mounted (it has always had an id the drive scripts rely on) but only takes
@@ -178,6 +201,14 @@ export const ChatRoomView: React.FC = () => {
     await attachLink(href);
   };
 
+  // Files are read right away, in the browser, for the same reason as links: a slow read during a
+  // round would look like a provider hang.
+  const takeFiles = async (list: FileList | File[] | null) => {
+    const files = list ? Array.from(list) : [];
+    if (files.length === 0 || isRunning || isReadingFile) return;
+    await attachFiles(files);
+  };
+
   // Chips type the mention for you: `@Name ` is exactly what the engine's alias table resolves.
   const insertMention = (handle: string) => {
     setDraft((value) => `${value}${value && !/\s$/.test(value) ? ' ' : ''}@${handle} `);
@@ -225,6 +256,18 @@ export const ChatRoomView: React.FC = () => {
               <Square className="h-4 w-4" aria-hidden="true" />
               {t.chatStop}
             </button>
+            {/* Stop stays what it was — it only aborts a round in flight and is disabled otherwise.
+                Ending the meeting is a different intent, so it gets its own button. */}
+            <button
+              type="button"
+              onClick={wrapUpRoom}
+              disabled={!currentRoom.messages.some((message) => message.authorId !== USER_HANDLE)}
+              title={t.chatWrapUpHint}
+              className="button-secondary min-h-11 justify-center disabled:opacity-45"
+            >
+              <ClipboardList className="h-4 w-4" aria-hidden="true" />
+              <span className="sr-only sm:not-sr-only">{t.chatWrapUp}</span>
+            </button>
             <button type="button" onClick={clearRoom} className="button-quiet min-h-11 justify-center">
               <Trash2 className="h-4 w-4" aria-hidden="true" />
               <span className="sr-only sm:not-sr-only">{t.chatClear}</span>
@@ -267,6 +310,11 @@ export const ChatRoomView: React.FC = () => {
                   </button>
                 ))}
               </div>
+              {roster[0] && (
+                <p className="mt-5 max-w-md text-xs leading-relaxed text-ink-muted">
+                  {t.chatOrderHint.replace('{name}', roster[0].name)}
+                </p>
+              )}
             </div>
           )}
           {currentRoom.messages.map((message) => {
@@ -287,12 +335,13 @@ export const ChatRoomView: React.FC = () => {
                             : 'border-border bg-background/60 text-ink-muted'
                       }`}
                     >
-                      <Link2 className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isUser && !attachment.problem ? '' : 'text-brass'}`} aria-hidden="true" />
+                      <AttachmentGlyph
+                        attachment={attachment}
+                        className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${isUser && !attachment.problem ? '' : 'text-brass'}`}
+                      />
                       <span className="min-w-0 break-all">
                         <span className={`font-medium ${isUser && !attachment.problem ? '' : 'text-ink'}`}>{attachment.name}</span>{' '}
-                        {attachment.problem
-                          ? t.chatAttachmentUnread.replace('{reason}', attachment.problem)
-                          : t.chatAttachmentRead}
+                        {attachmentStatus(attachment, t)}
                       </span>
                     </li>
                   ))}
@@ -365,6 +414,12 @@ export const ChatRoomView: React.FC = () => {
           <div className="mx-auto w-full max-w-3xl space-y-2">
             {/* Pinned but not sent. Shown as chips because "it read it silently and dropped it" is the
                 failure mode here: a link with no visible state is a link nobody trusts. */}
+            {isReadingFile && (
+              <p role="status" className="flex items-center gap-2 text-[11px] text-ink-muted">
+                <FileText className="h-3.5 w-3.5 shrink-0 animate-pulse text-brass" aria-hidden="true" />
+                {t.chatAttachFileReading}
+              </p>
+            )}
             {currentRoom.pending.length > 0 && (
               <ul className="flex flex-wrap gap-2">
                 {currentRoom.pending.map((attachment) => (
@@ -376,16 +431,16 @@ export const ChatRoomView: React.FC = () => {
                         : 'border-brass/40 bg-brass/10 text-ink-muted'
                     }`}
                   >
-                    <Link2 className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
+                    <AttachmentGlyph attachment={attachment} className="h-3.5 w-3.5 shrink-0 text-brass" />
                     <span className="min-w-0 truncate">
                       <span className="font-medium text-ink">{attachment.name}</span>{' '}
-                      {attachment.problem ? t.chatAttachmentUnread.replace('{reason}', attachment.problem) : t.chatAttachmentRead}
+                      {attachmentStatus(attachment, t)}
                     </span>
                     <button
                       type="button"
                       onClick={() => removePending(attachment.id)}
                       disabled={isRunning}
-                      aria-label={t.chatAttachRemove}
+                      aria-label={attachment.kind === 'link' ? t.chatAttachRemove : t.chatAttachFileRemove}
                       className="shrink-0 rounded-full p-0.5 text-ink-muted transition hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:opacity-45"
                     >
                       <X className="h-3.5 w-3.5" aria-hidden="true" />
@@ -395,7 +450,31 @@ export const ChatRoomView: React.FC = () => {
               </ul>
             )}
 
-            <div className="rounded-2xl border border-border bg-background transition focus-within:border-brass focus-within:ring-2 focus-within:ring-brass/20">
+            <div
+              onDragOver={(event) => {
+                if (isRunning || !event.dataTransfer.types.includes('Files')) return;
+                event.preventDefault();
+                setDragging(true);
+              }}
+              onDragLeave={(event) => {
+                // Leaving to a child of the composer is not leaving the composer.
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+              }}
+              onDrop={(event) => {
+                if (!event.dataTransfer.files.length) return;
+                event.preventDefault();
+                setDragging(false);
+                void takeFiles(event.dataTransfer.files);
+              }}
+              className={`relative rounded-2xl border bg-background transition focus-within:border-brass focus-within:ring-2 focus-within:ring-brass/20 ${
+                dragging ? 'border-brass ring-2 ring-brass/30' : 'border-border'
+              }`}
+            >
+              {dragging && (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-background/90 text-xs font-medium text-ink">
+                  {t.chatDropHint}
+                </div>
+              )}
               <form
                 onSubmit={handleAttach}
                 className={`${showLink ? 'flex' : 'hidden'} items-center gap-2 border-b border-border px-3 py-1.5`}
@@ -427,6 +506,34 @@ export const ChatRoomView: React.FC = () => {
               </form>
 
               <form onSubmit={handleSubmit} className="flex items-end gap-1.5 p-1.5">
+                <input
+                  ref={fileInputRef}
+                  id="chat-file"
+                  name="chat-file"
+                  type="file"
+                  multiple
+                  accept={FILE_INPUT_ACCEPT}
+                  className="hidden"
+                  tabIndex={-1}
+                  onChange={(event) => {
+                    const input = event.currentTarget;
+                    const picked = Array.from(input.files ?? []);
+                    // Cleared so picking the same file twice in a row still fires `change`.
+                    input.value = '';
+                    void takeFiles(picked);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isRunning || isReadingFile}
+                  aria-label={t.chatAttachFileLabel}
+                  title={t.chatAttachFileLabel}
+                  className="icon-button shrink-0 disabled:opacity-45"
+                  style={{ width: '2.5rem', height: '2.5rem', minHeight: 0, minWidth: 0, borderColor: 'transparent', background: 'transparent' }}
+                >
+                  <Paperclip className="h-4 w-4" aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowLink((value) => !value)}
@@ -455,6 +562,12 @@ export const ChatRoomView: React.FC = () => {
                   rows={1}
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
+                  onPaste={(event) => {
+                    // Only intercept when files are on the clipboard; pasted text must paste as text.
+                    if (event.clipboardData.files.length === 0) return;
+                    event.preventDefault();
+                    void takeFiles(event.clipboardData.files);
+                  }}
                   onKeyDown={(event) => {
                     // Enter sends, Shift+Enter breaks the line — the convention every messenger uses.
                     if (event.key === 'Enter' && !event.shiftKey) {

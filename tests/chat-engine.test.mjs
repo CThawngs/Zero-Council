@@ -8,6 +8,7 @@ import test from 'node:test';
 
 const engine = await import('../web/src/prototype/chat/engine.ts');
 const {
+  COUNCIL_ROUNDS,
   CONTEXT_SINGLE_EXCERPT,
   DEFAULT_MAX_TURNS,
   RESUME_ALL,
@@ -505,4 +506,112 @@ test('a link that could not be read still travels, carrying the reason', async (
     },
   });
   assert.equal(seen[0][0].problem, 'the page returned no readable text');
+});
+
+// ---- Rounds: advisors keep handing the floor to each other, then close to the human ----
+
+const TWO = ROSTER.slice(0, 2);
+const TWO_GEN = scriptedGenerator(TWO);
+
+test('with rounds, two advisors pass the floor back and forth and the last turn closes to the user', async () => {
+  const { speakers, messages, stoppedBy } = await runTurn({
+    roster: TWO,
+    mode: 'round-robin',
+    history: [],
+    userMessage: msg(USER_HANDLE, 'hello', parseMentions('hello', TWO)),
+    generate: TWO_GEN,
+    rounds: COUNCIL_ROUNDS,
+  });
+  assert.deepEqual(speakers, ['pragmatist', 'dreamer', 'pragmatist', 'dreamer', 'pragmatist', 'dreamer']);
+  assert.equal(stoppedBy, 'user');
+  assert.equal(parseMentions(messages[messages.length - 1].body, TWO).includes(USER_HANDLE), true);
+  // Every earlier turn names the advisor who goes next, never the user.
+  for (const message of messages.slice(1, -1)) {
+    assert.equal(parseMentions(message.body, TWO).includes(USER_HANDLE), false);
+  }
+});
+
+test('rounds=1 is the single pass it always was', async () => {
+  const { speakers, stoppedBy } = await runTurn({
+    roster: TWO,
+    mode: 'round-robin',
+    history: [],
+    userMessage: msg(USER_HANDLE, 'hello', []),
+    generate: TWO_GEN,
+  });
+  assert.deepEqual(speakers, ['pragmatist', 'dreamer']);
+  assert.equal(stoppedBy, 'user');
+});
+
+test('a mention scopes who opens, then the advisors loop between themselves', async () => {
+  const { speakers, stoppedBy } = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('@dreamer what do you think?'),
+    generate: GEN,
+    rounds: COUNCIL_ROUNDS,
+  });
+  assert.equal(speakers[0], 'dreamer');
+  assert.equal(speakers.length, ROSTER.length * COUNCIL_ROUNDS);
+  assert.equal(stoppedBy, 'user');
+  for (const bot of ROSTER) assert.equal(speakers.filter((id) => id === bot.id).length, COUNCIL_ROUNDS);
+});
+
+test('no mention opens in join order, then goes round the table', async () => {
+  const { speakers } = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('first prompt, nobody named'),
+    generate: GEN,
+    rounds: 2,
+  });
+  assert.deepEqual(speakers, ['pragmatist', 'dreamer', 'skeptic', 'pragmatist', 'dreamer', 'skeptic']);
+});
+
+test('a panel ignores rounds: everyone answers once and the last one closes', async () => {
+  const { speakers, stoppedBy } = await runTurn({
+    roster: ROSTER,
+    mode: 'panel',
+    history: [],
+    userMessage: userMsg('go'),
+    generate: GEN,
+    rounds: COUNCIL_ROUNDS,
+  });
+  assert.deepEqual(speakers, ['pragmatist', 'dreamer', 'skeptic']);
+  assert.equal(stoppedBy, 'user');
+});
+
+test('the turn cap still wins over rounds, and the advisor holding the last turn closes', async () => {
+  const closingFlags = [];
+  const { speakers, messages, stoppedBy } = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: userMsg('go'),
+    generate: (request) => {
+      closingFlags.push(request.isClosing);
+      return GEN(request);
+    },
+    rounds: COUNCIL_ROUNDS,
+    maxTurns: 4,
+  });
+  assert.equal(speakers.length, 4);
+  assert.deepEqual(closingFlags, [false, false, false, true]);
+  assert.equal(stoppedBy, 'user');
+  assert.equal(parseMentions(messages[messages.length - 1].body, ROSTER).includes(USER_HANDLE), true);
+});
+
+test('an advisor who passes still spends a turn, so a silent room cannot loop forever', async () => {
+  const { speakers, stoppedBy } = await runTurn({
+    roster: TWO,
+    mode: 'round-robin',
+    history: [],
+    userMessage: msg(USER_HANDLE, 'hello', []),
+    generate: () => turn(SILENT_TOKEN, [], { silent: true }),
+    rounds: COUNCIL_ROUNDS,
+  });
+  assert.equal(speakers.length <= TWO.length * COUNCIL_ROUNDS, true);
+  assert.equal(stoppedBy, 'silent');
 });

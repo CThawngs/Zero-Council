@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   AdvisorPersona,
   ApiKeyConfig,
@@ -18,6 +18,7 @@ import { initialApiKeys, initialPersonas, initialSessions, localizePersona } fro
 import { copy, modeLabel, translations, type Copy } from '../i18n';
 import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
 import {
+  COUNCIL_ROUNDS,
   DEFAULT_MAX_TURNS,
   DEFAULT_ROOM_BUDGET,
   DEFAULT_TURN_TIMEOUT_MS,
@@ -36,6 +37,8 @@ import {
 } from '../chat/engine';
 import { byokGenerator } from '../chat/byok';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
+import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
+import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
@@ -88,7 +91,13 @@ interface AppContextType {
   currentSessionId: string;
   setCurrentSessionId: (id: string) => void;
   currentSession: DeliberationSession;
-  startNewSession: (question?: string, framework?: DeliberationSession['framework']) => void;
+  startNewSession: (
+    question?: string,
+    framework?: DeliberationSession['framework'],
+    advisors?: AdvisorPersona[],
+    /** Where to land once the session exists. Default is the live session page. */
+    landOn?: ViewType
+  ) => void;
   setCurrentFramework: (framework: DeliberationSession['framework']) => void;
   setCurrentMode: (mode: CommunicationMode) => void;
   runRound: (prompt: string) => Promise<void>;
@@ -143,7 +152,13 @@ interface AppContextType {
   isJoinRoomOpen: boolean;
   openJoinRoom: () => void;
   closeJoinRoom: () => void;
-  joinRoom: (roster: AdvisorPersona[], mode: ChatMode) => void;
+  joinRoom: (roster: AdvisorPersona[], mode: ChatMode, title?: string) => void;
+  /** Opens a room with the default roster and puts `question` to it as the first message. */
+  startCouncilChat: (question: string, advisors?: AdvisorPersona[], mode?: ChatMode) => void;
+  /** Ends the meeting: aborts a round in flight, then shows the recap of what was said. */
+  wrapUpRoom: () => void;
+  /** Opens the framework conclusion (Chair's recommendation + scenario branches) for this room's question and advisors. */
+  openRoomConclusion: () => void;
   currentRoom: ChatRoom | null;
   sendMessage: (body: string) => Promise<void>;
   stopRoom: () => void;
@@ -152,8 +167,11 @@ interface AppContextType {
   isRoomBusy: boolean;
   /** Reads a link NOW and pins the text to the next message. Never called mid-round. */
   attachLink: (url: string) => Promise<void>;
+  /** Reads each file NOW, in the browser, and pins its text to the next message. */
+  attachFiles: (files: File[]) => Promise<void>;
   removePending: (id: string) => void;
   isReadingLink: boolean;
+  isReadingFile: boolean;
   canAddPersona: boolean;
   personaCap: number;
   toastMessage: ToastMessage | null;
@@ -232,60 +250,52 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
   };
 };
 
-/**
- * Unimplemted code to allow
- * server access to localStorage
- */
-// 1. Storage EventListener in the browser (to check for new update to storage)
-function subscribeLanguage(callback: () => void) {
-  window.addEventListener('storage', callback);
-  return () => window.removeEventListener('storage', callback);
-}
-
-// 2. Snapshot on Client (from localStorage)
-function getLanguageSnapshot(): Language {
-  try {
-    const saved = localStorage.getItem('zero_council_lang');
-    if (saved === 'en' || saved === 'vi') return saved;
-  } catch {}
-  return 'en';
-}
-// 3. Snapshot on Server (Next.js SSR default to 'en')
-function getLanguageServerSnapshot(): Language {
-  return 'en';
-}
+// `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Read once. The room and the view have to be decided from the SAME read, or a reload drops the
-  // user on the marketing page with a live deliberation sitting unread behind it — which is worse
-  // than losing the room, because nothing looks broken.
-  const [restored] = useState(() => readStoredRoom());
-
-  const [currentView, setCurrentView] = useState<ViewType>(restored ? 'chat-room' : 'overview');
-  const [language, setLanguage] = useState<Language>(() => {
+  // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
+  // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
+  // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
+  // and client-rendered everything, including the `<Script>` in the root layout — which is the
+  // "Encountered a script tag while rendering React component" overlay. A tab with no room never
+  // tripped it, which is why deleting the room made the error go away.
+  //
+  // So both start at the server's answer, and the restore happens once, after hydration but before
+  // paint (see the layout effect below). The room and the view are still set from the SAME read in
+  // one batch, so a reload cannot land on the marketing page with a live room sitting unread behind it.
+  const [currentView, setCurrentView] = useState<ViewType>('overview');
+  // Starts at the server's answer ('en'), like the room and the theme: reading storage in this
+  // initializer would hydrate a Vietnamese tree against English HTML. The saved choice is adopted
+  // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
+  // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
+  // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
+  const [language, setLanguageState] = useState<Language>('en');
+  useIsomorphicLayoutEffect(() => {
     try {
-    if (typeof localStorage === 'undefined') return 'en';
-    const s = localStorage.getItem('zc-lang');
-    return s === 'vi' ? 'vi' : 'en';
-  } catch { return 'en'; }
-  });
-
-  // Both server and initial client render start at 'light' so the HTML
-  // matches and hydration succeeds.  The bootstrap script has already set
-  // `data-theme` on <html> before paint, so the user never sees a flash.
-  // After mount the effect below reads the real attribute and adopts it.
-  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
-
-  useEffect(() => {
-    const actual =
-      document.documentElement.getAttribute('data-theme') === 'dark'
-        ? 'dark'
-        : 'light';
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTheme((prev) => (prev === actual ? prev : actual));
+      if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
+    } catch {
+      // Storage blocked: stay on the default.
+    }
   }, []);
-
+  const setLanguage = (next: Language) => {
+    setLanguageState(next);
+    try {
+      localStorage.setItem('zc-lang', next);
+    } catch {
+      // Private mode: the choice still applies for this page view, it just will not persist.
+    }
+  };
+  // The first client render has to match the server's, and the server cannot know the visitor's theme,
+  // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
+  // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun
+  // where the server had drawn a Moon, React found the trees different and discarded the server HTML.
+  // So start at the server's answer and adopt the real one before the browser paints (layout effect),
+  // which is the "adopt it on mount" step the comment in theme.ts has always described.
+  const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
+  useIsomorphicLayoutEffect(() => {
+    setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
+  }, []);
   const toggleTheme = () => {
     setTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark';
@@ -305,7 +315,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
-const [isDeliberating, setIsDeliberating] = useState(false);
+  const [isDeliberating, setIsDeliberating] = useState(false);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
@@ -325,11 +335,15 @@ const [isDeliberating, setIsDeliberating] = useState(false);
    */
   const analyticsConsent = useSyncExternalStore(subscribeAnalyticsConsent, readAnalyticsConsent, getServerAnalyticsConsent);
   const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
-  const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(() => {
-    // Rehydrate on the first render so the room is already there when the view mounts. Without this
-    // the user sees an empty chamber flash before the transcript appears, which reads as data loss.
-    if (!restored) return null;
-    return {
+  const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
+
+  // Restore a room the tab still holds. A layout effect rather than a plain effect: it runs before the
+  // browser paints, so the user never sees the empty page flash before the transcript appears (which
+  // reads as data loss). Runs once; nothing writes the store until a room exists, so this cannot clobber it.
+  useIsomorphicLayoutEffect(() => {
+    const restored = readStoredRoom();
+    if (!restored) return;
+    setCurrentRoom({
       title: restored.title,
       mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
       roster: restored.roster,
@@ -339,10 +353,12 @@ const [isDeliberating, setIsDeliberating] = useState(false);
       stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
       failures: (restored.failures as TurnFailure[]) ?? [],
       held: restored.held ?? [],
-    };
-  });
+    });
+    setCurrentView('chat-room');
+  }, []);
   const [isRoomBusy, setIsRoomBusy] = useState(false);
   const [isReadingLink, setIsReadingLink] = useState(false);
+  const [isReadingFile, setIsReadingFile] = useState(false);
   /** The one controller for the round in flight; `stopRoom` aborts it. Null when the room is idle. */
   const roomAbortRef = useRef<AbortController | null>(null);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
@@ -393,9 +409,12 @@ const [isDeliberating, setIsDeliberating] = useState(false);
 
   const signOut = async () => {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({
+      scope: 'local'
+    });
     setAuthUser(null);
     setCheckoutPlan(null);
+    window.location.href = '/';
     setCurrentView('overview');
     window.scrollTo(0, 0);
   };
@@ -453,17 +472,21 @@ const [isDeliberating, setIsDeliberating] = useState(false);
 
   const startNewSession = (
     question: string = copy[language].initialProjectTitle,
-    framework: DeliberationSession['framework'] = 'Good / Normal / Bad Scenarios'
+    framework: DeliberationSession['framework'] = 'Good / Normal / Bad Scenarios',
+    advisors: AdvisorPersona[] = localizedPersonas,
+    landOn: ViewType = 'session-active'
   ) => {
     const normalizedQuestion = question.trim().toLowerCase();
+    // Same question with a different seating is a different meeting, not a reopen of the old one.
+    const seatingOf = (list: AdvisorPersona[]) => list.map((persona) => persona.id).sort().join('|');
     const existing = sessions.find((session) => {
       const originalTitle = localizedTitles[session.id] ?? session.title;
-      return originalTitle.toLowerCase() === normalizedQuestion;
+      return originalTitle.toLowerCase() === normalizedQuestion && seatingOf(session.advisors) === seatingOf(advisors);
     });
     if (existing) {
       setCurrentSessionId(existing.id);
       setSelectedRoundIndex(existing.rounds.length);
-      setCurrentView('session-active');
+      setCurrentView(landOn);
       return;
     }
     void (async () => {
@@ -473,13 +496,13 @@ const [isDeliberating, setIsDeliberating] = useState(false);
           question.trim(),
           framework,
           currentMode,
-          localizedPersonas,
+          advisors,
           language
         );
         setSessions((value) => [session, ...value]);
         setCurrentSessionId(session.id);
         setSelectedRoundIndex(1);
-        setCurrentView('session-active');
+        setCurrentView(landOn);
       } finally {
         setIsDeliberating(false);
       }
@@ -570,10 +593,10 @@ const purgeSessions = () => {
     setCurrentView('personas');
   };
 
-  const joinRoom = (roster: AdvisorPersona[], mode: ChatMode) => {
+  const joinRoom = (roster: AdvisorPersona[], mode: ChatMode, title?: string) => {
     const capped = roster.slice(0, personaCap);
     setCurrentRoom({
-      title: copy[language].chatRoomTitle,
+      title: title ?? copy[language].chatRoomTitle,
       mode,
       roster: capped.map((persona) => persona.id),
       messages: [],
@@ -635,6 +658,52 @@ const purgeSessions = () => {
       setCurrentRoom((room) =>
         room ? { ...room, pending: [...room.pending, attachment] } : room
       );
+    }
+  };
+
+  /**
+   * Same contract as `attachLink`: read once, here, never mid-round, and an unreadable file is
+   * still pinned with its reason rather than dropped — the council would otherwise answer from the
+   * human's words alone and nobody would know a file was ignored.
+   */
+  const attachFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setIsReadingFile(true);
+    // Counted locally: `currentRoom` is a snapshot and would not see the images added in this loop.
+    let images = (currentRoom?.pending ?? []).filter((item) => item.kind === 'image' && !item.problem).length;
+    try {
+      for (const file of files) {
+        const image = isImageFile(file);
+        const attachment: ChatAttachment = {
+          // The random suffix matters: several files picked at once share the same millisecond.
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind: image ? 'image' : 'file',
+          name: file.name,
+          // Nothing to open: the bytes stay in the browser. Non-empty because the request check
+          // in lib/deliberation/plan.ts rejects an attachment with no href.
+          href: `${image ? 'image' : 'file'}:${file.name}`,
+        };
+        try {
+          if (image) {
+            if (images >= MAX_IMAGES_PER_MESSAGE) {
+              throw new UnreadableFileError(`At most ${MAX_IMAGES_PER_MESSAGE} images per message.`);
+            }
+            attachment.dataUrl = (await readImageInBrowser(file)).dataUrl;
+            images += 1;
+          } else {
+            const reading = await readFileInBrowser(file);
+            attachment.text = reading.text;
+            if (reading.truncated) attachment.truncated = true;
+          }
+        } catch (error) {
+          attachment.problem = error instanceof UnreadableFileError ? error.reason : String(error);
+        }
+        setCurrentRoom((room) =>
+          room ? { ...room, pending: [...room.pending, attachment] } : room
+        );
+      }
+    } finally {
+      setIsReadingFile(false);
     }
   };
 
@@ -722,6 +791,7 @@ const purgeSessions = () => {
         )(request);
       },
       maxTurns: DEFAULT_MAX_TURNS,
+      rounds: COUNCIL_ROUNDS,
       roomBudget: DEFAULT_ROOM_BUDGET,
       turnsUsed: currentRoom.turns,
       language,
@@ -753,6 +823,83 @@ const purgeSessions = () => {
       roomAbortRef.current = null;
       setIsRoomBusy(false);
     }
+  };
+
+  /**
+   * The decision form's primary button lands here. `joinRoom` only queues a state update, so
+   * `sendMessage` called in the same tick would still see no room and return silently. The question
+   * is parked in a ref and sent by the effect below, on the render where the room exists.
+   */
+  const openingQuestionRef = useRef<string | null>(null);
+
+  const startCouncilChat = (question: string, advisors?: AdvisorPersona[], mode: ChatMode = 'round-robin') => {
+    const body = question.trim();
+    if (!body) return;
+    const title = body.length > 72 ? `${body.slice(0, 69).trimEnd()}…` : body;
+    const seated = (advisors ?? localizedPersonas).slice(0, personaCap);
+    // Asking again for a question whose meeting is already open reopens it. Starting a new room here
+    // would throw away a transcript the user has not finished reading.
+    if (
+      currentRoom &&
+      currentRoom.messages.length > 0 &&
+      currentRoom.title === title &&
+      currentRoom.roster.join('|') === seated.map((persona) => persona.id).join('|')
+    ) {
+      setCurrentView('chat-room');
+      return;
+    }
+    const begin = () => {
+      openingQuestionRef.current = body;
+      joinRoom(seated, mode, title);
+    };
+    if (roomAbortRef.current === null) {
+      begin();
+      return;
+    }
+    // A round from the previous room is still in flight. When it settles it writes its result into
+    // whatever room is current, so a room opened now would be overwritten by the old transcript and
+    // its opening question never sent. Abort it and open the new room once it has let go.
+    roomAbortRef.current.abort();
+    const startedAt = Date.now();
+    const wait = setInterval(() => {
+      if (roomAbortRef.current === null || Date.now() - startedAt > 5000) {
+        clearInterval(wait);
+        begin();
+      }
+    }, 50);
+  };
+
+  useEffect(() => {
+    const opening = openingQuestionRef.current;
+    if (opening === null || !currentRoom || currentRoom.messages.length > 0) return;
+    openingQuestionRef.current = null;
+    void sendMessage(opening);
+    // sendMessage is rebuilt every render and reads the room from that render; this effect runs on
+    // the render where the new room first exists, which is exactly the one it must read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRoom]);
+
+  const wrapUpRoom = () => {
+    const wasRunning = roomAbortRef.current !== null;
+    roomAbortRef.current?.abort();
+    if (wasRunning) {
+      setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
+    }
+    setCurrentView('room-summary');
+  };
+
+  // The room is a free conversation; the framework conclusion is the structured read-out of the same
+  // question. The conclusion is built by the deliberation engine from the question and the advisors,
+  // not from the transcript, and the recap page says so. Creating the session is async, so the view
+  // change has to wait for it (`landOn`): switching now would show whatever session was open before.
+  const openRoomConclusion = () => {
+    if (!currentRoom) return;
+    const seated = currentRoom.roster
+      .map((id) => localizedPersonas.find((persona) => persona.id === id))
+      .filter((persona): persona is AdvisorPersona => Boolean(persona));
+    if (seated.length === 0) return;
+    const question = currentRoom.messages.find((message) => message.authorId === USER_HANDLE)?.body ?? currentRoom.title;
+    startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
   };
 
   // Keys live in memory for the life of the tab and nowhere else: not in storage, not on our server.
@@ -840,6 +987,9 @@ const purgeSessions = () => {
         openJoinRoom: () => setIsJoinRoomOpen(true),
         closeJoinRoom: () => setIsJoinRoomOpen(false),
         joinRoom,
+        startCouncilChat,
+        wrapUpRoom,
+        openRoomConclusion,
         currentRoom,
         sendMessage,
         stopRoom,
@@ -848,6 +998,8 @@ const purgeSessions = () => {
         attachLink,
         removePending,
         isReadingLink,
+        isReadingFile,
+        attachFiles,
         toastMessage,
         showToast,
       }}
