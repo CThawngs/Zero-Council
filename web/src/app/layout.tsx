@@ -13,14 +13,20 @@ export const metadata: Metadata = {
   other: { google: 'notranslate' },
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
   return (
     // suppressHydrationWarning on <html> as well as <body>: browser extensions
     // (Grammarly, read-aloud helpers) inject attributes before React hydrates,
     // and this script now writes `data-theme` onto <html> too.
+
     // No font classNames here: the families are declared with @font-face in globals.css.
     // next/font's `variable` class was the only reason app/fonts.ts existed, and next/font is
     // what made the build depend on a network call.
+    
     // `dark` is deliberately absent: the theme is driven by [data-theme='dark']
     // in globals.css, and pinning the class here would make it un-switchable.
     <html lang="en" translate="no" className="h-full antialiased" suppressHydrationWarning>
@@ -31,7 +37,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         */}
         <script
           id="zc-theme-bootstrap"
-          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
+          dangerouslySetInnerHTML={{
+            __html: THEME_BOOTSTRAP_SCRIPT,
+          }}
         />
       </head>
       

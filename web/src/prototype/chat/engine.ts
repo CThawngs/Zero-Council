@@ -94,6 +94,8 @@ export interface ChatAttachment {
   name: string;
   href: string;
   text?: string;
+  /** True when the source had more text than was kept. `text` is then only the beginning. */
+  truncated?: boolean;
   /** Why it could not be read, in words safe to show a user. */
   problem?: string;
 }

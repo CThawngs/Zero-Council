@@ -37,6 +37,7 @@ import {
 } from '../chat/engine';
 import { byokGenerator } from '../chat/byok';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
+import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
@@ -165,8 +166,11 @@ interface AppContextType {
   isRoomBusy: boolean;
   /** Reads a link NOW and pins the text to the next message. Never called mid-round. */
   attachLink: (url: string) => Promise<void>;
+  /** Reads each file NOW, in the browser, and pins its text to the next message. */
+  attachFiles: (files: File[]) => Promise<void>;
   removePending: (id: string) => void;
   isReadingLink: boolean;
+  isReadingFile: boolean;
   canAddPersona: boolean;
   personaCap: number;
   toastMessage: ToastMessage | null;
@@ -247,35 +251,8 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
-/**
- * Unimplemted code to allow
- * server access to localStorage
- */
-// 1. Storage EventListener in the browser (to check for new update to storage)
-function subscribeLanguage(callback: () => void) {
-  window.addEventListener('storage', callback);
-  return () => window.removeEventListener('storage', callback);
-}
-
-// 2. Snapshot on Client (from localStorage)
-function getLanguageSnapshot(): Language {
-  try {
-    const saved = localStorage.getItem('zero_council_lang');
-    if (saved === 'en' || saved === 'vi') return saved;
-  } catch {}
-  return 'en';
-}
-// 3. Snapshot on Server (Next.js SSR default to 'en')
-function getLanguageServerSnapshot(): Language {
-  return 'en';
-}
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Read once. The room and the view have to be decided from the SAME read, or a reload drops the
-  // user on the marketing page with a live deliberation sitting unread behind it — which is worse
-  // than losing the room, because nothing looks broken.
-  const [restored] = useState(() => readStoredRoom());
-  
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -292,14 +269,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
   // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
   // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
-  const [language, setLanguage] = useState<Language>('en');
-
+  const [language, setLanguageState] = useState<Language>('en');
   useIsomorphicLayoutEffect(() => {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('zc-lang') !== null) {
-      setLanguage(localStorage.getItem('zc-lang') === 'en' ? 'en' : 'vi');
+    try {
+      if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
+    } catch {
+      // Storage blocked: stay on the default.
     }
   }, []);
-
+  const setLanguage = (next: Language) => {
+    setLanguageState(next);
+    try {
+      localStorage.setItem('zc-lang', next);
+    } catch {
+      // Private mode: the choice still applies for this page view, it just will not persist.
+    }
+  };
   // The first client render has to match the server's, and the server cannot know the visitor's theme,
   // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
   // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun
@@ -310,7 +295,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useIsomorphicLayoutEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
   }, []);
-
   const toggleTheme = () => {
     setTheme((current) => {
       const next: Theme = current === 'dark' ? 'light' : 'dark';
@@ -373,6 +357,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
   const [isRoomBusy, setIsRoomBusy] = useState(false);
   const [isReadingLink, setIsReadingLink] = useState(false);
+  const [isReadingFile, setIsReadingFile] = useState(false);
   /** The one controller for the round in flight; `stopRoom` aborts it. Null when the room is idle. */
   const roomAbortRef = useRef<AbortController | null>(null);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
@@ -675,6 +660,41 @@ const purgeSessions = () => {
     }
   };
 
+  /**
+   * Same contract as `attachLink`: read once, here, never mid-round, and an unreadable file is
+   * still pinned with its reason rather than dropped — the council would otherwise answer from the
+   * human's words alone and nobody would know a file was ignored.
+   */
+  const attachFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setIsReadingFile(true);
+    try {
+      for (const file of files) {
+        const attachment: ChatAttachment = {
+          // The random suffix matters: several files picked at once share the same millisecond.
+          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          kind: 'file',
+          name: file.name,
+          // Nothing to open: the bytes stay in the browser. Non-empty because the request check
+          // in lib/deliberation/plan.ts rejects an attachment with no href.
+          href: `file:${file.name}`,
+        };
+        try {
+          const reading = await readFileInBrowser(file);
+          attachment.text = reading.text;
+          if (reading.truncated) attachment.truncated = true;
+        } catch (error) {
+          attachment.problem = error instanceof UnreadableFileError ? error.reason : String(error);
+        }
+        setCurrentRoom((room) =>
+          room ? { ...room, pending: [...room.pending, attachment] } : room
+        );
+      }
+    } finally {
+      setIsReadingFile(false);
+    }
+  };
+
   const removePending = (id: string) => {
     setCurrentRoom((room) =>
       room ? { ...room, pending: room.pending.filter((item) => item.id !== id) } : room
@@ -966,6 +986,8 @@ const purgeSessions = () => {
         attachLink,
         removePending,
         isReadingLink,
+        isReadingFile,
+        attachFiles,
         toastMessage,
         showToast,
       }}
