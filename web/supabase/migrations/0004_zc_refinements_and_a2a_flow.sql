@@ -22,20 +22,24 @@ UPDATE public.zc_agents
 SET system_prompt = 'You are a helpful AI council advisor.' 
 WHERE system_prompt IS NULL;
 
-ALTER TABLE public.zc_agents 
+ALTER TABLE public.zc_agents
   ALTER COLUMN system_prompt SET NOT NULL;
 
-UPDATE public.zc_agents 
-SET decision_lens = 'General Analysis' 
+UPDATE public.zc_agents
+SET decision_lens = 'General Analysis'
 WHERE decision_lens IS NULL;
 
-ALTER TABLE public.zc_agents 
+ALTER TABLE public.zc_agents
   ALTER COLUMN decision_lens SET NOT NULL;
 
 
 -- ---------------------------------------------------------------------------------------------
 -- 3. Siết chặt các khóa ngoại bắt buộc (NOT NULL constraints)
 -- ---------------------------------------------------------------------------------------------
+-- Id của public.zc_users bắt buộc phải có một Id auth.users tương ứng
+ALTER TABLE public.zc_users
+  ALTER COLUMN id SET NOT NULL;
+
 -- Công cụ phải thuộc về một Agent cụ thể
 ALTER TABLE public.zc_agent_tools 
   ALTER COLUMN agent_id SET NOT NULL;
@@ -55,10 +59,6 @@ ALTER TABLE public.zc_messages
 -- File đính kèm bắt buộc phải gắn với một Tin nhắn
 ALTER TABLE public.zc_message_attachments 
   ALTER COLUMN message_id SET NOT NULL;
-
--- Model AI bắt buộc phải thuộc về một Provider
-ALTER TABLE public.zc_agent_models 
-  ALTER COLUMN provider_id SET NOT NULL;
 
 
 -- ---------------------------------------------------------------------------------------------

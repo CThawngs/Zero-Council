@@ -341,7 +341,9 @@ export const ChatRoomView: React.FC = () => {
                       />
                       <span className="min-w-0 break-all">
                         <span className={`font-medium ${isUser && !attachment.problem ? '' : 'text-ink'}`}>{attachment.name}</span>{' '}
-                        {attachmentStatus(attachment, t)}
+                        <span className={`${attachment.problem ? 'text-red-500' : 'text-ink'}`}>
+                          {attachmentStatus(attachment, t)}
+                        </span>
                       </span>
                     </li>
                   ))}
