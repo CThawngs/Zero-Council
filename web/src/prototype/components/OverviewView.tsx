@@ -19,6 +19,7 @@ import {
   Users2,
   Zap,
 } from 'lucide-react';
+import Link from 'next/link';
 
 export const OverviewView: React.FC = () => {
   const { setCurrentView, t, language, authUser, authReady, requestCheckout } = useApp();
@@ -39,6 +40,9 @@ export const OverviewView: React.FC = () => {
     { icon: Scale, title: t.why3Title, body: t.why3Body, tint: 'var(--tint-green)' },
   ];
 
+  // Link can be used as a way to prerender pages but it is still required
+  // that we find a way to hold off until it all loads
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-20 py-8 sm:py-12">
       {/* Hero: headline + CTA on the left, 3D council stage on the right. */}
@@ -56,10 +60,10 @@ export const OverviewView: React.FC = () => {
           <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-muted sm:text-lg">{t.overviewBody}</p>
 
           <div className="mt-8 flex flex-col gap-3.5 sm:flex-row sm:items-center">
-            <button type="button" onClick={() => setCurrentView('empty-chamber')} className="button-primary text-base">
+            <Link href={'/dashboard'} className="button-primary text-base">
               <span>{t.overviewPrimary}</span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </button>
+            </Link>
             <a href="#how-it-works" className="button-secondary text-base">
               {t.overviewSecondary}
             </a>
