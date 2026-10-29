@@ -66,7 +66,7 @@ function AuthContent() {
 
 export default function Authentication() {
     return (
-        <AppProvider>
+        <AppProvider initialView='sign-in'>
             <AuthContent />
         </AppProvider>
     );

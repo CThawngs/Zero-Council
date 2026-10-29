@@ -253,7 +253,7 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: ViewType}> = ({ children, initialView = 'overview' }) => {
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -264,7 +264,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // So both start at the server's answer, and the restore happens once, after hydration but before
   // paint (see the layout effect below). The room and the view are still set from the SAME read in
   // one batch, so a reload cannot land on the marketing page with a live room sitting unread behind it.
-  const [currentView, setCurrentView] = useState<ViewType>('overview');
+  const [currentView, setCurrentView] = useState<ViewType>(initialView);
   // Starts at the server's answer ('en'), like the room and the theme: reading storage in this
   // initializer would hydrate a Vietnamese tree against English HTML. The saved choice is adopted
   // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
