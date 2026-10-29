@@ -68,8 +68,10 @@ export async function updateSession(request: NextRequest) {
     const hasPassword = user.user_metadata?.has_password === true;
 
     const path = request.nextUrl.pathname;
+    const isAuthPath = path.startsWith('/auth');
+    // startWith to still allow for callback
 
-    if (!hasPassword && path !== '/auth') {
+    if (!hasPassword && !isAuthPath) {
       return NextResponse.redirect(new URL('/auth', request.url))
     }
   }

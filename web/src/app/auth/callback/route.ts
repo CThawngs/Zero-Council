@@ -7,8 +7,8 @@ export async function GET(request: Request) {
 
   // Determine correct origin (handle reverse proxy / load balancer headers in production)
   const isLocalEnv = process.env.NODE_ENV === 'development'
-  const forwardedHost = request.headers.get('x-forwarded-host')
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+  const forwardedHost = request.headers.get('x-forwarded-host') // Get Og domain before intercepted
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https' // Same but for protocol
   const redirectOrigin = !isLocalEnv && forwardedHost
     ? `${forwardedProto}://${forwardedHost}`
     : origin

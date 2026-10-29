@@ -43,7 +43,7 @@ export const SignUpView: React.FC = () => {
     setMessage(t.authCheckEmail);
   }
 
-  const oauth = async (provider: 'google' | 'discord') => {
+  const oauth = async (provider: 'google') => {
     setError('');
     setMessage('');
     const supabase = await createClient();
@@ -140,13 +140,6 @@ export const SignUpView: React.FC = () => {
                 <path fill="#EA4335" d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z" />
               </svg>
               {t.authContinueGoogle}
-            </button>
-
-            <button type="button" onClick={() => oauth('discord')} className="button-secondary min-h-11 w-full justify-center">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#5865F2" d="M20.32 5.37a19.8 19.8 0 0 0-4.89-1.52.07.07 0 0 0-.08.04c-.21.38-.45.86-.61 1.25a18.3 18.3 0 0 0-5.48 0 12.6 12.6 0 0 0-.62-1.25.08.08 0 0 0-.08-.04c-1.71.29-3.35.8-4.89 1.52a.07.07 0 0 0-.03.03C.53 9.05-.32 12.62.1 16.15a.08.08 0 0 0 .03.06 19.9 19.9 0 0 0 5.99 3.03.08.08 0 0 0 .08-.03c.46-.63.87-1.3 1.23-2a.08.08 0 0 0-.04-.11 13.1 13.1 0 0 1-1.87-.89.08.08 0 0 1 0-.13l1.87-.89a.08.08 0 0 0 .04.11c.37.7.78 1.36 1.23 2a.08.08 0 0 0 .08.03 19.8 19.8 0 0 0 6-3.03.08.08 0 0 0 .03-.06c.5-4.08-.63-7.62-2.68-10.75a.06.06 0 0 0-.03-.03ZM8.02 14c-.9 0-1.63-.82-1.63-1.84 0-1.01.72-1.84 1.63-1.84.92 0 1.65.83 1.64 1.84 0 1.02-.72 1.84-1.64 1.84Zm7.97 0c-.9 0-1.63-.82-1.63-1.84 0-1.01.72-1.84 1.63-1.84.92 0 1.65.83 1.64 1.84 0 1.02-.71 1.84-1.64 1.84Z" />
-              </svg>
-              {t.authContinueDiscord}
             </button>
           </form>
 
