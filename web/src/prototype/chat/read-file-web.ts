@@ -31,8 +31,7 @@ const MAX_INFLATED_BYTES = 40 * 1024 * 1024;
 
 export const ACCEPTED_EXTENSIONS = [
   '.txt', '.md', '.csv', '.tsv', '.json', '.log',
-  '.docx', '.pptx', '.xlsx', 
-  // '.pdf',
+  '.docx', '.pptx', '.xlsx', '.pdf',
 ] as const;
 
 /** Value for `<input type="file" accept>`. */
@@ -362,20 +361,18 @@ const xlsxText = async (zip: Zip): Promise<string> => {
   return out;
 };
 
-// This code use 'unpdf' package but we don't have it installed
-
 /* ------------------------------------------------------------------- pdf */
 
-// const pdfText = async (bytes: Uint8Array): Promise<string> => {
-//   try {
-//     const { getDocumentProxy, extractText } = await import('unpdf')
-//     const pdf = await getDocumentProxy(bytes);
-//     const { text } = await extractText(pdf, { mergePages: true });
-//     return text;
-//   } catch {
-//     throw new UnreadableFileError('The PDF could not be opened. It may be password-protected or damaged.');
-//   }
-// };
+const pdfText = async (bytes: Uint8Array): Promise<string> => {
+  try {
+    const { getDocumentProxy, extractText } = await import('unpdf')
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    return text;
+  } catch {
+    throw new UnreadableFileError('The PDF could not be opened. It may be password-protected or damaged.');
+  }
+};
 
 /* ---------------------------------------------------------------- public */
 
@@ -410,14 +407,12 @@ export const readFileInBrowser = async (file: FileLike): Promise<FileReading> =>
   const bytes = new Uint8Array(await file.arrayBuffer());
   let text: string;
 
-  /** Process .pdf file */
-  // if (extension === '.pdf') {
-  //   text = await pdfText(bytes);
-  //   if (text.trim().length < 20) {
-  //     throw new UnreadableFileError('This PDF has no text to read. It is probably a scan, and there is no OCR yet.');
-  //   }
-  // } else
-  if (extension === '.docx' || extension === '.pptx' || extension === '.xlsx') {
+  if (extension === '.pdf') {
+    text = await pdfText(bytes);
+    if (text.trim().length < 20) {
+      throw new UnreadableFileError('This PDF has no text to read. It is probably a scan, and there is no OCR yet.');
+    }
+  } else if (extension === '.docx' || extension === '.pptx' || extension === '.xlsx') {
     let zip: Zip;
     try {
       zip = { entries: readZipDirectory(bytes), bytes };
