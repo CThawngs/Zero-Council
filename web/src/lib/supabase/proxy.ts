@@ -63,6 +63,15 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  /**
+   * Debug
+   */
+  console.log('[updateSession]', {
+    pathname: request.nextUrl.pathname,
+    hasUser: Boolean(user),
+    hasPassword: user?.user_metadata?.has_password,
+  });
+
   // Check force user to set a dedicated password for Zero-Council
   if (user) {
     const hasPassword = user.user_metadata?.has_password === true;
