@@ -1,3 +1,4 @@
+import { readStoredRoom } from '@/prototype/chat/storage'
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -70,6 +71,7 @@ export async function updateSession(request: NextRequest) {
     pathname: request.nextUrl.pathname,
     hasUser: Boolean(user),
     hasPassword: user?.user_metadata?.has_password,
+    storedRoom: readStoredRoom(),
   });
 
   // Check force user to set a dedicated password for Zero-Council
