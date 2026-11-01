@@ -1,30 +1,30 @@
 'use client'
 
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { AppProvider, useApp } from '@/prototype/context/AppContext';
-import { Header } from '../../prototype/components/Header';
-import { Sidebar } from '../../prototype/components/Sidebar';
-import { Footer } from '../../prototype/components/Footer';
-import { Toast } from '../../prototype/components/Toast';
-import { CounterDraftModal } from '../../prototype/components/CounterDraftModal';
-import { JoinRoomModal } from '../../prototype/components/JoinRoomModal';
-import { ChatRoomView } from '../../prototype/components/ChatRoomView';
-import { RoomSummaryView } from '../../prototype/components/RoomSummaryView';
-import { EmptyChamberView } from '../../prototype/components/EmptyChamberView';
-import { SessionActiveView } from '../../prototype/components/SessionActiveView';
-import { SessionConcludedView } from '../../prototype/components/SessionConcludedView';
-import { SessionsListView } from '../../prototype/components/SessionsListView';
-import { PersonasView } from '../../prototype/components/PersonasView';
-import { NewAdvisorView } from '../../prototype/components/NewAdvisorView';
-import { ApiKeysView } from '../../prototype/components/ApiKeysView';
-import { SettingsView } from '../../prototype/components/SettingsView';
-import { BillingHistoryView } from '../../prototype/components/BillingHistoryView';
-import { CookieNotice, AnalyticsLoader } from '../../prototype/components/CookieNotice';
-import { CheckoutDrawer } from '../../prototype/components/CheckoutDrawer';
-import { legalDocumentOf } from '../../prototype/types';
+import { Header } from '@/prototype/components/Header';
+import { Sidebar } from '@/prototype/components/Sidebar';
+import { Footer } from '@/prototype/components/Footer';
+import { Toast } from '@/prototype/components/Toast';
+import { CounterDraftModal } from '@/prototype/components/CounterDraftModal';
+import { JoinRoomModal } from '@/prototype/components/JoinRoomModal';
+import { ChatRoomView } from '@/prototype/components/ChatRoomView';
+import { RoomSummaryView } from '@/prototype/components/RoomSummaryView';
+import { EmptyChamberView } from '@/prototype/components/EmptyChamberView';
+import { SessionActiveView } from '@/prototype/components/SessionActiveView';
+import { SessionConcludedView } from '@/prototype/components/SessionConcludedView';
+import { SessionsListView } from '@/prototype/components/SessionsListView';
+import { PersonasView } from '@/prototype/components/PersonasView';
+import { NewAdvisorView } from '@/prototype/components/NewAdvisorView';
+import { ApiKeysView } from '@/prototype/components/ApiKeysView';
+import { SettingsView } from '@/prototype/components/SettingsView';
+import { BillingHistoryView } from '@/prototype/components/BillingHistoryView';
+import { CookieNotice, AnalyticsLoader } from '@/prototype/components/CookieNotice';
+import { CheckoutDrawer } from '@/prototype/components/CheckoutDrawer';
+import { legalDocumentOf } from '@/prototype/types';
 
 function ChamberContent () {
-    const { currentView, setCurrentView, t, checkoutPlan, closeCheckout } = useApp();
+    const { currentView, t, checkoutPlan, closeCheckout } = useApp();
     const mainRef = useRef<HTMLElement>(null);
     const isPublicPage = currentView === 'overview' || legalDocumentOf(currentView) !== null || currentView === 'sign-in' || currentView === 'sign-up';
 

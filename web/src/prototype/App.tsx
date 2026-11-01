@@ -38,8 +38,10 @@ const ChamberContent: React.FC = () => {
     <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
       <a href="#main-content" className="skip-link">{t.skipToContent}</a>
       <Header isWorkspace={!isPublicPage} />
+
       <div className="flex min-h-screen flex-1 pt-[76px]">
         {!isPublicPage && <Sidebar />}
+
         <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
           {currentView === 'overview' && <OverviewView />}
           {currentView === 'empty-chamber' && <EmptyChamberView />}
@@ -52,8 +54,6 @@ const ChamberContent: React.FC = () => {
           {currentView === 'settings' && <SettingsView />}
           {currentView === 'billing' && <BillingHistoryView />}
           {legalDocumentOf(currentView) && <LegalView />}
-          {/* {currentView === 'sign-up' && <SignUpView />}
-          {currentView === 'sign-in' && <SignInView />} */}
           {currentView === 'chat-room' && <ChatRoomView />}
           {currentView === 'room-summary' && <RoomSummaryView />}
         </main>

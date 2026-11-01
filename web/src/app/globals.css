@@ -1269,3 +1269,16 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
     transform: translateY(-0.2rem);
   }
 }
+
+@keyframes header-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.header-fade-in {
+  animation: header-fade-in 700ms ease-out both;
+}

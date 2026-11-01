@@ -44,11 +44,13 @@ import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
 import { createClient } from '@/lib/supabase/client';
 import {
+  AnalyticsConsentState,
   getServerAnalyticsConsent,
   readAnalyticsConsent,
   subscribeAnalyticsConsent,
   type AnalyticsConsent,
 } from '../components/CookieNotice';
+import { redirect } from 'next/navigation';
 
 /** One live room. Deliberately not a `DeliberationSession`: that shape has no message list. */
 export interface ChatRoom {
@@ -132,7 +134,8 @@ interface AppContextType {
   /** Plan awaiting payment. Non-null opens the checkout drawer. */
   checkoutPlan: Plan | null;
   /** `null` until the visitor answers the cookie dialog. Analytics loads only on `'granted'`. */
-  consent: AnalyticsConsent | null;
+  /** `loading` = chưa đọc storage; `null` = đã đọc nhưng chưa có quyết định. */
+  consent: AnalyticsConsentState;
   closeCheckout: () => void;
   /**
    * The one entry point to buying. Redirects to sign-in when nobody is signed in, and only then
@@ -271,6 +274,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: Vi
   // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
   // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
   const [language, setLanguageState] = useState<Language>('en');
+
   useIsomorphicLayoutEffect(() => {
     try {
       if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
@@ -286,6 +290,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: Vi
       // Private mode: the choice still applies for this page view, it just will not persist.
     }
   };
+  
   // The first client render has to match the server's, and the server cannot know the visitor's theme,
   // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
   // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun
@@ -342,20 +347,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: Vi
   // reads as data loss). Runs once; nothing writes the store until a room exists, so this cannot clobber it.
   useIsomorphicLayoutEffect(() => {
     const restored = readStoredRoom();
-    if (!restored) return;
-    setCurrentRoom({
-      title: restored.title,
-      mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
-      roster: restored.roster,
-      messages: restored.messages,
-      pending: restored.pending ?? [],
-      turns: restored.turns,
-      stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
-      failures: (restored.failures as TurnFailure[]) ?? [],
-      held: restored.held ?? [],
-    });
-    setCurrentView('chat-room');
+
+    if (restored) {        
+      setCurrentRoom({
+        title: restored.title,
+        mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
+        roster: restored.roster,
+        messages: restored.messages,
+        pending: restored.pending ?? [],
+        turns: restored.turns,
+        stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
+        failures: (restored.failures as TurnFailure[]) ?? [],
+        held: restored.held ?? [],
+      });
+
+      if (window.location.pathname.startsWith('/dashboard'))
+        setCurrentView('chat-room');
+    }
   }, []);
+
+  // Mirror every room change into the tab store. This is the only writer; nothing else touches it.
+  useLayoutEffect(() => {
+    if (currentRoom) writeStoredRoom(currentRoom);
+  }, [currentRoom]);
+
   const [isRoomBusy, setIsRoomBusy] = useState(false);
   const [isReadingLink, setIsReadingLink] = useState(false);
   const [isReadingFile, setIsReadingFile] = useState(false);
@@ -376,11 +391,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: Vi
     document.title = copy[language].documentTitle;
     document.querySelector('meta[name="description"]')?.setAttribute('content', copy[language].documentDescription);
   }, [language]);
-
-  // Mirror every room change into the tab store. This is the only writer; nothing else touches it.
-  useEffect(() => {
-    if (currentRoom) writeStoredRoom(currentRoom);
-  }, [currentRoom]);
 
   /**
    * Read the session once on mount, then follow it.
@@ -413,10 +423,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: Vi
       scope: 'local'
     });
     setAuthUser(null);
+
+    // Clear the everything that has been stored and reset to default
     setCheckoutPlan(null);
-    window.location.href = '/';
+    setCurrentRoom(null);
+    clearRoom();
+    
     setCurrentView('overview');
     window.scrollTo(0, 0);
+    redirect('/');
   };
 
   /**

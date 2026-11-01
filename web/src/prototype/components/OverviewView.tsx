@@ -22,7 +22,7 @@ import {
 import Link from 'next/link';
 
 export const OverviewView: React.FC = () => {
-  const { setCurrentView, t, language, authUser, authReady, requestCheckout } = useApp();
+  const { t, language, authUser, authReady, requestCheckout } = useApp();
 
   const flow = [
     { icon: MessageSquareText, title: t.flow1Title, body: t.flow1Body, badge: t.badgeStep1, tint: 'var(--tint-blue)' },
@@ -39,6 +39,11 @@ export const OverviewView: React.FC = () => {
     { icon: KeyRound, title: t.why2Title, body: t.why2Body, tint: 'var(--tint-violet)' },
     { icon: Scale, title: t.why3Title, body: t.why3Body, tint: 'var(--tint-green)' },
   ];
+
+  const goToSection = (href: string) => {
+    const scroll = () => document.querySelector(href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    requestAnimationFrame(() => requestAnimationFrame(scroll));
+  };
 
   // Link can be used as a way to prerender pages but it is still required
   // that we find a way to hold off until it all loads
@@ -64,7 +69,7 @@ export const OverviewView: React.FC = () => {
               <span>{t.overviewPrimary}</span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
-            <a href="#how-it-works" className="button-secondary text-base">
+            <a onClick={() => {goToSection('#how-it-works')}} className="button-secondary text-base">
               {t.overviewSecondary}
             </a>
           </div>
