@@ -14,8 +14,9 @@
 
 import { splitDataUrl } from './read-image-web.ts';
 import { SILENT_TOKEN, USER_HANDLE, aliasTable, findMentions, type BotGenerator, type BotTurn, type ChatBot, type ChatTurnRequest } from './engine.ts';
+import { createClient } from '@/lib/supabase/client';
 
-export type ProviderId = 'anthropic' | 'openai';
+export type ProviderId = string;
 
 export interface ProviderModel {
   id: string;
@@ -26,29 +27,63 @@ export interface Provider {
   id: ProviderId;
   label: string;
   models: ProviderModel[];
-  /** Env or setting the key comes from, named only so the UI can ask for the right thing. */
-  keyHint: string;
+  keyPrefix: string | null;
 }
 
-export const PROVIDERS: Provider[] = [
-  {
-    id: 'anthropic',
-    label: 'Anthropic',
-    models: [{ id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' }],
-    keyHint: 'sk-ant-…',
-  },
-  {
-    id: 'openai',
-    label: 'OpenAI',
-    models: [
-      { id: 'gpt-4o', label: 'GPT-4o' },
-      { id: 'gpt-4o-mini', label: 'GPT-4o mini' },
-    ],
-    keyHint: 'sk-…',
-  },
-];
+/**
+ * Load active providers and models from Supabase.
+ */
+export async function getProviders(): Promise<Provider[]> {
+  const supabase = createClient();
 
-export const providerById = (id: ProviderId): Provider => PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
+  const { data, error } = await supabase
+    .from('zc_agent_providers')
+    .select(`
+      id,
+      name,
+      key_prefix,
+      is_active,
+      zc_agent_models (
+        id,
+        name,
+        is_active
+      )
+    `)
+    .eq('is_active', true)
+    .order('name');
+
+  if (error) {
+    throw new Error(`Failed to load providers: ${error.message}`);
+  }
+
+  return (data ?? []).map((provider) => ({
+    id: provider.id,
+    label: provider.name,
+    keyPrefix: provider.key_prefix,
+    models: (provider.zc_agent_models ?? [])
+      .filter((model) => model.is_active)
+      .map((model) => ({
+        id: model.id,
+        label: model.name,
+      })),
+  }));
+}
+
+/**
+ * Adapter list
+ */
+const getProviderAdapter = (provider: ProviderId) => {
+  switch (provider) {
+    case 'anthropic':
+      return requestAnthropic;
+
+    case 'openai':
+      return requestOpenAi;
+
+    default:
+      throw new Error(`Unsupported provider adapter: ${provider}`);
+  }
+};
 
 /**
  * The one tool an advisor may call. Same name and shape as Hermes' `message_agent`, because the
@@ -91,7 +126,7 @@ export const resolveTarget = (raw: string, roster: ChatBot[]): string[] => {
   return hit ? [hit.id] : [];
 };
 
-interface Credentials {
+export interface Credentials {
   provider: ProviderId;
   model: string;
   apiKey: string;
@@ -323,7 +358,7 @@ export const byokGenerator =
     options.onStart?.(request.bot);
 
     const persona = options.personaOf?.(request.bot);
-    const call = credentials.provider === 'anthropic' ? requestAnthropic : requestOpenAi;
+    const call = getProviderAdapter(credentials.provider);
     const { text, target, attempted } = await call(credentials, request, persona);
 
     if (!text || text === SILENT_TOKEN) return { text: '', handoffs: [], silent: true };

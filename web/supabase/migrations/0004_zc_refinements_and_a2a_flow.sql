@@ -122,3 +122,13 @@ ALTER TABLE public.zc_users_api_keys
 -- Đổi tên index (nếu có) để thống nhất với tên cột mới
 ALTER INDEX IF EXISTS zc_users_api_keys_model_idx 
   RENAME TO zc_users_api_keys_provider_idx;
+
+-- ---------------------------------------------------------------------------------------------
+-- 7. Bổ sung thêm các cột lưu trữ cho zc_agent_providers và zc_agent_models
+-- ---------------------------------------------------------------------------------------------
+ALTER TABLE public.zc_agent_providers
+ADD COLUMN key_prefix TEXT,
+ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+ALTER TABLE public.zc_agent_models
+ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT TRUE;

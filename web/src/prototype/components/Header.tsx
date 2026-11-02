@@ -155,7 +155,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   return (
     <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <div className='flex justify-between gap-[50%]'>
+        <div className='flex justify-between gap-[45%]'>
           <Link href={`/`} onClick={() => setCurrentView('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
             <span className="brand-mark">
                 <CouncilOrb />
