@@ -117,6 +117,7 @@ export interface DeliberationSession {
 
 export interface ApiKeyConfig {
   provider: ModelProvider;
-  modelName: SupportedModel;
+  /** Wire model id from the live /v1/models list — any provider-returned id, not a fixed catalog. */
+  modelName: string;
   connected: boolean;
 }
