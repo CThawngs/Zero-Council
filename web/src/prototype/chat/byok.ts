@@ -16,6 +16,7 @@ import { splitDataUrl } from './read-image-web.ts';
 import { SILENT_TOKEN, USER_HANDLE, aliasTable, findMentions, type BotGenerator, type BotTurn, type ChatBot, type ChatTurnRequest } from './engine.ts';
 import { createClient } from '@/lib/supabase/client';
 
+// Provider lấy từ Supabase xuống
 export type ProviderId = string;
 
 export interface ProviderModel {
@@ -71,6 +72,8 @@ export async function getProviders(): Promise<Provider[]> {
 
 /**
  * Adapter list
+ * 
+ * supports : anthropic, openai
  */
 const getProviderAdapter = (provider: ProviderId) => {
   switch (provider) {

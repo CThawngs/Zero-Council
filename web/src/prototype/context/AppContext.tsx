@@ -111,6 +111,7 @@ interface AppContextType {
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
   apiKeys: ApiKeyConfig[];
+  refreshApiKeys: () => Promise<void>;
   connectApiKey: (provider: ModelProvider, key: string) => void;
   removeApiKey: (provider: ModelProvider) => void;
   revokeAllKeys: () => void;
@@ -130,7 +131,7 @@ interface AppContextType {
    * purchase that the server then refuses with a bare 401.
    */
   authReady: boolean;
-  signOut: () => Promise<void>;
+  signOut: () => Promise<vsaidoid>;
   /** Plan awaiting payment. Non-null opens the checkout drawer. */
   checkoutPlan: Plan | null;
   /** `null` until the visitor answers the cookie dialog. Analytics loads only on `'granted'`. */
@@ -314,10 +315,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialView?: Vi
       return next;
     });
   };
+
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
+
+  /**
+   * API keys
+   * 
+   * apiKeysLoaded và apiKeysLoading tính được sử dụng để xem trạng thái
+   * danh sách apiKeys hiện tại, qua đó hiển thị chờ
+   */
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
+  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
+  const [apiKeysLoading, setApiKeysLoading] = useState(true);
+
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
   const [isDeliberating, setIsDeliberating] = useState(false);
@@ -921,30 +933,104 @@ const purgeSessions = () => {
   // Reloading clears them, which is the trade for never handing a key to anyone but the vendor.
   const [keys, setKeys] = useState<Partial<Record<ModelProvider, string>>>({});
 
-  const connectApiKey = (provider: ModelProvider, key: string) => {
-    setKeys((value) => ({ ...value, [provider]: key }));
-    setApiKeys((value) =>
-      value.map((item) => (item.provider === provider ? { ...item, connected: true } : item))
-    );
-    showToast('toastProviderOn', { provider });
+
+  // -------------API Keys-------------
+  const refreshApiKeys = async (forceLoad = false) => {
+    if (apiKeysLoaded && !forceLoad) return;
+
+    setApiKeysLoading(true);
+
+    try {
+      const response = await fetch('/api/user/keys', {
+        method: 'GET',
+        cache: 'no-store',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load API keys');
+      }
+
+      setApiKeys(
+        (result.keys ?? []).map((key: { provider_id: string }) => ({
+          provider: key.provider_id,
+          connected: true,
+        }))
+      );
+
+      setApiKeysLoaded(true);
+    } finally {
+      setApiKeysLoading(false);
+    }
   };
 
-  const removeApiKey = (provider: ModelProvider) => {
-    setKeys((value) => {
-      const next = { ...value };
-      delete next[provider];
-      return next;
+  const connectApiKey = (provider: string, key: string) => {
+    const response = await fetch('/api/user/keys', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider_id: provider,
+        apiKey,
+      }),
     });
-    setApiKeys((value) =>
-      value.map((item) => (item.provider === provider ? { ...item, connected: false } : item))
-    );
-    showToast('toastProviderOff', { provider });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to save API key');
+    }
+
+    // Server đã lưu thành công, tải lại danh sách.
+    showToast('toastProviderOn', {provider});
+    await refreshApiKeys(true);
+  };
+
+  const removeApiKey = async (provider: string) => {
+    const response = await fetch('/api/user/keys', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        provider_id: provider,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to delete API key');
+    }
+
+    // Server đã xóa thành công, tải lại danh sách.
+    showToast('toastProviderOff', {provider});
+    await refreshApiKeys(true);
   };
 
   const revokeAllKeys = () => {
-    setKeys({});
-    setApiKeys((value) => value.map((item) => ({ ...item, connected: false })));
+    const response = await fetch('/api/user/keys', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        
+      },
+      body: JSON.stringify({
+        all: true,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to delete API key');
+    }
+
+    // Server đã xóa thành công, tải lại danh sách.
     showToast('toastProvidersCleared');
+    await refreshApiKeys(true);
   };
 
   const currentSession =
@@ -952,6 +1038,7 @@ const purgeSessions = () => {
     localizedSessions[0] ||
     localizeSession(initialSessions[0], language);
 
+  // -------------END-------------
   return (
     <AppContext.Provider
       value={{

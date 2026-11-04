@@ -174,6 +174,5 @@ export interface DeliberationSession {
 
 export interface ApiKeyConfig {
   provider: ModelProvider;
-  modelName: SupportedModel;
   connected: boolean;
 }

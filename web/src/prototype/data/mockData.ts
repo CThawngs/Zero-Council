@@ -76,8 +76,8 @@ export const initialSessions: DeliberationSession[] = [
 
 /** One row per provider. The key itself is never stored here — it lives in memory only. */
 export const initialApiKeys: ApiKeyConfig[] = [
-  { provider: 'anthropic', modelName: 'claude-sonnet-4-5', connected: false },
-  { provider: 'openai', modelName: 'gpt-4o', connected: false },
+  { provider: 'anthropic', connected: false },
+  { provider: 'openai', connected: false },
 ];
 
 // Vendors and model names are proper nouns. Translating them was never useful and produced copy
