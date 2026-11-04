@@ -131,6 +131,8 @@ interface AppContextType {
   currentPlanId: PlanId;
   /** The signed-in account, or null. Null is the normal state for a visitor, not an error. */
   authUser: { id: string; email: string } | null;
+  isAdmin: boolean;
+  isFounder: boolean;
   /**
    * False until the first session read resolves. Checkout stays disabled while this is false:
    * treating "not checked yet" as "signed out" would bounce a signed-in user to the login page
@@ -350,6 +352,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isFounder, setIsFounder] = useState(false);
   /**
    * Non-essential cookie consent. `null` means the visitor has not been asked yet, which is
    * deliberately NOT the same as consent: analytics only loads on an explicit `'granted'`.
@@ -1015,6 +1019,23 @@ const purgeSessions = () => {
     };
   }, [authUser]);
 
+  // Load this account's role once sign-in settles. The route scopes by session email.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    void fetch('/api/me', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { role?: string; isFounder?: boolean } | null) => {
+        if (cancelled) return;
+        setIsAdmin(body?.role === 'admin');
+        setIsFounder(Boolean(body?.isFounder));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
   // Mirror bots into the advisor roster so single-bot chat reuses runTurn/byok unchanged.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- roster mirrors server-owned bots, not local UI state
@@ -1167,6 +1188,8 @@ const purgeSessions = () => {
         closeCounterDraftModal: () => setIsCounterDraftModalOpen(false),
         currentPlanId,
         authUser,
+        isAdmin,
+        isFounder,
         authReady,
         signOut,
         checkoutPlan,

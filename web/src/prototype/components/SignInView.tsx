@@ -13,6 +13,9 @@ export const SignInView: React.FC = () => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [otpMode, setOtpMode] = useState(false);
+    const [otpCode, setOtpCode] = useState('');
+    const [newPassword, setNewPassword] = useState('');
 
     // Cân nhắc thêm trạng thái time out mỗi lần nhấn reset password
 
@@ -56,14 +59,41 @@ export const SignInView: React.FC = () => {
     }
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth`,
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email });
 
-    if (error)
+    if (error) {
       setError(error.message);
+      return;
+    }
 
-    setMessage(t.authCheckEmail);
+    setOtpMode(true);
+    setMessage(t.authOtpSent);
+  }
+
+  async function verifyOtpAndSetPassword(event: FormEvent) {
+    event.preventDefault();
+    setError('');
+    setMessage('');
+    if (newPassword.length < 8) {
+      setError(t.authPasswordHint);
+      return;
+    }
+    const supabase = await createClient();
+    const { error: verifyError } = await supabase.auth.verifyOtp({
+      email,
+      token: otpCode.trim(),
+      type: 'email',
+    });
+    if (verifyError) {
+      setError(verifyError.message);
+      return;
+    }
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      setError(updateError.message);
+      return;
+    }
+    window.location.href = '/';
   }
 
   return (
@@ -137,6 +167,24 @@ export const SignInView: React.FC = () => {
               <LogIn className="h-4 w-4" />
               {t.authSignInAction}
             </button>
+
+            {otpMode && (
+              <div className="space-y-4 rounded-xl border border-border bg-background/60 p-4" aria-live="polite">
+                <p className="text-sm font-semibold text-ink">{t.authOtpTitle}</p>
+                <p className="text-xs text-ink-muted">{t.authOtpBody}</p>
+                <label className="field">
+                  <span className="field-label">{t.authOtpCodeLabel}</span>
+                  <input type="text" inputMode="numeric" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="123456" autoComplete="one-time-code" />
+                </label>
+                <label className="field">
+                  <span className="field-label">{t.authNewPasswordLabel}</span>
+                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
+                </label>
+                <button type="button" onClick={verifyOtpAndSetPassword} className="button-primary min-h-11 w-full justify-center">
+                  {t.authOtpVerify}
+                </button>
+              </div>
+            )}
 
             {message && (
               <div className="flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink">

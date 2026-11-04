@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { isFounder } from '../founder.ts';
 import { serverEnv } from '../serverEnv.ts';
 import type { PlanId } from '@/prototype/data/plans';
 
@@ -139,17 +140,20 @@ interface UserRow {
 const toUser = (row: UserRow): AccountUser => ({ email: row.email, role: row.role, createdAt: row.created_at });
 
 /**
- * Record the account on first sight, always as `user`. This function can never produce an admin:
- * promotion is a separate, role-gated path, and the very first admin is a hand-run SQL insert
- * documented in the migration. If this could self-promote, anyone who reached it would be admin.
+ * Record the account on first sight. Promotions are normally a separate, role-gated
+ * path, and the very first admin is a hand-run SQL insert documented in the migration.
+ * The one exception is the hard-coded founder (see lib/founder.ts): that account is
+ * created as `admin` here, so the founder is supreme admin without needing a manual
+ * seed step, and can never self-demote.
  */
 export const ensureUser = async (email: string): Promise<AccountUser> => {
   assertStoreAvailable();
   const key = email.trim().toLowerCase();
+  const initialRole: Role = isFounder(key) ? 'admin' : 'user';
   if (supabaseConfig()) {
     const rows = await request('zc_users?on_conflict=email', {
       method: 'POST',
-      body: JSON.stringify({ email: key, role: 'user' }),
+      body: JSON.stringify({ email: key, role: initialRole }),
       headers: { Prefer: 'return=representation' },
     });
     const [row] = rows as UserRow[];
@@ -162,7 +166,7 @@ export const ensureUser = async (email: string): Promise<AccountUser> => {
   const data = await readAll();
   const existing = data.users[key];
   if (existing) return existing;
-  const created: AccountUser = { email: key, role: 'user', createdAt: new Date().toISOString() };
+  const created: AccountUser = { email: key, role: initialRole, createdAt: new Date().toISOString() };
   data.users[key] = created;
   await writeAll(data);
   return created;

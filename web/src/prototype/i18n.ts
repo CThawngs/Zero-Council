@@ -125,6 +125,8 @@ export const copy = {
     pricingTeaserBody: 'Start free. Upgrade when the council gets bigger.',
     planAdvisors: 'Up to {count} AI advisors active at once in a session',
     planCurrent: 'Current plan',
+    planActiveUntil: 'Plan active until',
+    adminNav: 'Admin',
     planChoose: 'Choose {plan}',
     planPerMonth: 'per month',
     planAdvisorLabel: 'AI advisors active at once',
@@ -315,6 +317,12 @@ export const copy = {
     authSetPasswordBody: 'Forgot your password or just signed in for the first time with a Google Account',
 
     authForgotPasswordLink: 'Forgot Password?',
+    authOtpTitle: 'Enter the OTP code from your email',
+    authOtpBody: 'We sent a 6-digit code to your email. Enter it and choose a new password.',
+    authOtpCodeLabel: 'OTP code',
+    authNewPasswordLabel: 'New password (8+ chars)',
+    authOtpVerify: 'Verify & set password',
+    authOtpSent: 'OTP sent. Check your email.',
     authEmailRequiredError: 'Please enter your email address before resetting your password.',
     authGenericError: 'An error occurred, please try again.',
 
@@ -1012,6 +1020,8 @@ export const copy = {
     pricingTeaserBody: 'Bắt đầu miễn phí. Nâng cấp khi hội đồng cần thêm người.',
     planAdvisors: 'Tối đa {count} AI cố vấn hoạt động cùng lúc trong 1 phiên',
     planCurrent: 'Gói hiện tại',
+    planActiveUntil: 'Gói có hiệu lực đến',
+    adminNav: 'Quản trị',
     planChoose: 'Chọn {plan}',
     planPerMonth: 'mỗi tháng',
     planAdvisorLabel: 'Số AI cố vấn hoạt động cùng lúc',
@@ -1184,6 +1194,12 @@ export const copy = {
     authSetPasswordBody: 'Dùng khi bạn quên mật khẩu hoặc lần đầu đăng nhập bằng Tài khoản Google',
 
     authForgotPasswordLink: 'Quên mật khẩu?',
+    authOtpTitle: 'Nhập mã OTP trong email',
+    authOtpBody: 'Chúng tôi đã gửi mã 6 chữ số tới email của bạn. Nhập mã và chọn mật khẩu mới.',
+    authOtpCodeLabel: 'Mã OTP',
+    authNewPasswordLabel: 'Mật khẩu mới (8+ ký tự)',
+    authOtpVerify: 'Xác thực & đặt mật khẩu',
+    authOtpSent: 'Đã gửi OTP. Kiểm tra email.',
     authEmailRequiredError: 'Vui lòng nhập địa chỉ email của bạn trước khi đặt lại mật khẩu.',
     authGenericError: 'Có lỗi xảy ra, vui lòng thử lại.',
 
