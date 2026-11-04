@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { hasPasswordClaim } from '@/lib/auth-password'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -65,7 +66,7 @@ export async function updateSession(request: NextRequest) {
 
   // Check force user to set a dedicated password for Zero-Council
   if (user) {
-    const hasPassword = user.user_metadata?.has_password === true;
+    const hasPassword = hasPasswordClaim(user as { user_metadata?: Record<string, unknown> });
 
     const path = request.nextUrl.pathname;
 

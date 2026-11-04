@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { type EmailOtpType } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { needsPasswordSet } from '@/lib/auth-password'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -67,8 +68,9 @@ export async function GET(request: Request) {
       // Check redirect user to set a dedicated password for Zero-Council
       const { data: { user } } = await supabase.auth.getUser();
       
-      const isGoogleOnly = user?.app_metadata?.providers?.includes('google') &&
-      user.user_metadata?.has_password !== true;
+      // Force Google-new users (no password claim) to create one before dashboard.
+  // Merged email+Google accounts have has_password=true and pass straight through.
+      const isGoogleOnly = needsPasswordSet(user);
 
       if (isGoogleOnly) {
         return NextResponse.redirect(`${redirectOrigin}/auth`)

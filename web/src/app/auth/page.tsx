@@ -9,6 +9,7 @@ import { SignUpView } from '@/prototype/components/SignUpView';
 import { SignInView } from '@/prototype/components/SignInView';
 import { SetPasswordView } from '@/prototype/components/SetPasswordView';
 import { createClient } from '@/lib/supabase/client';
+import { needsPasswordSet } from '@/lib/auth-password';
 
 function AuthContent() {
     const { currentView, setCurrentView, t } = useApp();
@@ -32,7 +33,7 @@ function AuthContent() {
             }
 
             // 2. Nếu đã có session nhưng chưa có mật khẩu
-            if (session?.user && session.user.user_metadata?.has_password !== true) {
+            if (session?.user && needsPasswordSet(session.user)) {
                 setCurrentView('set-password');
                 return;
             }
