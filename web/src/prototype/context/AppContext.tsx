@@ -112,9 +112,9 @@ interface AppContextType {
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
   apiKeys: ApiKeyConfig[];
-  connectApiKey: (provider: ModelProvider, key: string) => void;
-  removeApiKey: (provider: ModelProvider) => void;
-  revokeAllKeys: () => void;
+  connectApiKey: (provider: ModelProvider, key: string, model: string) => Promise<boolean>;
+  removeApiKey: (provider: ModelProvider) => Promise<void>;
+  revokeAllKeys: () => Promise<void>;
   isFrameworkModalOpen: boolean;
   openFrameworkModal: () => void;
   closeFrameworkModal: () => void;
@@ -929,19 +929,69 @@ const purgeSessions = () => {
     startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
   };
 
-  // Keys live in memory for the life of the tab and nowhere else: not in storage, not on our server.
-  // Reloading clears them, which is the trade for never handing a key to anyone but the vendor.
+  // Secrets live encrypted server-side (per account); the browser holds a decrypted copy in
+  // memory for the tab only, so direct BYOK calls keep working. A reload re-fetches them from
+  // the authenticated route — they are never in storage, the bundle, or logs.
   const [keys, setKeys] = useState<Partial<Record<ModelProvider, string>>>({});
 
-  const connectApiKey = (provider: ModelProvider, key: string) => {
+  // Restore this account's connected providers on sign-in: connected state + chosen model +
+  // in-memory secrets. Scoped by the session (the route reads the email server-side), so
+  // switching accounts never bleeds the previous account's keys into the new one.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    void fetch('/api/providers', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { providers?: { provider: string; model: string; key?: string }[] } | null) => {
+        if (cancelled || !body?.providers) return;
+        const restored: Partial<Record<ModelProvider, string>> = {};
+        const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
+        for (const entry of body.providers) {
+          if (entry.provider === 'anthropic' || entry.provider === 'openai') {
+            if (entry.key) restored[entry.provider] = entry.key;
+          }
+        }
+        setKeys(restored);
+        setApiKeys((value) =>
+          value.map((item) => {
+            const entry = saved.get(item.provider);
+            return entry ? { ...item, connected: true, modelName: entry.model } : item;
+          })
+        );
+      })
+      .catch(() => {
+        // Offline / store unconfigured: keep the seeded disconnected state, never crash boot.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  const connectApiKey = async (provider: ModelProvider, key: string, model: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/providers', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, model, key }),
+      });
+      if (!response.ok) return false;
+    } catch {
+      return false;
+    }
     setKeys((value) => ({ ...value, [provider]: key }));
     setApiKeys((value) =>
-      value.map((item) => (item.provider === provider ? { ...item, connected: true } : item))
+      value.map((item) => (item.provider === provider ? { ...item, connected: true, modelName: model } : item))
     );
     showToast('toastProviderOn', { provider });
+    return true;
   };
 
-  const removeApiKey = (provider: ModelProvider) => {
+  const removeApiKey = async (provider: ModelProvider) => {
+    await fetch(`/api/providers?provider=${encodeURIComponent(provider)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }).catch(() => undefined);
     setKeys((value) => {
       const next = { ...value };
       delete next[provider];
@@ -953,7 +1003,10 @@ const purgeSessions = () => {
     showToast('toastProviderOff', { provider });
   };
 
-  const revokeAllKeys = () => {
+  const revokeAllKeys = async () => {
+    await fetch('/api/providers', { method: 'DELETE', credentials: 'same-origin' }).catch(() =>
+      undefined
+    );
     setKeys({});
     setApiKeys((value) => value.map((item) => ({ ...item, connected: false })));
     showToast('toastProvidersCleared');
