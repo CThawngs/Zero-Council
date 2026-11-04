@@ -18,6 +18,7 @@ import { SessionsListView } from './components/SessionsListView';
 import { PersonasView } from './components/PersonasView';
 import { NewAdvisorView } from './components/NewAdvisorView';
 import { ApiKeysView } from './components/ApiKeysView';
+import { BotWizardView } from './components/BotWizardView';
 import { SettingsView } from './components/SettingsView';
 import { BillingHistoryView } from './components/BillingHistoryView';
 import { LegalView } from './components/LegalView';
@@ -49,6 +50,7 @@ const ChamberContent: React.FC = () => {
           {currentView === 'personas' && <PersonasView />}
           {currentView === 'new-advisor' && <NewAdvisorView />}
           {currentView === 'api-keys' && <ApiKeysView />}
+          {currentView === 'bot-wizard' && <BotWizardView />}
           {currentView === 'settings' && <SettingsView />}
           {currentView === 'billing' && <BillingHistoryView />}
           {legalDocumentOf(currentView) && <LegalView />}

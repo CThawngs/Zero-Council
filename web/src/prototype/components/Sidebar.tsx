@@ -16,7 +16,7 @@ import { WORKSPACE_NAV } from '../navigation';
  * hover-speed click cannot wipe a council.
  */
 export const Sidebar: React.FC = () => {
-  const { currentSessionId, currentView, deleteSession, language, openJoinRoom, renameSession, setCurrentSessionId, setCurrentView, sessions, t } = useApp();
+  const { bots, currentSessionId, currentView, deleteSession, language, openBotChat, openJoinRoom, renameSession, setCurrentSessionId, setCurrentView, sessions, t } = useApp();
   const labels = translations[language];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
@@ -68,6 +68,35 @@ export const Sidebar: React.FC = () => {
             </div>
           </div>
         ))}
+
+        <div className="mt-3">
+          <p className="nav-group-label">{t.botsTitle}</p>
+          {bots.length === 0 ? (
+            <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.botsEmpty}</p>
+          ) : (
+            <ul className="grid gap-1">
+              {bots.map((bot) => (
+                <li key={bot.id}>
+                  <button
+                    type="button"
+                    onClick={() => openBotChat(bot.id)}
+                    className="min-h-9 w-full truncate rounded-md px-2 text-left text-sm text-ink-muted hover:text-ink"
+                  >
+                    {bot.name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            onClick={() => go('bot-wizard')}
+            className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-brass hover:text-ink"
+          >
+            <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {t.newBot}
+          </button>
+        </div>
 
         <div className="mt-3">
           <p className="nav-group-label">{t.councilsTitle}</p>
