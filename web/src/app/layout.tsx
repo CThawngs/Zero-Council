@@ -3,6 +3,30 @@ import type { ReactNode } from 'react';
 import { THEME_BOOTSTRAP_SCRIPT } from '@/prototype/theme';
 import './globals.css';
 
+import { cookies } from 'next/headers';
+import { AppProvider } from '@/contexts/AppContext';
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const cookieStore = await cookies();
+
+  const language =
+    cookieStore.get('zc-lang')?.value === 'vi' ? 'vi' : 'en';
+
+  return (
+    <html lang={language}>
+      <body>
+        <AppProvider initialLanguage={language}>
+          {children}
+        </AppProvider>
+      </body>
+    </html>
+  );
+}
+
 export const metadata: Metadata = {
   title: 'Zero Council — AI decision council',
   description:

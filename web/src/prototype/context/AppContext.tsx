@@ -83,7 +83,7 @@ interface AppContextType {
   currentView: ViewType;
   setCurrentView: (view: ViewType) => void;
   language: Language;
-  setLanguage: (language: Language) => void;
+  setLanguage: (language: Language) => Promise<void>;
   theme: Theme;
   toggleTheme: () => void;
   t: (typeof copy)[Language];
@@ -270,14 +270,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
   // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
   // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
-  const [language, setLanguageState] = useState<Language>('en');
-  useIsomorphicLayoutEffect(() => {
-    try {
-      if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
-    } catch {
-      // Storage blocked: stay on the default.
+  interface AppProviderProps {
+  children: React.ReactNode;
+  initialLanguage: Language;
+}
+
+export function AppProvider({
+  children,
+  initialLanguage,
+}: AppProviderProps) {
+  const [language, setLanguageState] =
+    useState<Language>(initialLanguage);
+
+  // Phần code còn lại...
+}
+  const setLanguage = async (next: Language) => {
+    if (next === language) return;
+
+    const response = await fetch('/api/language', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ language: next }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Could not save language preference');
     }
-  }, []);
+
+    // Chỉ cập nhật giao diện sau khi cookie được lưu thành công.
+    document.documentElement.lang = next;
+    document.documentElement.dataset.language = next;
+
+    setLanguageState(next);
+  };
   const setLanguage = (next: Language) => {
     setLanguageState(next);
     try {
