@@ -93,6 +93,11 @@ export interface ScenarioBranch {
 export interface DeliberationSession {
   id: string;
   title: string;
+  /**
+   * Set once the user renames a session: their text then wins over the seed
+   * title localization, which otherwise re-translates the canned title.
+   */
+  titlePinned?: boolean;
   summary: string;
   framework: DecisionFramework;
   /** How advisors talk to each other. Applies to rounds started from now on. */
