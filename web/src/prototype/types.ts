@@ -17,6 +17,7 @@ export type ViewType =
   | 'room-summary'
   | 'set-password'
   | 'chat-room'
+  | 'bot-wizard'
 
 /**
  * Legal documents, one view each.
@@ -73,7 +74,7 @@ export interface AdvisorPersona {
   id: string;
   name: string;
   archetype: string;
-  model: SupportedModel;
+  model: string;
   provider: ModelProvider;
   generatedName?: boolean;
   colorToken: 'persona-rose' | 'persona-sage' | 'persona-slate' | 'persona-ochre';
@@ -120,4 +121,15 @@ export interface ApiKeyConfig {
   /** Wire model id from the live /v1/models list — any provider-returned id, not a fixed catalog. */
   modelName: string;
   connected: boolean;
+}
+
+/** A user-owned AI bot: one persona, one brain. Persisted server-side per account. */
+export interface UserBot {
+  id: string;
+  name: string;
+  instruction: string;
+  provider: ModelProvider;
+  model: string;
+  createdAt?: string;
+  updatedAt?: string;
 }

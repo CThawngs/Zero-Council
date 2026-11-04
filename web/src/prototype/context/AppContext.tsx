@@ -5,6 +5,7 @@ import {
   DeliberationSession,
   Language,
   ModelProvider,
+  UserBot,
   ViewType,
   frameworkIdOf,
 } from '../types';
@@ -111,6 +112,12 @@ interface AppContextType {
   deleteSession: (id: string) => void;
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
+  bots: UserBot[];
+  botsReady: boolean;
+  createBot: (input: { name: string; instruction: string; provider: ModelProvider; model: string }) => Promise<UserBot | null>;
+  updateBot: (id: string, input: { name: string; instruction: string; provider: ModelProvider; model: string }) => Promise<UserBot | null>;
+  deleteBot: (id: string) => Promise<void>;
+  openBotChat: (botId: string) => void;
   apiKeys: ApiKeyConfig[];
   connectApiKey: (provider: ModelProvider, key: string, model: string) => Promise<boolean>;
   removeApiKey: (provider: ModelProvider) => Promise<void>;
@@ -198,6 +205,22 @@ const stancesOf = (personas: AdvisorPersona[]) =>
 
 const toChatBots = (roster: AdvisorPersona[]): ChatBot[] =>
   roster.map((persona) => ({ id: persona.id, name: persona.name }));
+
+/** Prefix keeps bot personas from colliding with fixture advisor ids. */
+export const botPersonaId = (botId: string) => `bot:${botId}`;
+
+const botToPersona = (bot: UserBot): AdvisorPersona => ({
+  id: botPersonaId(bot.id),
+  name: bot.name,
+  archetype: bot.name,
+  model: bot.model,
+  provider: bot.provider,
+  colorToken: 'persona-sage',
+  colorHex: '#7C9885',
+  stance: '',
+  instructions: bot.instruction,
+  sampleQuote: '',
+});
 
 const createSession = async (
   question: string,
@@ -315,6 +338,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
+  const [bots, setBots] = useState<UserBot[]>([]);
+  const [botsReady, setBotsReady] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
@@ -417,14 +442,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    */
   const landedRef = useRef(false);
   useEffect(() => {
-    if (!authUser || landedRef.current) return;
+    if (!authUser || !botsReady || landedRef.current) return;
     landedRef.current = true;
     if (currentView === 'overview') {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot landing after sign-in, guarded by landedRef
-      setCurrentView('empty-chamber');
+      setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
       window.scrollTo(0, 0);
     }
-  }, [authUser, currentView]);
+  }, [authUser, botsReady, bots.length, currentView]);
 
   const signOut = async () => {
     const supabase = createClient();
@@ -467,10 +492,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     requestAnimationFrame(() => requestAnimationFrame(scroll));
   };
 
-  const localizedSessions = useMemo(
-    () => sessions.map((session) => localizeSession(session, language)),
-    [language, sessions]
-  );
+  const localizedSessions = useMemo(() => {
+    const visible = authUser
+      ? sessions.filter((session) => !['project-proposal', 'team-priority', 'process-change'].includes(session.id))
+      : sessions;
+    return visible.map((session) => localizeSession(session, language));
+  }, [language, sessions, authUser]);
 
   const localizedPersonas = useMemo(
     () => personas.map((persona) => localizePersona(persona, language)),
@@ -967,6 +994,84 @@ const purgeSessions = () => {
     };
   }, [authUser]);
 
+  // Load this account's bots once sign-in settles. The route scopes by session email.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset readiness when the account changes, before the fetch settles
+    setBotsReady(false);
+    void fetch('/api/bots', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { bots?: UserBot[] } | null) => {
+        if (cancelled) return;
+        setBots(body?.bots ?? []);
+        setBotsReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setBotsReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  // Mirror bots into the advisor roster so single-bot chat reuses runTurn/byok unchanged.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- roster mirrors server-owned bots, not local UI state
+    setPersonas((value) => [
+      ...value.filter((persona) => !persona.id.startsWith('bot:')),
+      ...bots.map(botToPersona),
+    ]);
+  }, [bots]);
+
+  const createBot = async (input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
+    try {
+      const response = await fetch('/api/bots', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { bot: UserBot };
+      setBots((value) => [...value, body.bot]);
+      return body.bot;
+    } catch {
+      return null;
+    }
+  };
+
+  const updateBot = async (id: string, input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
+    try {
+      const response = await fetch('/api/bots', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...input }),
+      });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { bot: UserBot };
+      setBots((value) => value.map((bot) => (bot.id === id ? body.bot : bot)));
+      return body.bot;
+    } catch {
+      return null;
+    }
+  };
+
+  const deleteBot = async (id: string) => {
+    await fetch(`/api/bots?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }).catch(() => undefined);
+    setBots((value) => value.filter((bot) => bot.id !== id));
+  };
+
+  const openBotChat = (botId: string) => {
+    const persona = personas.find((item) => item.id === botPersonaId(botId)) ?? bots.map(botToPersona).find((item) => item.id === botPersonaId(botId));
+    if (!persona) return;
+    joinRoom([persona], 'round-robin', persona.name);
+  };
+
   const connectApiKey = async (provider: ModelProvider, key: string, model: string): Promise<boolean> => {
     try {
       const response = await fetch('/api/providers', {
@@ -1044,6 +1149,12 @@ const purgeSessions = () => {
         deleteSession,
         personas: localizedPersonas,
         addPersona,
+        bots,
+        botsReady,
+        createBot,
+        updateBot,
+        deleteBot,
+        openBotChat,
         apiKeys,
         connectApiKey,
         removeApiKey,
