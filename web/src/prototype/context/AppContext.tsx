@@ -15,6 +15,7 @@ import {
   type Round,
 } from '@/lib/deliberation/engine';
 import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
+import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
 import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
 import {
@@ -106,6 +107,8 @@ interface AppContextType {
   selectedRoundIndex: number;
   selectRound: (index: number) => void;
   purgeSessions: () => void;
+  renameSession: (id: string, title: string) => void;
+  deleteSession: (id: string) => void;
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
   apiKeys: ApiKeyConfig[];
@@ -242,7 +245,7 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
   // round whose language differs from the interface.
   return {
     ...session,
-    title: localizedTitles[session.id] ?? session.title,
+    title: session.titlePinned ? session.title : localizedTitles[session.id] ?? session.title,
     summary: t.sampleSessionSummary,
     relativeTime: t.sample,
     advisors: localizedAdvisors,
@@ -406,6 +409,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       subscription.subscription.unsubscribe();
     };
   }, []);
+
+  /**
+   * Post-login dashboard: a signed-in user lands on the workspace (the new-council
+   * composer with the Grok-style left-bar), not the marketing landing. Fires once
+   * per sign-in — navigating back to the landing via the brand mark stays put.
+   */
+  const landedRef = useRef(false);
+  useEffect(() => {
+    if (!authUser || landedRef.current) return;
+    landedRef.current = true;
+    if (currentView === 'overview') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot landing after sign-in, guarded by landedRef
+      setCurrentView('empty-chamber');
+      window.scrollTo(0, 0);
+    }
+  }, [authUser, currentView]);
 
   const signOut = async () => {
     const supabase = createClient();
@@ -580,6 +599,14 @@ const purgeSessions = () => {
     setCurrentRoom(null);
     clearStoredRoom();
     showToast('toastSessionsReset');
+  };
+
+  const renameSession = (id: string, title: string) => {
+    setSessions((value) => renameSessionInList(value, id, title));
+  };
+
+  const deleteSession = (id: string) => {
+    setSessions((value) => deleteSessionFromList(value, id));
   };
 
   const addPersona = (persona: AdvisorPersona) => {
@@ -960,6 +987,8 @@ const purgeSessions = () => {
         selectedRoundIndex,
         selectRound,
         purgeSessions,
+        renameSession,
+        deleteSession,
         personas: localizedPersonas,
         addPersona,
         apiKeys,
