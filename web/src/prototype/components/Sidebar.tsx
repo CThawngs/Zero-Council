@@ -16,7 +16,7 @@ import { WORKSPACE_NAV } from '../navigation';
  * hover-speed click cannot wipe a council.
  */
 export const Sidebar: React.FC = () => {
-  const { bots, currentSessionId, currentView, deleteSession, language, openBotChat, openJoinRoom, renameSession, setCurrentSessionId, setCurrentView, sessions, t } = useApp();
+  const { bots, currentSessionId, currentView, deleteSession, isAdmin, language, openBotChat, openJoinRoom, renameSession, setCurrentSessionId, setCurrentView, sessions, t } = useApp();
   const labels = translations[language];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
@@ -96,6 +96,14 @@ export const Sidebar: React.FC = () => {
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
             {t.newBot}
           </button>
+          {isAdmin ? (
+            <a
+              href="/admin"
+              className="mt-1 flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-ink-muted hover:text-ink"
+            >
+              {t.adminNav}
+            </a>
+          ) : null}
         </div>
 
         <div className="mt-3">

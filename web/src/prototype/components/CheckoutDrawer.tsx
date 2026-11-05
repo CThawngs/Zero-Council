@@ -19,6 +19,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [granted, setGranted] = useState<string | null>(null);
+
   const startPayment = async () => {
     if (!plan || pending) return;
     setPending(true);
@@ -29,8 +31,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId: plan.id, code: code.trim() || undefined }),
       });
-      const result = (await response.json()) as { checkoutUrl?: string };
-      if (!response.ok || !result.checkoutUrl) throw new Error(t.checkoutError);
+      const result = (await response.json()) as { checkoutUrl?: string | null; grantedUntil?: string };
+      if (!response.ok) throw new Error(t.checkoutError);
+      // 100% coupon: plan granted instantly in-system, no payOS QR (avoids fee).
+      if (!result.checkoutUrl && result.grantedUntil) {
+        setGranted(result.grantedUntil);
+        setPending(false);
+        return;
+      }
+      if (!result.checkoutUrl) throw new Error(t.checkoutError);
       window.location.assign(result.checkoutUrl);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : t.checkoutError);
@@ -92,6 +101,11 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
             {plan.priceVnd <= 0 ? t.planCurrent : t.checkoutPay}
           </button>
 
+          {granted ? (
+            <p role="status" className="rounded-xl border border-sage/40 bg-sage/10 px-4 py-3 text-sm text-ink">
+              {t.planActiveUntil ? `${t.planActiveUntil}: ${new Date(granted).toLocaleDateString()}` : 'Đã kích hoạt gói.'}
+            </p>
+          ) : null}
           {error ? (
             <p role="alert" className="text-xs leading-relaxed text-red-400">
               {error}

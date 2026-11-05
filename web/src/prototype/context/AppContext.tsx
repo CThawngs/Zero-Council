@@ -131,6 +131,8 @@ interface AppContextType {
   currentPlanId: PlanId;
   /** The signed-in account, or null. Null is the normal state for a visitor, not an error. */
   authUser: { id: string; email: string } | null;
+  isAdmin: boolean;
+  isFounder: boolean;
   /**
    * False until the first session read resolves. Checkout stays disabled while this is false:
    * treating "not checked yet" as "signed out" would bounce a signed-in user to the login page
@@ -350,6 +352,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isFounder, setIsFounder] = useState(false);
   /**
    * Non-essential cookie consent. `null` means the visitor has not been asked yet, which is
    * deliberately NOT the same as consent: analytics only loads on an explicit `'granted'`.
@@ -392,11 +396,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Plan the account is on. Hardcoded to Free until entitlements land — `effectivePlan` in
-   * lib/store/account.ts is the real answer, and it needs auth to exist.
-   * ponytail: a constant until auth ships; swap for effectivePlan(currentUser.email).
+   * Plan the account is on, read from `effectivePlan` through `/api/me` once sign-in settles.
+   * Defaults to Free; boosts like advisor caps derive from this via `planById`.
    */
-  const currentPlanId: PlanId = 'free';
+  const [currentPlanId, setCurrentPlanId] = useState<PlanId>('free');
   const personaCap = planById(currentPlanId).maxActiveAdvisors;
 
   useEffect(() => {
@@ -1015,6 +1018,37 @@ const purgeSessions = () => {
     };
   }, [authUser]);
 
+  // Load this account's role once sign-in settles. The route scopes by session email.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    void fetch('/api/me', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { role?: string; isFounder?: boolean; plan?: { planId?: string } | null } | null) => {
+        if (cancelled) return;
+        setIsAdmin(body?.role === 'admin');
+        setIsFounder(Boolean(body?.isFounder));
+        const planId = body?.plan?.planId;
+        if (planId === 'pro' || planId === 'ultra' || planId === 'free') setCurrentPlanId(planId);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  // Landed back from payOS as a confirmed payment (`/checkout/return` sends `/?paid=1`):
+  // toast once, then drop the flag so a refresh does not re-toast.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('paid') !== '1') return;
+    url.searchParams.delete('paid');
+    window.history.replaceState(null, '', url.toString());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot toast on mount, guarded by ?paid=1 flag
+    showToast('toastPaymentSuccess');
+  }, []);
+
   // Mirror bots into the advisor roster so single-bot chat reuses runTurn/byok unchanged.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- roster mirrors server-owned bots, not local UI state
@@ -1167,6 +1201,8 @@ const purgeSessions = () => {
         closeCounterDraftModal: () => setIsCounterDraftModalOpen(false),
         currentPlanId,
         authUser,
+        isAdmin,
+        isFounder,
         authReady,
         signOut,
         checkoutPlan,

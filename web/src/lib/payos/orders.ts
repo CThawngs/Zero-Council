@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { PlanId } from '@/prototype/data/plans';
 import { serverEnv } from '../serverEnv.ts';
+import { isStaleOrder } from './stale.ts';
 
 export type OrderStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED';
 
@@ -210,4 +211,51 @@ export const markOrder = async (
   orders[String(orderCode)] = updated;
   await writeAll(orders);
   return updated;
+};
+
+export const deleteOrder = async (orderCode: number): Promise<boolean> => {
+  assertStoreAvailable();
+  if (supabaseConfig()) {
+    const rows = await request(`${TABLE}?order_code=eq.${orderCode}`, { method: 'DELETE' });
+    return (rows as unknown[]).length > 0;
+  }
+  const orders = await readAll();
+  if (!(String(orderCode) in orders)) return false;
+  delete orders[String(orderCode)];
+  await writeAll(orders);
+  return true;
+};
+
+/**
+ * Deletes every order the purge rule rejects, and returns how many rows went.
+ * Called from the request paths that already touch orders (create-payment and the
+ * webhook), so no cron or background job is needed for the cleanup to happen.
+ */
+export const sweepStaleOrders = async (): Promise<number> => {
+  assertStoreAvailable();
+  const now = Date.now();
+  if (supabaseConfig()) {
+    const rows = (await request(`${TABLE}?select=order_code,status,created_at`)) as {
+      order_code: number;
+      status: string;
+      created_at: string;
+    }[];
+    let removed = 0;
+    for (const row of rows) {
+      if (isStaleOrder(row.status, row.created_at, now)) {
+        if (await deleteOrder(row.order_code)) removed += 1;
+      }
+    }
+    return removed;
+  }
+  const orders = await readAll();
+  let removed = 0;
+  for (const [key, order] of Object.entries(orders)) {
+    if (isStaleOrder(order.status, order.createdAt, now)) {
+      delete orders[key];
+      removed += 1;
+    }
+  }
+  if (removed > 0) await writeAll(orders);
+  return removed;
 };
