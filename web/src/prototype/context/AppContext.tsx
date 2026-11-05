@@ -396,11 +396,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Plan the account is on. Hardcoded to Free until entitlements land — `effectivePlan` in
-   * lib/store/account.ts is the real answer, and it needs auth to exist.
-   * ponytail: a constant until auth ships; swap for effectivePlan(currentUser.email).
+   * Plan the account is on, read from `effectivePlan` through `/api/me` once sign-in settles.
+   * Defaults to Free; boosts like advisor caps derive from this via `planById`.
    */
-  const currentPlanId: PlanId = 'free';
+  const [currentPlanId, setCurrentPlanId] = useState<PlanId>('free');
   const personaCap = planById(currentPlanId).maxActiveAdvisors;
 
   useEffect(() => {
@@ -1025,16 +1024,30 @@ const purgeSessions = () => {
     let cancelled = false;
     void fetch('/api/me', { credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : null))
-      .then((body: { role?: string; isFounder?: boolean } | null) => {
+      .then((body: { role?: string; isFounder?: boolean; plan?: { planId?: string } | null } | null) => {
         if (cancelled) return;
         setIsAdmin(body?.role === 'admin');
         setIsFounder(Boolean(body?.isFounder));
+        const planId = body?.plan?.planId;
+        if (planId === 'pro' || planId === 'ultra' || planId === 'free') setCurrentPlanId(planId);
       })
       .catch(() => undefined);
     return () => {
       cancelled = true;
     };
   }, [authUser]);
+
+  // Landed back from payOS as a confirmed payment (`/checkout/return` sends `/?paid=1`):
+  // toast once, then drop the flag so a refresh does not re-toast.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('paid') !== '1') return;
+    url.searchParams.delete('paid');
+    window.history.replaceState(null, '', url.toString());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot toast on mount, guarded by ?paid=1 flag
+    showToast('toastPaymentSuccess');
+  }, []);
 
   // Mirror bots into the advisor roster so single-bot chat reuses runTurn/byok unchanged.
   useEffect(() => {

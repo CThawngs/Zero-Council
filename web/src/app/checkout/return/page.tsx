@@ -16,8 +16,7 @@ const copy = {
     pending: 'Waiting for payOS to confirm',
     pendingBody: 'payOS is confirming the transfer. This page updates itself — no refresh needed.',
     paid: 'Payment received',
-    paidBody:
-      'payOS confirmed the transfer. This build has no account system yet, so the plan is not attached to anything.',
+    paidBody: 'payOS confirmed the transfer. Your plan is now active on this account.',
     failed: 'Payment not completed',
     failedBody: 'Nothing was charged. You can start the payment again from the pricing page.',
     back: 'Back to Zero Council',
@@ -27,7 +26,8 @@ const copy = {
     pending: 'Đang chờ payOS xác nhận',
     pendingBody: 'payOS đang xác nhận giao dịch chuyển khoản. Trang này tự cập nhật, không cần tải lại.',
     paid: 'Đã nhận thanh toán',
-    paidBody: 'payOS đã xác nhận giao dịch. Bản này chưa có hệ thống tài khoản nên gói chưa được gắn vào đâu cả.',
+    paidBody:
+      'payOS đã xác nhận giao dịch. Gói của bạn đã được kích hoạt trên tài khoản này.',
     failed: 'Thanh toán chưa hoàn tất',
     failedBody: 'Không có khoản tiền nào bị trừ. Bạn có thể thanh toán lại từ trang Giá.',
     back: 'Về Zero Council',
@@ -55,6 +55,12 @@ function PaymentResult() {
 
   useEffect(() => {
     if (!orderCode) return;
+    // payOS cancel lands here with `status=cancelled`; nothing was charged, stop polling.
+    if (params.get('status') === 'cancelled') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot cancelled guard, before polling starts
+      setLookupFailed(true);
+      return;
+    }
     let active = true;
     const poll = async () => {
       try {
@@ -76,7 +82,8 @@ function PaymentResult() {
     return () => {
       active = false;
     };
-  }, [orderCode]);
+  }, [orderCode, params]);
+  const paid = !missing && order?.status === 'PAID';
 
   const headline = missing
     ? text.failed
@@ -123,7 +130,7 @@ function PaymentResult() {
             ₫{number.format(order.amountVnd)} (~${order.amountUsd})
           </p>
         ) : null}
-        <Link href="/" className="button-primary mt-2 min-h-11 justify-center">
+        <Link href={paid ? '/?paid=1' : '/'} className="button-primary mt-2 min-h-11 justify-center">
           {text.back}
         </Link>
       </section>
