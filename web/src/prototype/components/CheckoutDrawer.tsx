@@ -257,12 +257,29 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
               alt={t.checkoutQrAlt.replace('{bill}', String(qr.orderCode))}
               className="h-64 w-64 rounded-xl border border-border bg-white object-contain"
             />
-            <p className="text-sm text-ink">
-              {t.checkoutAmountLabel}: <strong>{qr.amountVnd.toLocaleString('vi-VN')}₫</strong>
-            </p>
-            <p className="text-sm text-ink">
-              {t.checkoutQrBill}: <strong>{qr.orderCode}</strong>
-            </p>
+            <div className="grid w-full gap-3 sm:grid-cols-2">
+              <div className="field">
+                <label htmlFor="qr-amount">{t.checkoutQrAmount}</label>
+                <input
+                  id="qr-amount"
+                  type="text"
+                  readOnly
+                  value={qr.amountVnd.toLocaleString('vi-VN') + ' ₫'}
+                  className="cursor-not-allowed bg-surface-elevated opacity-70"
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="qr-bill">{t.checkoutQrBill}</label>
+                <input
+                  id="qr-bill"
+                  type="text"
+                  readOnly
+                  value={`ZC ${qr.orderCode}`}
+                  className="cursor-not-allowed bg-surface-elevated opacity-70"
+                />
+              </div>
+            </div>
+            <p className="text-center text-xs text-muted">{t.checkoutQrLocked}</p>
             <p
               role="timer"
               aria-live="polite"
