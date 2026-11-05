@@ -4,6 +4,7 @@ import { ModelProvider } from '../types';
 import { getProviders, Provider } from '../chat/byok';
 import { Check, Eye, EyeOff, LockKeyhole, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
+import { createClient } from '@/lib/supabase/client';
 
 export const ApiKeysView: React.FC = () => {
   const { apiKeys, removeApiKey, revokeAllKeys, t } = useApp();
@@ -26,10 +27,44 @@ export const ApiKeysView: React.FC = () => {
 
     const loadProviders = async () => {
       try {
-        const data = await getProviders();
-
+        const data = async (): Promise<Provider[]> => {
+          const supabase = createClient();
+          
+          const { data, error } = await supabase
+            .from('zc_agent_providers')
+            .select(`
+              id,
+              name,
+              key_prefix,
+              is_active,
+              zc_agent_models (
+                id,
+                name,
+                is_active
+              )
+            `)
+            .eq('is_active', true)
+            .order('name');
+        
+          if (error) {
+            throw new Error(`Failed to load providers: ${error.message}`);
+          }
+        
+          return (data ?? []).map((provider) => ({
+            id: provider.id,
+            label: provider.name,
+            keyPrefix: provider.key_prefix,
+            models: (provider.zc_agent_models ?? [])
+              .filter((model) => model.is_active)
+              .map((model) => ({
+                id: model.id,
+                label: model.name,
+              })),
+          }));
+        };
+        
         if (!cancelled) {
-          setProviders(data);
+          setProviders(await data());
         }
       } catch (err) {
         if (!cancelled) {
@@ -49,10 +84,12 @@ export const ApiKeysView: React.FC = () => {
     };
   }, []);
 
+  // Provider đã gắn BYOK đang chọn
   const activeItem = activeProvider
   ? apiKeys.find((key) => key.provider === activeProvider)
   : undefined;
 
+  // Provider đang chọn
   const provider = activeProvider
   ? providers.find((p) => p.id === activeProvider)
   : undefined;
@@ -67,6 +104,9 @@ export const ApiKeysView: React.FC = () => {
   }
 
   /**
+   * Lưu lại khóa mới:
+   * - Nếu đang không chọn provider hoặc provider đã gắn BYOK thì hủy
+   * - Nếu khóa 
    * 
    */
   const toggle = async () => {

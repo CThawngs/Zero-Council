@@ -131,7 +131,7 @@ interface AppContextType {
    * purchase that the server then refuses with a bare 401.
    */
   authReady: boolean;
-  signOut: () => Promise<vsaidoid>;
+  signOut: () => Promise<void>;
   /** Plan awaiting payment. Non-null opens the checkout drawer. */
   checkoutPlan: Plan | null;
   /** `null` until the visitor answers the cookie dialog. Analytics loads only on `'granted'`. */
@@ -929,12 +929,23 @@ const purgeSessions = () => {
     startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
   };
 
+  const currentSession =
+  localizedSessions.find((session) => session.id === currentSessionId) ||
+  localizedSessions[0] ||
+  localizeSession(initialSessions[0], language);
+
   // Keys live in memory for the life of the tab and nowhere else: not in storage, not on our server.
   // Reloading clears them, which is the trade for never handing a key to anyone but the vendor.
   const [keys, setKeys] = useState<Partial<Record<ModelProvider, string>>>({});
 
 
   // -------------API Keys-------------
+  /**
+   * Lệnh lấy và tải lại các providers đã được gắn BYOK
+   * 
+   * @param forceLoad 
+   * @returns 
+   */
   const refreshApiKeys = async (forceLoad = false) => {
     if (apiKeysLoaded && !forceLoad) return;
 
@@ -965,15 +976,20 @@ const purgeSessions = () => {
     }
   };
 
-  const connectApiKey = (provider: string, key: string) => {
+  /**
+   * 
+   * @param provider Id của provider
+   * @param key BYOK của người dùng
+   */
+  const connectApiKey = async (provider: string, key: string) => {
     const response = await fetch('/api/user/keys', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        provider_id: provider,
-        apiKey,
+        providerId: provider,
+        apiKey: key,
       }),
     });
 
@@ -988,6 +1004,10 @@ const purgeSessions = () => {
     await refreshApiKeys(true);
   };
 
+  /**
+   * 
+   * @param provider Id của provider
+   */
   const removeApiKey = async (provider: string) => {
     const response = await fetch('/api/user/keys', {
       method: 'DELETE',
@@ -995,7 +1015,7 @@ const purgeSessions = () => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        provider_id: provider,
+        providerId: provider,
       }),
     });
 
@@ -1010,7 +1030,7 @@ const purgeSessions = () => {
     await refreshApiKeys(true);
   };
 
-  const revokeAllKeys = () => {
+  const revokeAllKeys = async () => {
     const response = await fetch('/api/user/keys', {
       method: 'DELETE',
       headers: {
@@ -1032,11 +1052,6 @@ const purgeSessions = () => {
     showToast('toastProvidersCleared');
     await refreshApiKeys(true);
   };
-
-  const currentSession =
-    localizedSessions.find((session) => session.id === currentSessionId) ||
-    localizedSessions[0] ||
-    localizeSession(initialSessions[0], language);
 
   // -------------END-------------
   return (
@@ -1065,6 +1080,7 @@ const purgeSessions = () => {
         personas: localizedPersonas,
         addPersona,
         apiKeys,
+        refreshApiKeys,
         connectApiKey,
         removeApiKey,
         revokeAllKeys,

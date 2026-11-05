@@ -113,11 +113,14 @@ const HANDOFF_TOOL = {
 
 /**
  * Resolves whatever the model put in `target` to a roster id.
+ * Or
+ * Find the next mention in the AI output
  *
  * A model will not obey the schema. It will return "The Dreamer", "dreamer", "Dreamer, take this
- * one" or a paragraph. Silently dropping those would leave the room stalled with no explanation, so
- * an unresolvable target closes the round back to the user instead — which is the recoverable
- * failure. The visible text still says what the advisor said.
+ * one" or a paragraph with or without mentioning the next one. Silently dropping those would 
+ * leave the room stalled with no explanation, so an unresolvable target closes the round 
+ * back to the user instead — which is the recoverablefailure. The visible text still says what 
+ * the advisor said.
  */
 export const resolveTarget = (raw: string, roster: ChatBot[]): string[] => {
   const wanted = raw.replace(/^@/, '').trim();
