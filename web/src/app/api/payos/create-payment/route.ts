@@ -178,5 +178,8 @@ export async function POST(request: Request) {
     amountVnd: amount,
     amountUsd: plan.priceUsd,
     checkoutUrl: result.data.checkoutUrl,
+    // In-app QR popup: payOS returns the VietQR code alongside the hosted page link.
+    qrCode: (result.data.qrCode as string | undefined) ?? null,
+    expiredAt,
   });
 }
