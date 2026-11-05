@@ -322,8 +322,9 @@ export const copy = {
     authOtpCodeLabel: 'OTP code',
     authNewPasswordLabel: 'New password (8+ chars)',
     authOtpVerify: 'Verify & set password',
-    authOtpSent: 'OTP sent. Check your email.',
+    authResetSent: 'Reset link sent. Click it in your email to set a new password.',
     authEmailRequiredError: 'Please enter your email address before resetting your password.',
+    authAccountNotFound: 'No account uses this email address.',
     authGenericError: 'An error occurred, please try again.',
 
     authValidatingLink: 'Validating reset password link...',
@@ -1205,8 +1206,9 @@ export const copy = {
     authOtpCodeLabel: 'Mã OTP',
     authNewPasswordLabel: 'Mật khẩu mới (8+ ký tự)',
     authOtpVerify: 'Xác thực & đặt mật khẩu',
-    authOtpSent: 'Đã gửi OTP. Kiểm tra email.',
+    authResetSent: 'Đã gửi link đặt lại. Bấm link trong email để đặt mật khẩu mới.',
     authEmailRequiredError: 'Vui lòng nhập địa chỉ email của bạn trước khi đặt lại mật khẩu.',
+    authAccountNotFound: 'Không có tài khoản nào dùng email này.',
     authGenericError: 'Có lỗi xảy ra, vui lòng thử lại.',
 
     authValidatingLink: 'Đang xác thực liên kết đặt lại mật khẩu...',
