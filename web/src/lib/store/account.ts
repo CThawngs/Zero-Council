@@ -540,3 +540,27 @@ export const listGrants = async (userEmail: string): Promise<Grant[]> => {
     .filter((grant) => grant.userEmail === email)
     .sort((a, b) => b.expiresAt.localeCompare(a.expiresAt));
 };
+
+/**
+ * Deletes every still-running grant of one account. That is the whole cancel/downgrade lever:
+ * `effectivePlan` derives the plan from unexpired grants, so deleting them puts the account
+ * back on Free at read time — no tombstone row and no expiry cron to stay consistent with.
+ * Expired grants stay in the table as history.
+ */
+export const revokeGrants = async (userEmail: string): Promise<void> => {
+  assertStoreAvailable();
+  const email = userEmail.trim().toLowerCase();
+  const nowIso = new Date().toISOString();
+  if (supabaseConfig()) {
+    await request(
+      `zc_grants?user_email=eq.${encodeURIComponent(email)}&expires_at=gt.${encodeURIComponent(nowIso)}`,
+      { method: 'DELETE' }
+    );
+    return;
+  }
+  const data = await readAll();
+  data.grants = data.grants.filter(
+    (grant) => !(grant.userEmail === email && grant.expiresAt > nowIso)
+  );
+  await writeAll(data);
+};

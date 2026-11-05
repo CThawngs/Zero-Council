@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 export const OverviewView: React.FC = () => {
-  const { setCurrentView, t, language, authUser, authReady, requestCheckout } = useApp();
+  const { setCurrentView, t, language, authUser, authReady, requestCheckout, currentPlanId, cancelPlanToFree } = useApp();
 
   const flow = [
     { icon: MessageSquareText, title: t.flow1Title, body: t.flow1Body, badge: t.badgeStep1, tint: 'var(--tint-blue)' },
@@ -265,15 +265,25 @@ export const OverviewView: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => requestCheckout(plan)}
+                  onClick={() => {
+                    if (plan.priceVnd <= 0 && currentPlanId !== 'free') {
+                      if (window.confirm(t.planCancelConfirm)) void cancelPlanToFree();
+                      return;
+                    }
+                    requestCheckout(plan);
+                  }}
                   disabled={!authReady}
                   className={`mt-6 w-full ${plan.popular ? 'button-primary' : 'button-secondary'}`}
                 >
                   {plan.priceVnd <= 0
-                    ? t.planCurrent
-                    : authUser
-                      ? t.planChoose.replace('{plan}', plan.name)
-                      : t.planSignInToBuy}
+                    ? currentPlanId !== 'free' && authUser
+                      ? t.planCancelToFree
+                      : t.planCurrent
+                    : plan.id === currentPlanId
+                      ? t.planCurrent
+                      : authUser
+                        ? t.planChoose.replace('{plan}', plan.name)
+                        : t.planSignInToBuy}
                 </button>
               </article>
             </Reveal>
