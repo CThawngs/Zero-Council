@@ -78,6 +78,6 @@ const ChamberContent: React.FC = () => {
   );
 };
 
-export default function App() {
-  return <AppProvider><ChamberContent /></AppProvider>;
+export default function App({ initialAuthUser }: { initialAuthUser?: { id: string; email: string } | null }) {
+  return <AppProvider initialAuthUser={initialAuthUser}><ChamberContent /></AppProvider>;
 }
