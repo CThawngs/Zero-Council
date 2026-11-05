@@ -59,7 +59,12 @@ export const SignInView: React.FC = () => {
     }
 
     const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    // Without emailRedirectTo the link lands on the Supabase Site URL, outside /auth,
+    // so the token is never parsed by this app and the user hits a dead page.
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${window.location.origin}/auth` },
+    });
 
     if (error) {
       setError(error.message);

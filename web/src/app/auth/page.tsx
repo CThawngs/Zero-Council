@@ -26,6 +26,18 @@ function AuthContent() {
 
         // Lắng nghe tất cả sự kiện Auth (bao gồm cả khi vừa load trang nhận token hoặc session)
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            // Link email OTP/reset mang token trong hash (#access_token=...) hoặc
+            // ?code=...: người vừa bấm link phải vào đặt mật khẩu mới, bất kể loại
+            // sự kiện (link OTP loại email phát SIGNED_IN, không phải PASSWORD_RECOVERY).
+            const arrivingFromEmailLink =
+                typeof window !== 'undefined' &&
+                (window.location.hash.includes('access_token') ||
+                    new URLSearchParams(window.location.search).has('code'));
+            if (arrivingFromEmailLink && session?.user) {
+                setCurrentView('set-password');
+                return;
+            }
+
             // 1. Nếu là luồng reset password từ email
             if (event === 'PASSWORD_RECOVERY') {
                 setCurrentView('set-password');

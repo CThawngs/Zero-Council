@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   AdvisorPersona,
   ApiKeyConfig,
@@ -152,6 +152,12 @@ interface AppContextType {
    * instead of after the click.
    */
   requestCheckout: (plan: Plan) => void;
+  /** Re-reads the granted plan from /api/me. Used after a cancel/downgrade so caps update at once. */
+  refreshPlan: () => Promise<void>;
+  /** Revokes the running grant: back to Free, no payment. False when the server refuses. */
+  cancelPlanToFree: () => Promise<boolean>;
+  /** From Ultra: revokes Ultra, then opens a fresh Pro checkout. False on refusal. */
+  downgradeToPro: () => Promise<boolean>;
   /**
    * Send the visitor to the pricing table on the landing page.
    *
@@ -483,6 +489,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     setCheckoutPlan(plan);
+  };
+
+  const refreshPlan = useCallback(async () => {
+    try {
+      const response = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!response.ok) return;
+      const body = (await response.json()) as {
+        role?: string;
+        isFounder?: boolean;
+        plan?: { planId?: string } | null;
+      };
+      setIsAdmin(body?.role === 'admin');
+      setIsFounder(Boolean(body?.isFounder));
+      const planId = body?.plan?.planId;
+      setCurrentPlanId(planId === 'pro' || planId === 'ultra' || planId === 'free' ? planId : 'free');
+    } catch {
+      // A failed refresh keeps the last known plan rather than pretending it changed.
+    }
+  }, []);
+
+  const postPlanChange = async (to: 'free' | 'pro'): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/plan/cancel', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to }),
+      });
+      if (!response.ok) return false;
+      await refreshPlan();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const cancelPlanToFree = async (): Promise<boolean> => postPlanChange('free');
+
+  const downgradeToPro = async (): Promise<boolean> => {
+    const ok = await postPlanChange('pro');
+    if (ok) setCheckoutPlan(planById('pro'));
+    return ok;
   };
 
   const goToPricing = () => {
@@ -1018,24 +1066,12 @@ const purgeSessions = () => {
     };
   }, [authUser]);
 
-  // Load this account's role once sign-in settles. The route scopes by session email.
+  // Load this account's role + plan once sign-in settles. The route scopes by session email.
   useEffect(() => {
     if (!authUser) return;
-    let cancelled = false;
-    void fetch('/api/me', { credentials: 'same-origin' })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { role?: string; isFounder?: boolean; plan?: { planId?: string } | null } | null) => {
-        if (cancelled) return;
-        setIsAdmin(body?.role === 'admin');
-        setIsFounder(Boolean(body?.isFounder));
-        const planId = body?.plan?.planId;
-        if (planId === 'pro' || planId === 'ultra' || planId === 'free') setCurrentPlanId(planId);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- plan refresh mirrors server state, not local UI state
+    void refreshPlan();
+  }, [authUser, refreshPlan]);
 
   // Landed back from payOS as a confirmed payment (`/checkout/return` sends `/?paid=1`):
   // toast once, then drop the flag so a refresh does not re-toast.
@@ -1209,6 +1245,9 @@ const purgeSessions = () => {
         consent: analyticsConsent,
         closeCheckout: () => setCheckoutPlan(null),
         requestCheckout,
+        refreshPlan,
+        cancelPlanToFree,
+        downgradeToPro,
         goToPricing,
         personaCap,
         canAddPersona: personas.length < personaCap,
