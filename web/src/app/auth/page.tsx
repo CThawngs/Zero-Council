@@ -24,15 +24,30 @@ function AuthContent() {
     useEffect(() => {
         const supabase = createClient();
 
+        // PKCE landings (?code=) never yield a session until the code is exchanged;
+        // the server callback does it, but a link that lands here directly needs
+        // it now, otherwise INITIAL_SESSION is null and the user ends up on sign-in.
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            supabase.auth.exchangeCodeForSession(code).then(async ({ error }) => {
+                if (!error) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user) setCurrentView('set-password');
+                }
+            }).catch(() => undefined);
+        }
+
         // Lắng nghe tất cả sự kiện Auth (bao gồm cả khi vừa load trang nhận token hoặc session)
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             // Link email OTP/reset mang token trong hash (#access_token=...) hoặc
-            // ?code=...: người vừa bấm link phải vào đặt mật khẩu mới, bất kể loại
+            // ?code=/reset=1...: người vừa bấm link phải vào đặt mật khẩu mới, bất kể loại
             // sự kiện (link OTP loại email phát SIGNED_IN, không phải PASSWORD_RECOVERY).
             const arrivingFromEmailLink =
                 typeof window !== 'undefined' &&
                 (window.location.hash.includes('access_token') ||
-                    new URLSearchParams(window.location.search).has('code'));
+                    params.has('code') ||
+                    params.get('reset') === '1');
             if (arrivingFromEmailLink && session?.user) {
                 setCurrentView('set-password');
                 return;

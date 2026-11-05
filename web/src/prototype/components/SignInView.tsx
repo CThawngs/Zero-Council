@@ -13,9 +13,6 @@ export const SignInView: React.FC = () => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [otpMode, setOtpMode] = useState(false);
-    const [otpCode, setOtpCode] = useState('');
-    const [newPassword, setNewPassword] = useState('');
 
     // Cân nhắc thêm trạng thái time out mỗi lần nhấn reset password
 
@@ -58,12 +55,19 @@ export const SignInView: React.FC = () => {
       return;
     }
 
+    const checked = await fetch(`/api/auth/check-account?email=${encodeURIComponent(email.trim().toLowerCase())}`);
+    const body = (await checked.json().catch(() => null)) as { exists?: boolean } | null;
+    if (!checked.ok || !body?.exists) {
+      setError(t.authAccountNotFound);
+      return;
+    }
+
     const supabase = await createClient();
-    // Without emailRedirectTo the link lands on the Supabase Site URL, outside /auth,
-    // so the token is never parsed by this app and the user hits a dead page.
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth` },
+    // Default Supabase template: resetPasswordForEmail sends a link whose click
+    // lands on /auth/callback (exchanges code/token_hash) then /auth?reset=1
+    // where the set-password form lives. No template edit needed from the user.
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/auth?reset=1')}`,
     });
 
     if (error) {
@@ -71,34 +75,7 @@ export const SignInView: React.FC = () => {
       return;
     }
 
-    setOtpMode(true);
-    setMessage(t.authOtpSent);
-  }
-
-  async function verifyOtpAndSetPassword(event: FormEvent) {
-    event.preventDefault();
-    setError('');
-    setMessage('');
-    if (newPassword.length < 8) {
-      setError(t.authPasswordHint);
-      return;
-    }
-    const supabase = await createClient();
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: otpCode.trim(),
-      type: 'email',
-    });
-    if (verifyError) {
-      setError(verifyError.message);
-      return;
-    }
-    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-    window.location.href = '/';
+    setMessage(t.authResetSent);
   }
 
   return (
@@ -172,24 +149,6 @@ export const SignInView: React.FC = () => {
               <LogIn className="h-4 w-4" />
               {t.authSignInAction}
             </button>
-
-            {otpMode && (
-              <div className="space-y-4 rounded-xl border border-border bg-background/60 p-4" aria-live="polite">
-                <p className="text-sm font-semibold text-ink">{t.authOtpTitle}</p>
-                <p className="text-xs text-ink-muted">{t.authOtpBody}</p>
-                <label className="field">
-                  <span className="field-label">{t.authOtpCodeLabel}</span>
-                  <input type="text" inputMode="numeric" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="123456" autoComplete="one-time-code" />
-                </label>
-                <label className="field">
-                  <span className="field-label">{t.authNewPasswordLabel}</span>
-                  <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" />
-                </label>
-                <button type="button" onClick={verifyOtpAndSetPassword} className="button-primary min-h-11 w-full justify-center">
-                  {t.authOtpVerify}
-                </button>
-              </div>
-            )}
 
             {message && (
               <div className="flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink">
