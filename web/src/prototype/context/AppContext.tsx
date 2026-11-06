@@ -943,6 +943,9 @@ const purgeSessions = () => {
   /**
    * Lệnh lấy và tải lại các providers đã được gắn BYOK
    * 
+   * Lưu ý: Trong trường hợp không bắt buộc, nếu Api Keys
+   * đã được tạo thì sẽ không thực hiện lệnh.
+   * 
    * @param forceLoad 
    * @returns 
    */

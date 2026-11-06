@@ -1,15 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ModelProvider } from '../types';
-import { getProviders, Provider } from '../chat/byok';
+import { Provider } from '../chat/byok';
 import { Check, Eye, EyeOff, LockKeyhole, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
 import { createClient } from '@/lib/supabase/client';
 
 export const ApiKeysView: React.FC = () => {
-  const { apiKeys, removeApiKey, revokeAllKeys, t } = useApp();
+  const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, t } = useApp();
 
-  const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
+  const [activeProviderId, setActiveProviderId] = useState<ModelProvider | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isClearOpen, setIsClearOpen] = useState(false);
   const [draftKey, setDraftKey] = useState('');
@@ -85,18 +85,18 @@ export const ApiKeysView: React.FC = () => {
   }, []);
 
   // Provider đã gắn BYOK đang chọn
-  const activeItem = activeProvider
-  ? apiKeys.find((key) => key.provider === activeProvider)
+  const activeItem = activeProviderId
+  ? apiKeys.find((key) => key.provider === activeProviderId)
   : undefined;
 
   // Provider đang chọn
-  const provider = activeProvider
-  ? providers.find((p) => p.id === activeProvider)
+  const activeProvider = activeProviderId
+  ? providers.find((p) => p.id === activeProviderId)
   : undefined;
 
   // Reset modal state
   const closeModal = () => {
-    setActiveProvider(null)
+    setActiveProviderId(null)
     setDraftKey('')
     setError('')
     setMessage('')
@@ -104,36 +104,15 @@ export const ApiKeysView: React.FC = () => {
   }
 
   /**
-   * Lưu lại khóa mới:
-   * - Nếu đang không chọn provider hoặc provider đã gắn BYOK thì hủy
-   * - Nếu khóa 
-   * 
+   * Lưu hoặc xóa khóa dựa trên việc khóa đã được kết nối chưa
+   * - Nếu đang không chọn provider nào hoặc provider đã gắn BYOK thì hủy
+   * - Nếu khóa chạy được thì xóa
+   * - Tạo mới khóa hoặc cập nhật
    */
-  const toggle = async () => {
-    if (!activeProvider || !activeItem) return
-
-    if (activeItem.connected) {
-      removeApiKey(activeProvider)
-      closeModal()
-      return
-    }
-
-    await saveAPIKey()
-  };
-
-  // Save and verify API key
-  const saveAPIKey = async () => {
-    if (!activeProvider || !provider || !draftKey.trim()) {
-      setError('Please enter an API key.');
-      return;
-    }
-
-    // Basic prefix validation
-    if (
-      provider.keyPrefix &&
-      !draftKey.trim().startsWith(provider.keyPrefix)
-    ) {
-      setError(`Invalid API key format. Expected prefix: ${provider.keyPrefix}`);
+  const toggleConnectOrRemoveKey = async () => {
+    // Kiểm tra đã chọn provider chưa
+    if (!activeProviderId || !activeProvider) {
+      setError('Please select a provider.');
       return;
     }
 
@@ -142,40 +121,52 @@ export const ApiKeysView: React.FC = () => {
     setMessage('');
 
     try {
-      const response = await fetch('/api/user/keys', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          provider_id: activeProvider,
-          apiKey: draftKey.trim(),
-        }),
-      });
+      // Xóa key nếu đã tồn tại
+      if (activeItem?.connected) {
+        await removeApiKey(activeProviderId)
+        closeModal()
+        return
+      } else {
+        const key  = draftKey.trim();
 
-      const result = await response.json();
+        if (!key) {
+          setError(`Please enter an valid API key.`)
+          return
+        }
 
-      if (!response.ok) {
-        throw new Error(result.error ?? 'Failed to save API key.');
+        // Kiểm tra định dạng cơ bản dựa trên prefix
+        if (activeProvider.keyPrefix && !key.startsWith(activeProvider.keyPrefix)) {
+          setError(`Invalid API key format. Expected prefix: ${activeProvider.keyPrefix}`)
+          return
+        }
+
+        await connectApiKey(activeProviderId, key)
+        closeModal()
       }
-
-      setMessage('API key saved successfully.');
-
-      // Close modal after successful save
-      closeModal();
-
-      // If AppContext was to stores key connection state,
-      // refresh its state here instead of relying on local state.
-
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Something went wrong.'
-      );
+    } catch (err : unknown) {
+      setError(err instanceof Error ? err.message : 'Something went wrong!')
     } finally {
       setSaving(false);
     }
-  };
-  
+  }
+
+  /**
+   * Xóa tất cả khóa
+   */
+  const toggleRevokeAllKeys = async () => {
+    setSaving(true)
+    setError('')
+    
+    try {
+      setIsClearOpen(false)
+      await revokeAllKeys()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke all keys!')
+    } finally {
+      setSaving(false);
+    }
+    
+  }
 
   return (
     <div className="content-shell space-y-7">
@@ -245,7 +236,7 @@ export const ApiKeysView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveProvider(item.id as ModelProvider);
+                    setActiveProviderId(item.id as ModelProvider);
                     setError('');
                     setMessage('');
                   }}
@@ -273,8 +264,9 @@ export const ApiKeysView: React.FC = () => {
         </div>
       )}
 
+      {/** Pop up hiện đ */}
       <Modal
-        isOpen={activeProvider !== null}
+        isOpen={activeProviderId !== null}
         onClose={closeModal}
         title={t.dialogTitle}
         description={t.dialogBody}
@@ -291,11 +283,16 @@ export const ApiKeysView: React.FC = () => {
 
             <button
               type="button"
-              onClick={toggle}
+              onClick={toggleConnectOrRemoveKey}
               disabled={saving}
               className="button-primary min-h-11 justify-center"
             >
-              {saving ? 'Saving...' : t.toggle}
+              {saving ? 
+                'Saving...' : 
+                activeItem?.connected ? 
+                  t.clearState :
+                  t.toggle
+              }
             </button>
           </>
         }
@@ -315,7 +312,7 @@ export const ApiKeysView: React.FC = () => {
                 spellCheck={false}
                 inputMode="text"
                 value={draftKey}
-                placeholder={provider?.keyPrefix ?? ''}
+                placeholder={activeProvider?.keyPrefix ?? ''}
                 onChange={(event) => setDraftKey(event.target.value)}
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
               />
@@ -365,10 +362,7 @@ export const ApiKeysView: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => {
-                setIsClearOpen(false);
-                revokeAllKeys();
-              }}
+              onClick={() => toggleRevokeAllKeys()}
               className="button-danger min-h-11 justify-center"
             >
               {t.clearStates}
