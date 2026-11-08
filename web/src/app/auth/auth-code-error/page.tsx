@@ -135,10 +135,8 @@ function AuthCodeErrorFallback() {
 
 export default function AuthCodeError() {
   return (
-    <AppProvider>
-      <Suspense fallback={<AuthCodeErrorFallback />}>
-        <AuthCodeErrorContent />
-      </Suspense>
-    </AppProvider>
+    <Suspense fallback={<AuthCodeErrorFallback />}>
+      <AuthCodeErrorContent />
+    </Suspense>
   );
 }

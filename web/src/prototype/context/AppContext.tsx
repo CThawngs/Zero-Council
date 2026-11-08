@@ -1,3 +1,5 @@
+'use client'
+
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   AdvisorPersona,
@@ -253,7 +255,7 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language }> = ({ children, initialLanguage }) => {
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -275,15 +277,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   initialLanguage: Language;
 }
 
-export function AppProvider({
-  children,
-  initialLanguage,
-}: AppProviderProps) {
-  const [language, setLanguageState] =
-    useState<Language>(initialLanguage);
+  const [language, setLanguageState] = useState<Language>(initialLanguage);
 
-  // Phần code còn lại...
-}
   const setLanguage = async (next: Language) => {
     if (next === language) return;
 
@@ -305,14 +300,7 @@ export function AppProvider({
 
     setLanguageState(next);
   };
-  const setLanguage = (next: Language) => {
-    setLanguageState(next);
-    try {
-      localStorage.setItem('zc-lang', next);
-    } catch {
-      // Private mode: the choice still applies for this page view, it just will not persist.
-    }
-  };
+
   // The first client render has to match the server's, and the server cannot know the visitor's theme,
   // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
   // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun
