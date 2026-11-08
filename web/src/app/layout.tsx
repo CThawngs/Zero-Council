@@ -5,6 +5,9 @@ import './globals.css';
 
 import { cookies } from 'next/headers';
 import { AppProvider } from '@/prototype/context/AppContext';
+import { createClient } from '@/lib/supabase/server';
+import { hasPasswordClaim } from '@/lib/auth-password';
+import { redirect } from 'next/navigation';
 
 export default async function RootLayout({
   children,
@@ -15,9 +18,33 @@ export default async function RootLayout({
 
   const language = cookieStore.get('zc-lang')?.value === 'vi' ? 'vi' : 'en';
 
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  // A returning signed-in user (session cookie survived the browser close) is
+  // mounted straight into the dashboard, never shown the marketing landing.
+  // Google-only accounts without a password must create one first.
+  if (user?.email) {
+    if (!hasPasswordClaim(user.user_metadata)) {
+      redirect("/auth");
+    }
+
+    return (
+      <html lang={language}>
+        <body suppressHydrationWarning>
+          <AppProvider
+          initialLanguage={language}
+          initialAuthUser={{ id: user.id, email: user.email?.trim().toLowerCase() }}>
+            {children}
+          </AppProvider>
+        </body>
+      </html>
+    );
+  }
+
   return (
     <html lang={language}>
-      <body>
+      <body suppressHydrationWarning>
         <AppProvider initialLanguage={language}>
           {children}
         </AppProvider>

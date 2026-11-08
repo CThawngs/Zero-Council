@@ -1,10 +1,6 @@
-<<<<<<< HEAD
 'use client'
 
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-=======
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
->>>>>>> main
 import {
   AdvisorPersona,
   ApiKeyConfig,
@@ -293,11 +289,7 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-<<<<<<< HEAD
-export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language }> = ({ children, initialLanguage }) => {
-=======
-export const AppProvider: React.FC<{ children: React.ReactNode; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialAuthUser }) => {
->>>>>>> main
+export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialLanguage, initialAuthUser }) => {
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -309,16 +301,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialAuthUser?
   // paint (see the layout effect below). The room and the view are still set from the SAME read in
   // one batch, so a reload cannot land on the marketing page with a live room sitting unread behind it.
   const [currentView, setCurrentView] = useState<ViewType>('overview');
+
   // Starts at the server's answer ('en'), like the room and the theme: reading storage in this
   // initializer would hydrate a Vietnamese tree against English HTML. The saved choice is adopted
   // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
   // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
   // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
-  interface AppProviderProps {
-  children: React.ReactNode;
-  initialLanguage: Language;
-}
-
   const [language, setLanguageState] = useState<Language>(initialLanguage);
 
   const setLanguage = async (next: Language) => {
