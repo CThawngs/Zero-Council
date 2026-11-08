@@ -9,6 +9,7 @@ import { SignUpView } from '@/prototype/components/SignUpView';
 import { SignInView } from '@/prototype/components/SignInView';
 import { SetPasswordView } from '@/prototype/components/SetPasswordView';
 import { createClient } from '@/lib/supabase/client';
+import { needsPasswordSet } from '@/lib/auth-password';
 
 function AuthContent() {
     const { currentView, setCurrentView, t } = useApp();
@@ -23,8 +24,35 @@ function AuthContent() {
     useEffect(() => {
         const supabase = createClient();
 
+        // PKCE landings (?code=) never yield a session until the code is exchanged;
+        // the server callback does it, but a link that lands here directly needs
+        // it now, otherwise INITIAL_SESSION is null and the user ends up on sign-in.
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        if (code) {
+            supabase.auth.exchangeCodeForSession(code).then(async ({ error }) => {
+                if (!error) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (session?.user) setCurrentView('set-password');
+                }
+            }).catch(() => undefined);
+        }
+
         // Lắng nghe tất cả sự kiện Auth (bao gồm cả khi vừa load trang nhận token hoặc session)
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            // Link email OTP/reset mang token trong hash (#access_token=...) hoặc
+            // ?code=/reset=1...: người vừa bấm link phải vào đặt mật khẩu mới, bất kể loại
+            // sự kiện (link OTP loại email phát SIGNED_IN, không phải PASSWORD_RECOVERY).
+            const arrivingFromEmailLink =
+                typeof window !== 'undefined' &&
+                (window.location.hash.includes('access_token') ||
+                    params.has('code') ||
+                    params.get('reset') === '1');
+            if (arrivingFromEmailLink && session?.user) {
+                setCurrentView('set-password');
+                return;
+            }
+
             // 1. Nếu là luồng reset password từ email
             if (event === 'PASSWORD_RECOVERY') {
                 setCurrentView('set-password');
@@ -32,7 +60,7 @@ function AuthContent() {
             }
 
             // 2. Nếu đã có session nhưng chưa có mật khẩu
-            if (session?.user && session.user.user_metadata?.has_password !== true) {
+            if (session?.user && needsPasswordSet(session.user)) {
                 setCurrentView('set-password');
                 return;
             }

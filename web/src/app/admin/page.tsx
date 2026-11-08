@@ -43,6 +43,9 @@ const copy = {
     accounts: 'Accounts',
     promote: 'Make admin',
     demote: 'Make user',
+    resetPassword: 'Reset password',
+    newPassword: 'New password (8+ chars)',
+    resetDone: 'Password reset.',
     sync: 'Syncing with other admins every 5s',
     denied: 'This page is for admin accounts only.',
     signedOut: 'No account is signed in on this device.',
@@ -74,6 +77,9 @@ const copy = {
     accounts: 'Tài khoản',
     promote: 'Cho làm admin',
     demote: 'Bỏ admin',
+    resetPassword: 'Đặt lại mật khẩu',
+    newPassword: 'Mật khẩu mới (8+ ký tự)',
+    resetDone: 'Đã đặt lại mật khẩu.',
     sync: 'Đang đồng bộ với admin khác mỗi 5 giây',
     denied: 'Trang này chỉ dành cho tài khoản admin.',
     signedOut: 'Thiết bị này chưa đăng nhập tài khoản nào.',
@@ -93,6 +99,11 @@ const ERROR_TEXT: Record<string, { en: string; vi: string }> = {
   COUPON_EXISTS: { en: 'That code already exists.', vi: 'Mã đó đã tồn tại.' },
   CODE_IMMUTABLE: { en: 'A code cannot be renamed — its redemptions point at it.', vi: 'Không đổi được tên mã — các lượt đã dùng gắn vào mã đó.' },
   LAST_ADMIN: { en: 'This is the last admin. Removing it would leave nobody able to promote anyone.', vi: 'Đây là admin cuối cùng. Bỏ đi thì không còn ai phong được admin nữa.' },
+  FOUNDER_LOCKED: { en: 'The founder account can never be demoted.', vi: 'Tài khoản founder không bao giờ bị bỏ admin.' },
+  ONLY_FOUNDER_CAN_DEMOTE: { en: 'Only the founder can remove admin role.', vi: 'Chỉ founder mới được bỏ admin của người khác.' },
+  ONLY_FOUNDER: { en: 'Only the founder can reset passwords.', vi: 'Chỉ founder mới được đặt lại mật khẩu.' },
+  PASSWORD_TOO_SHORT: { en: 'Password must be at least 8 characters.', vi: 'Mật khẩu phải dài ít nhất 8 ký tự.' },
+  RESET_FAILED: { en: 'Password reset failed on the server.', vi: 'Đặt lại mật khẩu thất bại trên máy chủ.' },
   UNKNOWN_USER: { en: 'No such account.', vi: 'Không có tài khoản này.' },
   FORBIDDEN: { en: 'This account is not an admin.', vi: 'Tài khoản này không phải admin.' },
   NEED_LOGIN: { en: 'No account is signed in on this device.', vi: 'Thiết bị này chưa đăng nhập tài khoản nào.' },
@@ -118,6 +129,9 @@ export default function AdminPage() {
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [me, setMe] = useState<{ email: string; isFounder: boolean } | null>(null);
+  const [resetFor, setResetFor] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
   // The ref closes the double-submit window synchronously; the state drives the disabled button.
   // A ref read during render is a React error, so it cannot do both jobs.
   const busy = useRef(false);
@@ -189,6 +203,20 @@ export default function AdminPage() {
   useEffect(() => {
     document.documentElement.lang = language;
   }, [language]);
+
+  // Caller identity: decides who sees the demote button and the password-reset row.
+  useEffect(() => {
+    let active = true;
+    void fetch('/api/me')
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { email?: string; isFounder?: boolean } | null) => {
+        if (active && body?.email) setMe({ email: body.email, isFounder: Boolean(body.isFounder) });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -271,6 +299,28 @@ export default function AdminPage() {
       body: JSON.stringify({ active: !coupon.active }),
     });
     await refresh();
+  };
+
+  const resetPassword = async (user: User) => {
+    setError(null);
+    setNotice(null);
+    if (newPassword.length < 8) {
+      setError(ERROR_TEXT.PASSWORD_TOO_SHORT[language]);
+      return;
+    }
+    const response = await fetch(`/api/admin/users/${encodeURIComponent(user.email)}/password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: newPassword }),
+    });
+    if (!response.ok) {
+      const json = (await response.json().catch(() => ({}))) as { error?: string };
+      setError(ERROR_TEXT[json.error ?? '']?.[language] ?? json.error ?? 'UNKNOWN');
+      return;
+    }
+    setResetFor(null);
+    setNewPassword('');
+    setNotice(t.resetDone);
   };
 
   const setRole = async (user: User, role: 'user' | 'admin') => {
@@ -470,21 +520,69 @@ export default function AdminPage() {
       <section className="space-y-3" aria-labelledby="users-heading">
         <h2 id="users-heading" className="font-serif text-xl text-ink">{t.accounts}</h2>
         {users.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
-        {users.map((user) => (
+        {users.map((user) => {
+          const isFounderRow = Boolean(me?.isFounder && me.email.toLowerCase() === user.email.toLowerCase());
+          const canDemote = Boolean(me?.isFounder && !isFounderRow);
+          return (
           <article key={user.email} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
-            <div className="min-w-0">
+            <div className="min-w-0 grow">
               <p className="truncate text-ink">{user.email}</p>
               <p className="mt-1 text-sm text-ink-muted">{user.role}</p>
+              {me?.isFounder && resetFor === user.email ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <input
+                    type="password"
+                    className={field}
+                    style={{ maxWidth: '16rem' }}
+                    value={newPassword}
+                    autoComplete="new-password"
+                    placeholder={t.newPassword}
+                    aria-label={t.newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                  <button type="button" className={primary} onClick={() => void resetPassword(user)}>
+                    {t.resetPassword}
+                  </button>
+                </div>
+              ) : null}
             </div>
-            <button
-              type="button"
-              className={button}
-              onClick={() => setRole(user, user.role === 'admin' ? 'user' : 'admin')}
-            >
-              {user.role === 'admin' ? t.demote : t.promote}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {user.role === 'admin' ? (
+                canDemote ? (
+                  <button
+                    type="button"
+                    className={button}
+                    onClick={() => setRole(user, 'user')}
+                  >
+                    {t.demote}
+                  </button>
+                ) : null
+              ) : (
+                <button
+                  type="button"
+                  className={button}
+                  onClick={() => setRole(user, 'admin')}
+                >
+                  {t.promote}
+                </button>
+              )}
+              {me?.isFounder ? (
+                <button
+                  type="button"
+                  className={button}
+                  onClick={() => {
+                    setResetFor(resetFor === user.email ? null : user.email);
+                    setNewPassword('');
+                    setError(null);
+                  }}
+                >
+                  {t.resetPassword}
+                </button>
+              ) : null}
+            </div>
           </article>
-        ))}
+          );
+        })}
       </section>
     </main>
   );

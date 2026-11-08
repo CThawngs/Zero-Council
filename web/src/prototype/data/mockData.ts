@@ -90,6 +90,7 @@ const modelLabels: Record<SupportedModel, string> = {
 
 const providerLabels: Record<ModelProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
 
-export const modelLabel = (model: SupportedModel) => modelLabels[model];
+export const modelLabel = (model: string) =>
+  (modelLabels as Record<string, string>)[model] ?? model;
 
 export const providerLabel = (provider: ModelProvider) => providerLabels[provider];

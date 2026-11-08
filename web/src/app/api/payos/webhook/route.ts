@@ -1,5 +1,5 @@
 import { serverEnv } from '@/lib/serverEnv';
-import { getOrder, markOrder, type OrderStatus } from '@/lib/payos/orders';
+import { deleteOrder, getOrder, markOrder, sweepStaleOrders, type OrderStatus } from '@/lib/payos/orders';
 import { verifySignature } from '@/lib/payos/signature';
 import { addGrant, redeemCoupon } from '@/lib/store/account';
 
@@ -36,7 +36,15 @@ export async function POST(request: Request) {
   const orderCode = Number(data.orderCode);
   const amount = Number(data.amount);
   const order = await getOrder(orderCode);
-  if (!order) return new Response('unknown order', { status: 404 });
+  if (!order) {
+    // Order was swept as stale (5-min timeout) — late webhook ignored, nothing granted.
+    return new Response('unknown order', { status: 404 });
+  }
+  try {
+    await sweepStaleOrders();
+  } catch {
+    /* sweep is best-effort here */
+  }
 
   // Signature proves payOS sent this; it does not prove the amount is what we asked for.
   if (amount !== order.amountVnd) {
@@ -86,6 +94,15 @@ export async function POST(request: Request) {
   }
 
   console.log('[payos] order', orderCode, '->', status, 'stored:', JSON.stringify(updated));
+
+  // Failed transactions are permanently deleted; only successful ones are kept.
+  if (status === 'FAILED') {
+    try {
+      await deleteOrder(orderCode);
+    } catch {
+      /* best-effort */
+    }
+  }
 
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,

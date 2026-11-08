@@ -1,12 +1,17 @@
+<<<<<<< HEAD
 'use client'
 
 import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+=======
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+>>>>>>> main
 import {
   AdvisorPersona,
   ApiKeyConfig,
   DeliberationSession,
   Language,
   ModelProvider,
+  UserBot,
   ViewType,
   frameworkIdOf,
 } from '../types';
@@ -17,6 +22,7 @@ import {
   type Round,
 } from '@/lib/deliberation/engine';
 import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
+import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
 import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
 import {
@@ -108,12 +114,20 @@ interface AppContextType {
   selectedRoundIndex: number;
   selectRound: (index: number) => void;
   purgeSessions: () => void;
+  renameSession: (id: string, title: string) => void;
+  deleteSession: (id: string) => void;
   personas: AdvisorPersona[];
   addPersona: (persona: AdvisorPersona) => void;
+  bots: UserBot[];
+  botsReady: boolean;
+  createBot: (input: { name: string; instruction: string; provider: ModelProvider; model: string }) => Promise<UserBot | null>;
+  updateBot: (id: string, input: { name: string; instruction: string; provider: ModelProvider; model: string }) => Promise<UserBot | null>;
+  deleteBot: (id: string) => Promise<void>;
+  openBotChat: (botId: string) => void;
   apiKeys: ApiKeyConfig[];
-  connectApiKey: (provider: ModelProvider, key: string) => void;
-  removeApiKey: (provider: ModelProvider) => void;
-  revokeAllKeys: () => void;
+  connectApiKey: (provider: ModelProvider, key: string, model: string) => Promise<boolean>;
+  removeApiKey: (provider: ModelProvider) => Promise<void>;
+  revokeAllKeys: () => Promise<void>;
   isFrameworkModalOpen: boolean;
   openFrameworkModal: () => void;
   closeFrameworkModal: () => void;
@@ -123,6 +137,8 @@ interface AppContextType {
   currentPlanId: PlanId;
   /** The signed-in account, or null. Null is the normal state for a visitor, not an error. */
   authUser: { id: string; email: string } | null;
+  isAdmin: boolean;
+  isFounder: boolean;
   /**
    * False until the first session read resolves. Checkout stays disabled while this is false:
    * treating "not checked yet" as "signed out" would bounce a signed-in user to the login page
@@ -142,6 +158,12 @@ interface AppContextType {
    * instead of after the click.
    */
   requestCheckout: (plan: Plan) => void;
+  /** Re-reads the granted plan from /api/me. Used after a cancel/downgrade so caps update at once. */
+  refreshPlan: () => Promise<void>;
+  /** Revokes the running grant: back to Free, no payment. False when the server refuses. */
+  cancelPlanToFree: () => Promise<boolean>;
+  /** From Ultra: revokes Ultra, then opens a fresh Pro checkout. False on refusal. */
+  downgradeToPro: () => Promise<boolean>;
   /**
    * Send the visitor to the pricing table on the landing page.
    *
@@ -198,6 +220,22 @@ const stancesOf = (personas: AdvisorPersona[]) =>
 const toChatBots = (roster: AdvisorPersona[]): ChatBot[] =>
   roster.map((persona) => ({ id: persona.id, name: persona.name }));
 
+/** Prefix keeps bot personas from colliding with fixture advisor ids. */
+export const botPersonaId = (botId: string) => `bot:${botId}`;
+
+const botToPersona = (bot: UserBot): AdvisorPersona => ({
+  id: botPersonaId(bot.id),
+  name: bot.name,
+  archetype: bot.name,
+  model: bot.model,
+  provider: bot.provider,
+  colorToken: 'persona-sage',
+  colorHex: '#7C9885',
+  stance: '',
+  instructions: bot.instruction,
+  sampleQuote: '',
+});
+
 const createSession = async (
   question: string,
   framework: DeliberationSession['framework'],
@@ -244,7 +282,7 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
   // round whose language differs from the interface.
   return {
     ...session,
-    title: localizedTitles[session.id] ?? session.title,
+    title: session.titlePinned ? session.title : localizedTitles[session.id] ?? session.title,
     summary: t.sampleSessionSummary,
     relativeTime: t.sample,
     advisors: localizedAdvisors,
@@ -255,7 +293,11 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
+<<<<<<< HEAD
 export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language }> = ({ children, initialLanguage }) => {
+=======
+export const AppProvider: React.FC<{ children: React.ReactNode; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialAuthUser }) => {
+>>>>>>> main
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -327,6 +369,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
+  const [bots, setBots] = useState<UserBot[]>([]);
+  const [botsReady, setBotsReady] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
@@ -335,8 +379,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
-  const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(null);
-  const [authReady, setAuthReady] = useState(false);
+  // Server-mounted (page.tsx) when session cookie survived browser close: deterministic, no hydration mismatch.
+  const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(initialAuthUser ?? null);
+  const [authReady, setAuthReady] = useState(!!initialAuthUser);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isFounder, setIsFounder] = useState(false);
   /**
    * Non-essential cookie consent. `null` means the visitor has not been asked yet, which is
    * deliberately NOT the same as consent: analytics only loads on an explicit `'granted'`.
@@ -379,11 +426,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
-   * Plan the account is on. Hardcoded to Free until entitlements land — `effectivePlan` in
-   * lib/store/account.ts is the real answer, and it needs auth to exist.
-   * ponytail: a constant until auth ships; swap for effectivePlan(currentUser.email).
+   * Plan the account is on, read from `effectivePlan` through `/api/me` once sign-in settles.
+   * Defaults to Free; boosts like advisor caps derive from this via `planById`.
    */
-  const currentPlanId: PlanId = 'free';
+  const [currentPlanId, setCurrentPlanId] = useState<PlanId>('free');
   const personaCap = planById(currentPlanId).maxActiveAdvisors;
 
   useEffect(() => {
@@ -422,6 +468,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     };
   }, []);
 
+  /**
+   * Post-login dashboard: a signed-in user lands on the workspace (the new-council
+   * composer with the Grok-style left-bar), not the marketing landing. Fires once
+   * per sign-in — navigating back to the landing via the brand mark stays put.
+   */
+  const landedRef = useRef(false);
+  useEffect(() => {
+    if (!authUser || !botsReady || landedRef.current) return;
+    landedRef.current = true;
+    if (currentView === 'overview') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot landing after sign-in, guarded by landedRef
+      setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
+      window.scrollTo(0, 0);
+    }
+  }, [authUser, botsReady, bots.length, currentView]);
+
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut({
@@ -453,6 +515,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     setCheckoutPlan(plan);
   };
 
+  const refreshPlan = useCallback(async () => {
+    try {
+      const response = await fetch('/api/me', { credentials: 'same-origin' });
+      if (!response.ok) return;
+      const body = (await response.json()) as {
+        role?: string;
+        isFounder?: boolean;
+        plan?: { planId?: string } | null;
+      };
+      setIsAdmin(body?.role === 'admin');
+      setIsFounder(Boolean(body?.isFounder));
+      const planId = body?.plan?.planId;
+      setCurrentPlanId(planId === 'pro' || planId === 'ultra' || planId === 'free' ? planId : 'free');
+    } catch {
+      // A failed refresh keeps the last known plan rather than pretending it changed.
+    }
+  }, []);
+
+  const postPlanChange = async (to: 'free' | 'pro'): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/plan/cancel', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to }),
+      });
+      if (!response.ok) return false;
+      await refreshPlan();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const cancelPlanToFree = async (): Promise<boolean> => postPlanChange('free');
+
+  const downgradeToPro = async (): Promise<boolean> => {
+    const ok = await postPlanChange('pro');
+    if (ok) setCheckoutPlan(planById('pro'));
+    return ok;
+  };
+
   const goToPricing = () => {
     if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
       window.location.assign('/#pricing');
@@ -463,10 +567,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     requestAnimationFrame(() => requestAnimationFrame(scroll));
   };
 
-  const localizedSessions = useMemo(
-    () => sessions.map((session) => localizeSession(session, language)),
-    [language, sessions]
-  );
+  const localizedSessions = useMemo(() => {
+    const visible = authUser
+      ? sessions.filter((session) => !['project-proposal', 'team-priority', 'process-change'].includes(session.id))
+      : sessions;
+    return visible.map((session) => localizeSession(session, language));
+  }, [language, sessions, authUser]);
 
   const localizedPersonas = useMemo(
     () => personas.map((persona) => localizePersona(persona, language)),
@@ -595,6 +701,14 @@ const purgeSessions = () => {
     setCurrentRoom(null);
     clearStoredRoom();
     showToast('toastSessionsReset');
+  };
+
+  const renameSession = (id: string, title: string) => {
+    setSessions((value) => renameSessionInList(value, id, title));
+  };
+
+  const deleteSession = (id: string) => {
+    setSessions((value) => deleteSessionFromList(value, id));
   };
 
   const addPersona = (persona: AdvisorPersona) => {
@@ -917,19 +1031,166 @@ const purgeSessions = () => {
     startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
   };
 
-  // Keys live in memory for the life of the tab and nowhere else: not in storage, not on our server.
-  // Reloading clears them, which is the trade for never handing a key to anyone but the vendor.
+  // Secrets live encrypted server-side (per account); the browser holds a decrypted copy in
+  // memory for the tab only, so direct BYOK calls keep working. A reload re-fetches them from
+  // the authenticated route — they are never in storage, the bundle, or logs.
   const [keys, setKeys] = useState<Partial<Record<ModelProvider, string>>>({});
 
-  const connectApiKey = (provider: ModelProvider, key: string) => {
-    setKeys((value) => ({ ...value, [provider]: key }));
-    setApiKeys((value) =>
-      value.map((item) => (item.provider === provider ? { ...item, connected: true } : item))
-    );
-    showToast('toastProviderOn', { provider });
+  // Restore this account's connected providers on sign-in: connected state + chosen model +
+  // in-memory secrets. Scoped by the session (the route reads the email server-side), so
+  // switching accounts never bleeds the previous account's keys into the new one.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    void fetch('/api/providers', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { providers?: { provider: string; model: string; key?: string }[] } | null) => {
+        if (cancelled || !body?.providers) return;
+        const restored: Partial<Record<ModelProvider, string>> = {};
+        const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
+        for (const entry of body.providers) {
+          if (entry.provider === 'anthropic' || entry.provider === 'openai') {
+            if (entry.key) restored[entry.provider] = entry.key;
+          }
+        }
+        setKeys(restored);
+        setApiKeys((value) =>
+          value.map((item) => {
+            const entry = saved.get(item.provider);
+            return entry ? { ...item, connected: true, modelName: entry.model } : item;
+          })
+        );
+      })
+      .catch(() => {
+        // Offline / store unconfigured: keep the seeded disconnected state, never crash boot.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  // Load this account's bots once sign-in settles. The route scopes by session email.
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset readiness when the account changes, before the fetch settles
+    setBotsReady(false);
+    void fetch('/api/bots', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { bots?: UserBot[] } | null) => {
+        if (cancelled) return;
+        setBots(body?.bots ?? []);
+        setBotsReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setBotsReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  // Load this account's role + plan once sign-in settles. The route scopes by session email.
+  useEffect(() => {
+    if (!authUser) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- plan refresh mirrors server state, not local UI state
+    void refreshPlan();
+  }, [authUser, refreshPlan]);
+
+  // Landed back from payOS as a confirmed payment (`/checkout/return` sends `/?paid=1`):
+  // toast once, then drop the flag so a refresh does not re-toast.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('paid') !== '1') return;
+    url.searchParams.delete('paid');
+    window.history.replaceState(null, '', url.toString());
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot toast on mount, guarded by ?paid=1 flag
+    showToast('toastPaymentSuccess');
+  }, []);
+
+  // Mirror bots into the advisor roster so single-bot chat reuses runTurn/byok unchanged.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- roster mirrors server-owned bots, not local UI state
+    setPersonas((value) => [
+      ...value.filter((persona) => !persona.id.startsWith('bot:')),
+      ...bots.map(botToPersona),
+    ]);
+  }, [bots]);
+
+  const createBot = async (input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
+    try {
+      const response = await fetch('/api/bots', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { bot: UserBot };
+      setBots((value) => [...value, body.bot]);
+      return body.bot;
+    } catch {
+      return null;
+    }
   };
 
-  const removeApiKey = (provider: ModelProvider) => {
+  const updateBot = async (id: string, input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
+    try {
+      const response = await fetch('/api/bots', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...input }),
+      });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { bot: UserBot };
+      setBots((value) => value.map((bot) => (bot.id === id ? body.bot : bot)));
+      return body.bot;
+    } catch {
+      return null;
+    }
+  };
+
+  const deleteBot = async (id: string) => {
+    await fetch(`/api/bots?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }).catch(() => undefined);
+    setBots((value) => value.filter((bot) => bot.id !== id));
+  };
+
+  const openBotChat = (botId: string) => {
+    const persona = personas.find((item) => item.id === botPersonaId(botId)) ?? bots.map(botToPersona).find((item) => item.id === botPersonaId(botId));
+    if (!persona) return;
+    joinRoom([persona], 'round-robin', persona.name);
+  };
+
+  const connectApiKey = async (provider: ModelProvider, key: string, model: string): Promise<boolean> => {
+    try {
+      const response = await fetch('/api/providers', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, model, key }),
+      });
+      if (!response.ok) return false;
+    } catch {
+      return false;
+    }
+    setKeys((value) => ({ ...value, [provider]: key }));
+    setApiKeys((value) =>
+      value.map((item) => (item.provider === provider ? { ...item, connected: true, modelName: model } : item))
+    );
+    showToast('toastProviderOn', { provider });
+    return true;
+  };
+
+  const removeApiKey = async (provider: ModelProvider) => {
+    await fetch(`/api/providers?provider=${encodeURIComponent(provider)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    }).catch(() => undefined);
     setKeys((value) => {
       const next = { ...value };
       delete next[provider];
@@ -941,7 +1202,10 @@ const purgeSessions = () => {
     showToast('toastProviderOff', { provider });
   };
 
-  const revokeAllKeys = () => {
+  const revokeAllKeys = async () => {
+    await fetch('/api/providers', { method: 'DELETE', credentials: 'same-origin' }).catch(() =>
+      undefined
+    );
     setKeys({});
     setApiKeys((value) => value.map((item) => ({ ...item, connected: false })));
     showToast('toastProvidersCleared');
@@ -975,8 +1239,16 @@ const purgeSessions = () => {
         selectedRoundIndex,
         selectRound,
         purgeSessions,
+        renameSession,
+        deleteSession,
         personas: localizedPersonas,
         addPersona,
+        bots,
+        botsReady,
+        createBot,
+        updateBot,
+        deleteBot,
+        openBotChat,
         apiKeys,
         connectApiKey,
         removeApiKey,
@@ -989,12 +1261,17 @@ const purgeSessions = () => {
         closeCounterDraftModal: () => setIsCounterDraftModalOpen(false),
         currentPlanId,
         authUser,
+        isAdmin,
+        isFounder,
         authReady,
         signOut,
         checkoutPlan,
         consent: analyticsConsent,
         closeCheckout: () => setCheckoutPlan(null),
         requestCheckout,
+        refreshPlan,
+        cancelPlanToFree,
+        downgradeToPro,
         goToPricing,
         personaCap,
         canAddPersona: personas.length < personaCap,

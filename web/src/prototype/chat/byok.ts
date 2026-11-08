@@ -51,6 +51,42 @@ export const PROVIDERS: Provider[] = [
 export const providerById = (id: ProviderId): Provider => PROVIDERS.find((p) => p.id === id) ?? PROVIDERS[0];
 
 /**
+ * Test connection + fetch the live model list in one call. GET /v1/models on both providers
+ * answers 401 for a bad key and a model list for a good one, so this is the whole probe — no
+ * server round-trip. The key is used here and discarded; nothing is stored by this function.
+ */
+export const fetchProviderModels = async (provider: ProviderId, apiKey: string): Promise<string[]> => {
+  const key = apiKey.trim();
+  if (!key) throw new Error('EMPTY_KEY');
+  let response: Response;
+  try {
+    if (provider === 'anthropic') {
+      response = await fetch('https://api.anthropic.com/v1/models', {
+        headers: {
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          // Required: Anthropic refuses browser calls without this header.
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+      });
+    } else {
+      response = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${key}` },
+      });
+    }
+  } catch {
+    throw new Error('NETWORK_FAILED');
+  }
+  if (response.status === 401 || response.status === 403) throw new Error('INVALID_KEY');
+  if (!response.ok) throw new Error(`PROVIDER_${response.status}`);
+  const body = (await response.json().catch(() => null)) as { data?: { id?: unknown }[] } | null;
+  const ids = (body?.data ?? [])
+    .map((entry) => (typeof entry?.id === 'string' ? entry.id : null))
+    .filter((id): id is string => Boolean(id));
+  return [...new Set(ids)].sort();
+};
+
+/**
  * The one tool an advisor may call. Same name and shape as Hermes' `message_agent`, because the
  * point is that a model asked to address someone produces a target rather than a paragraph that
  * happens to contain "@The Dreamer".

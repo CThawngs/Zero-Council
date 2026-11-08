@@ -4,7 +4,7 @@ import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
 import { addGrant, redeemCoupon } from '@/lib/store/account';
 import { serverEnv } from '@/lib/serverEnv';
 import { signData, verifySignature } from '@/lib/payos/signature';
-import { putOrder } from '@/lib/payos/orders';
+import { putOrder, sweepStaleOrders } from '@/lib/payos/orders';
 
 // payOS v2 create-payment. The v1 `/payment/create` path the older docs showed now answers 404.
 const PAYOS_API = 'https://api-merchant.payos.vn/v2/payment-requests';
@@ -22,6 +22,13 @@ const normaliseCouponCode = (code: string) => code.trim().toUpperCase();
  * tampered client cannot choose what it pays.
  */
 export async function POST(request: Request) {
+  // Purge failed and expired orders before doing any work.
+  try {
+    await sweepStaleOrders();
+  } catch (error) {
+    console.error('[payos] sweep failed:', (error as Error).message);
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -108,12 +115,14 @@ export async function POST(request: Request) {
   }
 
   const origin = new URL(request.url).origin;
+  const expiredAt = Date.now() + 5 * 60 * 1000;
   const payload = {
     orderCode,
     amount,
-    description: `ZC ${plan.name}`,
+    description: `ZC ${orderCode}`,
     cancelUrl: `${origin}/checkout/return?orderCode=${orderCode}&status=cancelled`,
     returnUrl: `${origin}/checkout/return?orderCode=${orderCode}`,
+    expiredAt,
   };
 
   const payosResponse = await fetch(PAYOS_API, {
@@ -169,5 +178,8 @@ export async function POST(request: Request) {
     amountVnd: amount,
     amountUsd: plan.priceUsd,
     checkoutUrl: result.data.checkoutUrl,
+    // In-app QR popup: payOS returns the VietQR code alongside the hosted page link.
+    qrCode: (result.data.qrCode as string | undefined) ?? null,
+    expiredAt,
   });
 }
