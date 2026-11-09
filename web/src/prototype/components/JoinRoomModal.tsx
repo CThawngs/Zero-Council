@@ -2,9 +2,10 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { planById } from '../data/plans';
 import type { AdvisorPersona } from '../types';
-import { Bot, Check, LayoutList, MessagesSquare, Repeat } from 'lucide-react';
+import { Bot, Check, Eye, LayoutList, MessagesSquare, Repeat } from 'lucide-react';
 import { Modal } from './Modal';
 import type { ChatMode } from '../chat/engine';
+import type { CommunicationMode } from '@/lib/deliberation/engine';
 
 /**
  * Step 6 of the council flow: which advisors join this room, and how they take turns.
@@ -18,12 +19,18 @@ export const JoinRoomModal: React.FC = () => {
   const cap = planById(currentPlanId).maxActiveAdvisors;
   const defaultSelection = () => personas.slice(0, cap).map((persona) => persona.id);
   const [selected, setSelected] = useState<string[]>(defaultSelection);
+  // Cách các cố vấn trao đổi với nhau
+  const [communicationMode, setCommunicationMode] =
+    useState<CommunicationMode>('independent');
+
+  // Cách phân phối lượt phát biểu hiện tại
   const [mode, setMode] = useState<ChatMode>('round-robin');
 
   // Reset on close, not on open: an effect that writes state re-renders the whole tree for no
   // reason, and `closeJoinRoom` is already an event handler this component owns.
   const dismiss = () => {
     setSelected(defaultSelection());
+    setCommunicationMode('independent');
     setMode('round-robin');
     closeJoinRoom();
   };
@@ -47,13 +54,30 @@ export const JoinRoomModal: React.FC = () => {
     if (roster.length === 0) return;
     // Reset here too, or the next open pre-selects whatever the last room happened to use.
     setSelected(defaultSelection());
+    setCommunicationMode('independent');
     setMode('round-robin');
     joinRoom(roster, mode);
   };
 
-  const modes = [
-    { id: 'round-robin' as const, title: t.modeRoundRobin, body: t.modeRoundRobinBody, icon: Repeat },
-    { id: 'panel' as const, title: t.modePanel, body: t.modePanelBody, icon: LayoutList },
+  const communicationModes = [
+    {
+      id: 'independent' as const,
+      title: t.modeIndependentTitle,
+      body: t.modeIndependentBody,
+      icon: Eye,
+    },
+    {
+      id: 'debate' as const,
+      title: t.modeDebateTitle,
+      body: t.modeDebateBody,
+      icon: MessagesSquare,
+    },
+    {
+      id: 'chain' as const,
+      title: t.modeChainTitle,
+      body: t.modeChainBody,
+      icon: LayoutList,
+    },
   ];
 
   return (
@@ -130,33 +154,47 @@ export const JoinRoomModal: React.FC = () => {
       </fieldset>
 
       <fieldset className="mt-6 space-y-3">
-        <legend className="field-label">{t.joinMechanism}</legend>
+        <legend className="field-label">
+          {t.modeLabel}
+        </legend>
+
+        <p className="text-xs leading-relaxed text-ink-muted">
+          {t.modeHint}
+        </p>
+
         <div className="grid gap-2">
-          {modes.map(({ id, title, body, icon: Icon }) => {
-            const isSelected = mode === id;
+          {communicationModes.map(({ id, title, body, icon: Icon }) => {
+            const isSelected = communicationMode === id;
+
             return (
               <button
                 key={id}
                 type="button"
-                onClick={() => setMode(id)}
+                onClick={() => setCommunicationMode(id)}
                 aria-pressed={isSelected}
-                className={`option-card text-left ${isSelected ? 'option-card-selected' : ''}`}
+                className={`option-card relative w-full text-left ${
+                  isSelected ? 'option-card-selected' : ''
+                }`}
               >
                 <span className="flex items-start gap-3">
                   <span className="icon-tile shrink-0">
                     <Icon className="h-4 w-4" aria-hidden="true" />
                   </span>
+
                   <span className="min-w-0 flex-1">
-                    <span className="flex items-center justify-between gap-3">
-                      <span className="min-w-0 break-words font-medium text-ink">{title}</span>
-                      {isSelected && (
-                        <span className="badge-success shrink-0">
-                          <Check className="h-3 w-3" aria-hidden="true" />
-                          {t.selected}
-                        </span>
-                      )}
+                    <span className="block w-full pr-24 font-medium text-ink">
+                      {title}
                     </span>
-                    <span className="mt-2 block text-xs leading-relaxed text-ink-muted">{body}</span>
+
+                    {isSelected && (
+                      <span className="badge-success absolute right-4 top-4 shrink-0">
+                        <Check className="h-3 w-3" aria-hidden="true" />
+                        {t.selected}
+                      </span>
+                    )}
+                    <span className="mt-2 block text-xs leading-relaxed text-ink-muted">
+                      {body}
+                    </span>
                   </span>
                 </span>
               </button>
