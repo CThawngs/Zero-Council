@@ -29,7 +29,7 @@ export const Sidebar: React.FC = () => {
 
   const openSession = (id: string) => {
     setCurrentSessionId(id);
-    go('session-active');
+    go('session-concluded');
   };
 
   const startRename = (id: string, title: string) => {
@@ -113,7 +113,7 @@ export const Sidebar: React.FC = () => {
           ) : (
             <ul className="grid gap-1">
               {sessions.map((session) => {
-                const isActive = currentView === 'session-active' && currentSessionId === session.id;
+                const isActive = currentView === 'session-concluded' && currentSessionId === session.id;
                 const isEditing = editingId === session.id;
                 const isConfirming = confirmingId === session.id;
                 return (

@@ -12,7 +12,7 @@ import { ChatRoomView } from './components/ChatRoomView';
 import { RoomSummaryView } from './components/RoomSummaryView';
 import { OverviewView } from './components/OverviewView';
 import { EmptyChamberView } from './components/EmptyChamberView';
-import { SessionActiveView } from './components/SessionActiveView';
+import { GuideView } from './components/GuideView';
 import { SessionConcludedView } from './components/SessionConcludedView';
 import { SessionsListView } from './components/SessionsListView';
 import { PersonasView } from './components/PersonasView';
@@ -44,7 +44,7 @@ const ChamberContent: React.FC = () => {
         <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
           {currentView === 'overview' && <OverviewView />}
           {currentView === 'empty-chamber' && <EmptyChamberView />}
-          {currentView === 'session-active' && <SessionActiveView />}
+          {currentView === 'guide' && <GuideView />}
           {currentView === 'session-concluded' && <SessionConcludedView />}
           {currentView === 'sessions' && <SessionsListView />}
           {currentView === 'personas' && <PersonasView />}

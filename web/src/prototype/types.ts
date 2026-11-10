@@ -3,7 +3,7 @@ import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/e
 export type ViewType =
   | 'overview'
   | 'empty-chamber'
-  | 'session-active'
+  | 'guide'
   | 'session-concluded'
   | 'sessions'
   | 'personas'
