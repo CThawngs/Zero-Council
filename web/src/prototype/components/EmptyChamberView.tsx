@@ -1,12 +1,29 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import type { DecisionFramework } from '../types';
 import { modelLabel, providerLabel } from '../data/mockData';
-import { Check, Compass, GitBranch, Layers3, MessageSquareText, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
+import { modeLabel } from '../i18n';
+import type { CommunicationMode } from '@/lib/deliberation/engine';
+import { BookOpen, Check, Compass, GitBranch, Layers3, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
+
+const MODES: CommunicationMode[] = ['independent', 'debate', 'chain'];
+
+const MODE_DESCRIPTION: Record<CommunicationMode, 'modeIndependentBody' | 'modeDebateBody' | 'modeChainBody'> = {
+  independent: 'modeIndependentBody',
+  debate: 'modeDebateBody',
+  chain: 'modeChainBody',
+};
+
+const HOW_STEPS = [
+  { title: 'howStep1Title', body: 'howStep1Body' },
+  { title: 'howStep2Title', body: 'howStep2Body' },
+  { title: 'howStep3Title', body: 'howStep3Body' },
+] as const;
 
 export const EmptyChamberView: React.FC = () => {
-  const { startNewSession, openJoinRoom, personas, personaCap, setCurrentView, t} = useApp();
+  const { startCouncilChat, personas, personaCap, setCurrentView, language, t } = useApp();
   const [question, setQuestion] = useState('');
+  const [mode, setMode] = useState<CommunicationMode>('independent');
   const [selectedFramework, setSelectedFramework] =
     useState<DecisionFramework>('Good / Normal / Bad Scenarios');
 
@@ -48,7 +65,9 @@ export const EmptyChamberView: React.FC = () => {
     if (!normalizedQuestion) return;
     const chosen = personas.filter((persona) => selectedIds.includes(persona.id));
     if (chosen.length === 0) return;
-    startNewSession(normalizedQuestion, selectedFramework, chosen);
+    // Independent answers map to the panel (everyone answers on their own); debate and chain both need
+    // advisors to hear each other, which is what round-robin turn-taking is. Goes straight to the chat room.
+    startCouncilChat(normalizedQuestion, chosen, mode === 'independent' ? 'panel' : 'round-robin');
   };
 
   return (
@@ -114,6 +133,40 @@ export const EmptyChamberView: React.FC = () => {
                   </span>
                   <span className="mt-4 block min-w-0 break-words text-sm font-semibold text-ink">{title}</span>
                   <span className="mt-2 block min-w-0 break-words text-xs leading-relaxed text-ink-muted">{body}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend className="text-sm font-semibold text-ink">{t.modeLabel}</legend>
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {MODES.map((id) => {
+              const isSelected = mode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => setMode(id)}
+                  className={`rounded-xl border p-4 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass ${
+                    isSelected
+                      ? 'border-brass bg-background shadow-sm'
+                      : 'border-border bg-background/50 hover:border-brass/50 hover:bg-background'
+                  }`}
+                >
+                  <span className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words text-sm font-semibold text-ink">{modeLabel(id, language)}</span>
+                    {isSelected && (
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brass text-background">
+                        <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-2 block min-w-0 break-words text-xs leading-relaxed text-ink-muted">
+                    {t[MODE_DESCRIPTION[id]]}
+                  </span>
                 </button>
               );
             })}
@@ -202,15 +255,21 @@ export const EmptyChamberView: React.FC = () => {
         </div>
       </form>
 
-      {/* Step 5 → 6: the live room is a separate entry, because it is a separate kind of session. */}
-      <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="open-room-title">
-        <h2 id="open-room-title" className="text-sm font-semibold text-ink">
-          {t.chatTitle}
+      <section className="rounded-2xl border border-border bg-surface p-5" aria-labelledby="guide-card-title">
+        <h2 id="guide-card-title" className="text-sm font-semibold text-ink">
+          {t.guideCardTitle}
         </h2>
-        <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.joinBody}</p>
-        <button type="button" onClick={openJoinRoom} className="button-primary mt-4 min-h-11 w-full justify-center sm:w-auto">
-          <MessageSquareText className="h-4 w-4" aria-hidden="true" />
-          {t.joinStart}
+        <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.guideCardBody}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setCurrentView('guide');
+            window.scrollTo(0, 0);
+          }}
+          className="button-primary mt-4 min-h-11 w-full justify-center sm:w-auto"
+        >
+          <BookOpen className="h-4 w-4" aria-hidden="true" />
+          {t.guideOpen}
         </button>
       </section>
 
@@ -226,6 +285,23 @@ export const EmptyChamberView: React.FC = () => {
           <span>{t.questionPlaceholder}</span>
           <span className="shrink-0 text-xs font-semibold text-brass">{t.useExample}</span>
         </button>
+      </section>
+
+      <section className="space-y-4" aria-labelledby="how-title">
+        <h2 id="how-title" className="text-sm font-semibold text-ink">
+          {t.howTitle}
+        </h2>
+        <ol className="grid gap-3 sm:grid-cols-3">
+          {HOW_STEPS.map((step, index) => (
+            <li key={step.title} className="rounded-2xl border border-border bg-surface p-5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brass/10 text-sm font-semibold text-brass">
+                {index + 1}
+              </span>
+              <h3 className="mt-4 text-sm font-semibold text-ink">{t[step.title]}</h3>
+              <p className="mt-2 text-xs leading-relaxed text-ink-muted">{t[step.body]}</p>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );

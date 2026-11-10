@@ -572,7 +572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialAuthUser?
     question: string = copy[language].initialProjectTitle,
     framework: DeliberationSession['framework'] = 'Good / Normal / Bad Scenarios',
     advisors: AdvisorPersona[] = localizedPersonas,
-    landOn: ViewType = 'session-active'
+    landOn: ViewType = 'session-concluded'
   ) => {
     const normalizedQuestion = question.trim().toLowerCase();
     // Same question with a different seating is a different meeting, not a reopen of the old one.
