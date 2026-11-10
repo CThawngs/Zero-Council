@@ -3,6 +3,56 @@ import type { ReactNode } from 'react';
 import { THEME_BOOTSTRAP_SCRIPT } from '@/prototype/theme';
 import './globals.css';
 
+import { cookies } from 'next/headers';
+import { AppProvider } from '@/prototype/context/AppContext';
+import { createClient } from '@/lib/supabase/server';
+import { hasPasswordClaim } from '@/lib/auth-password';
+import { redirect } from 'next/navigation';
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const cookieStore = await cookies();
+
+  const language = cookieStore.get('zc-lang')?.value === 'vi' ? 'vi' : 'en';
+
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+
+  // A returning signed-in user (session cookie survived the browser close) is
+  // mounted straight into the dashboard, never shown the marketing landing.
+  // Google-only accounts without a password must create one first.
+  if (user?.email) {
+    if (!hasPasswordClaim(user.user_metadata)) {
+      redirect("/auth");
+    }
+
+    return (
+      <html lang={language}>
+        <body suppressHydrationWarning>
+          <AppProvider
+          initialLanguage={language}
+          initialAuthUser={{ id: user.id, email: user.email?.trim().toLowerCase() }}>
+            {children}
+          </AppProvider>
+        </body>
+      </html>
+    );
+  }
+
+  return (
+    <html lang={language}>
+      <body suppressHydrationWarning>
+        <AppProvider initialLanguage={language}>
+          {children}
+        </AppProvider>
+      </body>
+    </html>
+  );
+}
+
 export const metadata: Metadata = {
   title: 'Zero Council — AI decision council',
   description:
@@ -12,40 +62,3 @@ export const metadata: Metadata = {
   // "Failed to execute 'removeChild' on 'Node'" the next time that text changes.
   other: { google: 'notranslate' },
 };
-
-export default function RootLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  return (
-    // suppressHydrationWarning on <html> as well as <body>: browser extensions
-    // (Grammarly, read-aloud helpers) inject attributes before React hydrates,
-    // and this script now writes `data-theme` onto <html> too.
-
-    // No font classNames here: the families are declared with @font-face in globals.css.
-    // next/font's `variable` class was the only reason app/fonts.ts existed, and next/font is
-    // what made the build depend on a network call.
-    
-    // `dark` is deliberately absent: the theme is driven by [data-theme='dark']
-    // in globals.css, and pinning the class here would make it un-switchable.
-    <html lang="en" translate="no" className="h-full antialiased" suppressHydrationWarning>
-      <head>
-        {/*
-          Runs synchronously before first paint so a dark-theme visitor never sees a white flash.
-          dangerouslySetInnerHTML in <head> guarantees execution prior to rendering <body>.
-        */}
-        <script
-          id="zc-theme-bootstrap"
-          dangerouslySetInnerHTML={{
-            __html: THEME_BOOTSTRAP_SCRIPT,
-          }}
-        />
-      </head>
-      
-      <body className="min-h-full" suppressHydrationWarning>
-        {children}
-      </body>
-    </html>
-  );
-}

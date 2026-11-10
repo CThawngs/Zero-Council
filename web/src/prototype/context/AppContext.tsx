@@ -1,3 +1,5 @@
+'use client'
+
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import {
   AdvisorPersona,
@@ -85,7 +87,7 @@ interface AppContextType {
   currentView: ViewType;
   setCurrentView: (view: ViewType) => void;
   language: Language;
-  setLanguage: (language: Language) => void;
+  setLanguage: (language: Language) => Promise<void>;
   theme: Theme;
   toggleTheme: () => void;
   t: (typeof copy)[Language];
@@ -287,7 +289,7 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export const AppProvider: React.FC<{ children: React.ReactNode; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialAuthUser }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialLanguage, initialAuthUser }) => {
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -299,27 +301,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialAuthUser?
   // paint (see the layout effect below). The room and the view are still set from the SAME read in
   // one batch, so a reload cannot land on the marketing page with a live room sitting unread behind it.
   const [currentView, setCurrentView] = useState<ViewType>('overview');
+
   // Starts at the server's answer ('en'), like the room and the theme: reading storage in this
   // initializer would hydrate a Vietnamese tree against English HTML. The saved choice is adopted
   // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
   // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
   // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
-  const [language, setLanguageState] = useState<Language>('en');
-  useIsomorphicLayoutEffect(() => {
-    try {
-      if (localStorage.getItem('zc-lang') === 'vi') setLanguageState('vi');
-    } catch {
-      // Storage blocked: stay on the default.
+  const [language, setLanguageState] = useState<Language>(initialLanguage);
+
+  const setLanguage = async (next: Language) => {
+    if (next === language) return;
+
+    const response = await fetch('/api/language', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ language: next }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Could not save language preference');
     }
-  }, []);
-  const setLanguage = (next: Language) => {
+
+    // Chỉ cập nhật giao diện sau khi cookie được lưu thành công.
+    document.documentElement.lang = next;
+    document.documentElement.dataset.language = next;
+
     setLanguageState(next);
-    try {
-      localStorage.setItem('zc-lang', next);
-    } catch {
-      // Private mode: the choice still applies for this page view, it just will not persist.
-    }
   };
+
   // The first client render has to match the server's, and the server cannot know the visitor's theme,
   // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
   // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun

@@ -94,8 +94,6 @@ function AuthContent() {
 
 export default function Authentication() {
     return (
-        <AppProvider>
-            <AuthContent />
-        </AppProvider>
+        <AuthContent />
     );
 }
