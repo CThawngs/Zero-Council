@@ -49,7 +49,7 @@ const request = async (pathAndQuery: string, init: RequestInit = {}): Promise<un
 };
 
 const EPHEMERAL = process.env.VERCEL === '1';
-const STORE_PATH = serverEnv('ZC_BOTS_STORE') ?? path.join(process.cwd(), '.zc-bots.json');
+const STORE_PATH = serverEnv('ZC_AGENTS_STORE') ?? path.join(process.cwd(), '.zc-bots.json');
 
 type FileShape = Record<string, BotRecord>;
 
@@ -97,7 +97,7 @@ export const listBots = async (email: string): Promise<BotRecord[]> => {
   const key = normalizeEmail(email);
   if (supabaseConfig()) {
     const rows = await request(
-      `zc_bots?user_email=eq.${encodeURIComponent(key)}&select=id,name,instruction,provider,model,created_at,updated_at&order=created_at`
+      `zc_agents?user_email=eq.${encodeURIComponent(key)}&select=id,name,instruction,provider,model,created_at,updated_at&order=created_at`
     );
     return (rows as Row[]).map(toRecord);
   }
@@ -113,7 +113,7 @@ export const createBot = async (email: string, input: ValidBotInput): Promise<Bo
   const now = new Date().toISOString();
   const record: BotRecord = { id: randomUUID(), ...input, createdAt: now, updatedAt: now };
   if (supabaseConfig()) {
-    const rows = await request('zc_bots', {
+    const rows = await request('zc_agents', {
       method: 'POST',
       body: JSON.stringify({
         user_email: key,
@@ -143,7 +143,7 @@ export const updateBot = async (
   const now = new Date().toISOString();
   if (supabaseConfig()) {
     const rows = await request(
-      `zc_bots?user_email=eq.${encodeURIComponent(key)}&id=eq.${encodeURIComponent(id)}`,
+      `zc_agents?user_email=eq.${encodeURIComponent(key)}&id=eq.${encodeURIComponent(id)}`,
       {
         method: 'PATCH',
         body: JSON.stringify({
@@ -171,7 +171,7 @@ export const deleteBot = async (email: string, id: string): Promise<boolean> => 
   const key = normalizeEmail(email);
   if (supabaseConfig()) {
     const rows = await request(
-      `zc_bots?user_email=eq.${encodeURIComponent(key)}&id=eq.${encodeURIComponent(id)}`,
+      `zc_agents?user_email=eq.${encodeURIComponent(key)}&id=eq.${encodeURIComponent(id)}`,
       { method: 'DELETE' }
     );
     return (rows as unknown[]).length > 0;
