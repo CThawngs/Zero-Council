@@ -9,11 +9,6 @@
 --   * zc_agents.system_prompt is the existing instruction content.
 --
 
--- List of changes:
---   * All tables: reference user_email instead of user_id
---   * zc_agents:
---      + Remove archetype, system_prompt
-
 -- Review existing RLS policies before applying in production.
 -- ============================================================
 
