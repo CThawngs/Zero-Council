@@ -19,25 +19,27 @@ BEGIN;
 -- One encrypted API key per user and provider.
 -- ============================================================
 
+DROP TABLE IF EXISTS public.zc_users_api_keys;
 DROP TABLE IF EXISTS public.zc_provider_keys;
 
 CREATE TABLE IF NOT EXISTS public.zc_provider_keys (
     user_email TEXT NOT NULL,
     provider TEXT NOT NULL,
+    model TEXT NOT NULL,
     encrypted_key TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT zc_provider_keys_pkey
+    CONSTRAINT pk_zc_provider_keys
         PRIMARY KEY (user_email, provider),
 
-    CONSTRAINT zc_provider_keys_user_email_fkey
+    CONSTRAINT fk_zc_provider_keys_user_email
         FOREIGN KEY (user_email)
         REFERENCES public.zc_users(email)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
 
-    CONSTRAINT zc_provider_keys_provider_fkey
+    CONSTRAINT fk_zc_provider_keys_provider
         FOREIGN KEY (provider)
         REFERENCES public.zc_agent_providers(id)
         ON UPDATE CASCADE
@@ -60,7 +62,7 @@ GRANT ALL ON public.zc_provider_keys TO service_role;
 --
 -- Changes:
 --   archetype     -> name
---   system_prompt -> instructions
+--   system_prompt -> instruction
 --   user_id       -> user_email
 --   model_id      -> provider + model
 --   decision_lens -> removed
@@ -72,7 +74,7 @@ ALTER TABLE public.zc_agents
     RENAME COLUMN archetype TO name;
 
 ALTER TABLE public.zc_agents
-    RENAME COLUMN system_prompt TO instructions;
+    RENAME COLUMN system_prompt TO instruction;
 
 ALTER TABLE public.zc_agents
     ADD COLUMN user_email TEXT,
@@ -96,28 +98,28 @@ WHERE a.model_id = m.id;
 
 -- Remove old foreign keys and columns.
 ALTER TABLE public.zc_agents
-    DROP CONSTRAINT IF EXISTS zc_agents_user_id_fkey,
-    DROP CONSTRAINT IF EXISTS zc_agents_model_id_fkey;
+    DROP CONSTRAINT IF EXISTS fk_agents_user,
+    DROP CONSTRAINT IF EXISTS fk_agents_model;
 
 ALTER TABLE public.zc_agents
     DROP COLUMN user_id,
     DROP COLUMN model_id,
     DROP COLUMN decision_lens;
 
--- name and instructions are required for every agent.
+-- name and instruction are required for every agent.
 ALTER TABLE public.zc_agents
     ALTER COLUMN name SET NOT NULL,
-    ALTER COLUMN instructions SET NOT NULL;
+    ALTER COLUMN instruction SET NOT NULL;
 
 -- Add the new ownership and provider relationships.
 ALTER TABLE public.zc_agents
-    ADD CONSTRAINT zc_agents_user_email_fkey
+    ADD CONSTRAINT fk_zc_agents_user_email
         FOREIGN KEY (user_email)
         REFERENCES public.zc_users(email)
         ON UPDATE CASCADE
         ON DELETE CASCADE,
 
-    ADD CONSTRAINT zc_agents_provider_fkey
+    ADD CONSTRAINT fk_zc_agents_provider
         FOREIGN KEY (provider)
         REFERENCES public.zc_agent_providers(id)
         ON UPDATE CASCADE
@@ -153,13 +155,13 @@ ALTER TABLE public.zc_conversations
     ALTER COLUMN user_email SET NOT NULL;
 
 ALTER TABLE public.zc_conversations
-    DROP CONSTRAINT IF EXISTS zc_conversations_user_id_fkey;
+    DROP CONSTRAINT IF EXISTS fk_zc_conversations_user_id;
 
 ALTER TABLE public.zc_conversations
     DROP COLUMN user_id;
 
 ALTER TABLE public.zc_conversations
-    ADD CONSTRAINT zc_conversations_user_email_fkey
+    ADD CONSTRAINT fk_zc_conversations_user_email
         FOREIGN KEY (user_email)
         REFERENCES public.zc_users(email)
         ON UPDATE CASCADE
