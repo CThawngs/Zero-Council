@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import type { ReactNode } from 'react';
 import { THEME_BOOTSTRAP_SCRIPT } from '@/prototype/theme';
 import './globals.css';
 
@@ -30,7 +29,19 @@ export default async function RootLayout({
     }
 
     return (
-      <html lang={language}>
+      <html lang={language} suppressHydrationWarning>
+        <head>
+        {/*
+          Runs synchronously before first paint so a dark-theme visitor never sees a white flash.
+          dangerouslySetInnerHTML in <head> guarantees execution prior to rendering <body>.
+        */}
+        <script
+          id="zc-theme-bootstrap"
+          dangerouslySetInnerHTML={{
+            __html: THEME_BOOTSTRAP_SCRIPT,
+          }}
+        />
+      </head>
         <body suppressHydrationWarning>
           <AppProvider
           initialLanguage={language}
@@ -43,7 +54,15 @@ export default async function RootLayout({
   }
 
   return (
-    <html lang={language}>
+    <html lang={language} suppressHydrationWarning>
+      <head>
+        <script
+          id="zc-theme-bootstrap"
+          dangerouslySetInnerHTML={{
+            __html: THEME_BOOTSTRAP_SCRIPT,
+          }}
+        />
+      </head>
       <body suppressHydrationWarning>
         <AppProvider initialLanguage={language}>
           {children}
