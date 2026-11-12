@@ -4,9 +4,9 @@
 -- ============================================================
 INSERT INTO public.zc_agent_providers (id, name)
 VALUES 
-    ('openai', 'OpenAI', 'sk-'),
-    ('anthropic', 'Anthropic', 'sk-ant'),
-    ('google', 'Google', 'AIza')
+    ('openai', 'OpenAI'),
+    ('anthropic', 'Anthropic'),
+    ('google', 'Google')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO public.zc_agent_models (id, name, provider_id)

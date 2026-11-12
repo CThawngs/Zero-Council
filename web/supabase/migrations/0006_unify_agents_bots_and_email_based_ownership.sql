@@ -8,8 +8,6 @@
 --   * zc_users.email values match existing user ownership records.
 --   * zc_agents.system_prompt is the existing instruction content.
 --
-
--- Review existing RLS policies before applying in production.
 -- ============================================================
 
 BEGIN;
@@ -50,13 +48,6 @@ DROP POLICY IF EXISTS "Users can delete own conversations" ON public.zc_conversa
 -- ============================================================
 
 DROP TABLE IF EXISTS public.zc_users_api_keys;
-=======
--- 1. ZC_PROVIDER_KEYS
--- One encrypted API key per user and provider.
--- ============================================================
-
-DROP TABLE IF EXISTS public.zc_users_api_keys;
-DROP TABLE IF EXISTS public.zc_provider_keys;
 
 CREATE TABLE IF NOT EXISTS public.zc_provider_keys (
     user_email TEXT NOT NULL,
