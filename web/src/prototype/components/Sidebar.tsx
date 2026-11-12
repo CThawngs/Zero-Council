@@ -48,9 +48,9 @@ export const Sidebar: React.FC = () => {
       <button type="button" onClick={openJoinRoom} className="button-primary mb-5 w-full justify-center">
         <Plus className="h-4 w-4" aria-hidden="true" /> {labels.nav.newDeliberation}
       </button>
-      <nav className="grid gap-1 overflow-y-auto" aria-label={t.workspaceNavigation}>
+      <nav className="grid min-w-0 grid-cols-1 gap-1 overflow-y-auto overflow-x-hidden" aria-label={t.workspaceNavigation}>
         {WORKSPACE_NAV.map((group) => (
-          <div key={group.labelKey}>
+          <div key={group.labelKey} className="min-w-0">
             <p className="nav-group-label">{labels.navGroup[group.labelKey]}</p>
             <div className="grid gap-1">
               {group.items.map(({ view, labelKey, icon: Icon }) => (
@@ -69,12 +69,12 @@ export const Sidebar: React.FC = () => {
           </div>
         ))}
 
-        <div className="mt-3">
+        <div className="mt-3 min-w-0">
           <p className="nav-group-label">{t.botsTitle}</p>
           {bots.length === 0 ? (
             <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.botsEmpty}</p>
           ) : (
-            <ul className="grid gap-1">
+            <ul className="grid grid-cols-1 gap-1">
               {bots.map((bot) => (
                 <li key={bot.id}>
                   <button
@@ -106,12 +106,12 @@ export const Sidebar: React.FC = () => {
           ) : null}
         </div>
 
-        <div className="mt-3">
+        <div className="mt-3 min-w-0">
           <p className="nav-group-label">{t.councilsTitle}</p>
           {sessions.length === 0 ? (
             <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.emptySessionsBody}</p>
           ) : (
-            <ul className="grid gap-1">
+            <ul className="grid grid-cols-1 gap-1">
               {sessions.map((session) => {
                 const isActive = currentView === 'session-concluded' && currentSessionId === session.id;
                 const isEditing = editingId === session.id;
@@ -119,7 +119,7 @@ export const Sidebar: React.FC = () => {
                 return (
                   <li
                     key={session.id}
-                    className={`group flex items-center gap-1 rounded-lg px-1 ${isActive ? 'bg-surface' : ''}`}
+                    className={`group flex min-w-0 items-center gap-1 rounded-lg px-1 ${isActive ? 'bg-surface' : ''}`}
                   >
                     {isEditing ? (
                       <>
