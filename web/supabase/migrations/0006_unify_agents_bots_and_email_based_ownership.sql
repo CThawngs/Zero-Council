@@ -13,14 +13,21 @@
 BEGIN;
 
 -- ============================================================
+-- -1. Add new collumn to check for proper provider API keys
+-- syntax
+-- ============================================================
+ALTER TABLE public.zc_agent_providers
+    ADD COLUMN key_prefix TEXT NOT NULL
+
+-- ============================================================
 -- 0. PREPARATION: Seed standard providers and models if missing
 -- Ensures FK from zc_provider_keys and zc_agents does not fail
 -- ============================================================
 INSERT INTO public.zc_agent_providers (id, name)
 VALUES 
-    ('openai', 'OpenAI'),
-    ('anthropic', 'Anthropic'),
-    ('google', 'Google')
+    ('openai', 'OpenAI', 'sk-'),
+    ('anthropic', 'Anthropic', 'sk-ant'),
+    ('google', 'Google', 'AIza')
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO public.zc_agent_models (id, name, provider_id)
