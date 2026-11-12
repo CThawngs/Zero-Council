@@ -15,13 +15,6 @@
 BEGIN;
 
 -- ============================================================
--- 0. Add new collumn to check for proper provider API keys
--- syntax
--- ============================================================
-ALTER TABLE public.zc_agent_providers
-    ADD COLUMN key_prefix TEXT NOT NULL
-
--- ============================================================
 -- 1. DROP DEPENDENT RLS POLICIES FIRST
 -- PostgreSQL prevents dropping columns (user_id) if policies depend on them.
 -- ============================================================
