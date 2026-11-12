@@ -25,7 +25,7 @@ export default async function RootLayout({
   // mounted straight into the dashboard, never shown the marketing landing.
   // Google-only accounts without a password must create one first.
   if (user?.email) {
-    if (!hasPasswordClaim(user.user_metadata)) {
+    if (!hasPasswordClaim(user)) {
       redirect("/auth");
     }
 
