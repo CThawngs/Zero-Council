@@ -78,7 +78,6 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
     }
     else if ((
       view === 'empty-chamber' ||
-      view === 'session-active' ||
       view === 'session-concluded' ||
       view === 'sessions' ||
       view === 'personas' ||

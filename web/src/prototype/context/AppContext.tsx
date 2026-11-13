@@ -55,6 +55,7 @@ import {
   type AnalyticsConsent,
 } from '../components/CookieNotice';
 import { redirect } from 'next/navigation';
+import path from 'path';
 
 /** One live room. Deliberately not a `DeliberationSession`: that shape has no message list. */
 export interface ChatRoom {
@@ -123,7 +124,6 @@ interface AppContextType {
   deleteBot: (id: string) => Promise<void>;
   openBotChat: (botId: string) => void;
   apiKeys: ApiKeyConfig[];
-  refreshApiKeys: () => Promise<void>;
   connectApiKey: (provider: ModelProvider, key: string, model: string) => Promise<boolean>;
   removeApiKey: (provider: ModelProvider) => Promise<void>;
   revokeAllKeys: () => Promise<void>;
@@ -480,11 +480,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
    * Post-login dashboard: a signed-in user lands on the workspace (the new-council
    * composer with the Grok-style left-bar), not the marketing landing. Fires once
    * per sign-in — navigating back to the landing via the brand mark stays put.
+   * 
+   * It also works on reload (which is bad)
    */
   const landedRef = useRef(false);
   useEffect(() => {
     if (!authUser || !botsReady || landedRef.current) return;
     landedRef.current = true;
+
+    if (window.location.href == '')
+      redirect('/dashboard');
+
     if (currentView === 'overview') {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot landing after sign-in, guarded by landedRef
       setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
@@ -1068,7 +1074,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
         const restored: Partial<Record<ModelProvider, string>> = {};
         const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
         for (const entry of body.providers) {
-          if (entry.provider === 'anthropic' || entry.provider === 'openai') {
+          if (entry.provider === 'anthropic' || entry.provider === 'openai' || entry.provider === 'google') {
             if (entry.key) restored[entry.provider] = entry.key;
           }
         }
@@ -1266,7 +1272,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
         deleteBot,
         openBotChat,
         apiKeys,
-        refreshApiKeys,
         connectApiKey,
         removeApiKey,
         revokeAllKeys,

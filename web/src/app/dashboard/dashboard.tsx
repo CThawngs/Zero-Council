@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef } from 'react';
-import { AppProvider, useApp } from '@/prototype/context/AppContext';
+import { useEffect, useRef } from 'react';
+import { useApp } from '@/prototype/context/AppContext';
 import { Header } from '@/prototype/components/Header';
 import { Sidebar } from '@/prototype/components/Sidebar';
 import { Footer } from '@/prototype/components/Footer';
@@ -11,7 +11,6 @@ import { JoinRoomModal } from '@/prototype/components/JoinRoomModal';
 import { ChatRoomView } from '@/prototype/components/ChatRoomView';
 import { RoomSummaryView } from '@/prototype/components/RoomSummaryView';
 import { EmptyChamberView } from '@/prototype/components/EmptyChamberView';
-import { SessionActiveView } from '@/prototype/components/SessionActiveView';
 import { SessionConcludedView } from '@/prototype/components/SessionConcludedView';
 import { SessionsListView } from '@/prototype/components/SessionsListView';
 import { PersonasView } from '@/prototype/components/PersonasView';
@@ -24,9 +23,28 @@ import { CheckoutDrawer } from '@/prototype/components/CheckoutDrawer';
 import { legalDocumentOf } from '@/prototype/types';
 
 function ChamberContent () {
-    const { currentView, t, checkoutPlan, closeCheckout } = useApp();
+    const { currentView, setCurrentView, bots, t, checkoutPlan, closeCheckout } = useApp();
     const mainRef = useRef<HTMLElement>(null);
     const isPublicPage = currentView === 'overview' || legalDocumentOf(currentView) !== null || currentView === 'sign-in' || currentView === 'sign-up';
+
+    // Nếu không thuộc các view của riêng dashboard thì biến thành dashboard
+    useEffect(() => {
+    if (
+        currentView !== 'empty-chamber' &&
+        currentView !== 'session-concluded' &&
+        currentView !== 'sessions' &&
+        currentView !== 'personas' &&
+        currentView !== 'new-advisor' &&
+        currentView !== 'api-keys' &&
+        currentView !== 'settings' && 
+        currentView !== 'billing' &&
+        currentView !== 'room-summary' &&
+        currentView !== 'chat-room'
+    ){
+      setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
+      window.scrollTo(0, 0);
+    }
+    }, [])
 
     return (
         <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
@@ -36,7 +54,6 @@ function ChamberContent () {
                 {!isPublicPage && <Sidebar />}
                 <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
                 {currentView === 'empty-chamber' && <EmptyChamberView />}
-                {currentView === 'session-active' && <SessionActiveView />}
                 {currentView === 'session-concluded' && <SessionConcludedView />}
                 {currentView === 'sessions' && <SessionsListView />}
                 {currentView === 'personas' && <PersonasView />}
@@ -67,5 +84,5 @@ function ChamberContent () {
 }
 
 export default function Dashboard() {
-    return <AppProvider initialView={'empty-chamber'}><ChamberContent /></AppProvider>;
+    return <ChamberContent />
 }

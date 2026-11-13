@@ -6,6 +6,8 @@ import { Provider, fetchProviderModels, providerById } from '../chat/byok';
 import { Check, Loader2, Eye, EyeOff, LockKeyhole, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
 import { createClient } from '@/lib/supabase/client';
+import { type } from 'node:os';
+import { error } from 'node:console';
 
 type TestState =
   | { phase: 'idle' }
@@ -31,13 +33,32 @@ const errorText = (t: Record<string, string>, state: TestState): string => {
 export const ApiKeysView: React.FC = () => {
   const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, t } = useApp();
 
-  const [activeProviderId, setActiveProviderId] = useState<ModelProvider | null>(null);
+  const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isClearOpen, setIsClearOpen] = useState(false);
   const [draftKey, setDraftKey] = useState('');
   const [test, setTest] = useState<TestState>({ phase: 'idle' });
-  const activeItem = activeProviderId ? apiKeys.find((key) => key.provider === activeProviderId) : undefined;
-  const provider = activeProviderId ? providerById(activeProviderId) : undefined;
+  const activeItem = activeProvider ? apiKeys.find((key) => key.provider === activeProvider) : undefined;
+  const provider = activeProvider ? providerById(activeProvider) : undefined;
+  const prefix = () => {
+    switch (activeProvider) {
+      case 'openai':
+        return 'sk-';
+      
+      case 'anthropic':
+        return 'sk-ant';
+
+      case 'google':
+        return 'AIza';
+
+      default:
+        return undefined;
+    }
+  };
+
+  function providerById(id: ModelProvider) {
+
+  }
 
   const openProvider = (next: ModelProvider) => {
     setActiveProvider(next);
@@ -51,11 +72,21 @@ export const ApiKeysView: React.FC = () => {
     setTest({ phase: 'idle' });
   };
 
+  const prefixCheck = (): boolean | undefined => {
+    if (typeof prefix === 'string') {
+      if (draftKey.startsWith( prefix ))
+        return true;
+      else
+        return false;
+    }
+    setTest({ phase: 'error', message: ('Found no prefix.')})
+  }
+
   const testConnection = async () => {
-    if (!activeProviderId || test.phase === 'testing' || test.phase === 'saving') return;
+    if (!activeProvider || test.phase === 'testing' || test.phase === 'saving') return;
     setTest({ phase: 'testing' });
     try {
-      const models = await fetchProviderModels(activeProviderId, draftKey);
+      const models = await fetchProviderModels(activeProvider, draftKey);
       if (models.length === 0) throw new Error('NO_MODELS');
       setTest({ phase: 'tested', models, selected: models[0] });
     } catch (error) {
@@ -64,9 +95,9 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const save = async () => {
-    if (!activeProviderId || test.phase !== 'tested') return;
+    if (!activeProvider || test.phase !== 'tested') return;
     setTest({ phase: 'saving', models: test.models, selected: test.selected });
-    const ok = await connectApiKey(activeProviderId, draftKey.trim(), test.selected);
+    const ok = await connectApiKey(activeProvider, draftKey.trim(), test.selected);
     if (!ok) {
       setTest({ phase: 'error', message: 'SAVE_FAILED' });
       return;
@@ -75,8 +106,8 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const disconnect = async () => {
-    if (!activeProviderId) return;
-    await removeApiKey(activeProviderId);
+    if (!activeProvider) return;
+    await removeApiKey(activeProvider);
     closeModal();
   };
 
@@ -152,9 +183,7 @@ export const ApiKeysView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveProviderId(item.id as ModelProvider);
-                    setError('');
-                    setMessage('');
+                    setActiveProvider(item.id as ModelProvider);
                   }}
                   className={
                     connected
@@ -182,7 +211,7 @@ export const ApiKeysView: React.FC = () => {
 
       {/** Pop up hiện đ */}
       <Modal
-        isOpen={activeProviderId !== null}
+        isOpen={activeProvider !== null}
         onClose={closeModal}
         title={t.dialogTitle}
         description={t.dialogBody}
@@ -222,7 +251,7 @@ export const ApiKeysView: React.FC = () => {
                 spellCheck={false}
                 inputMode="text"
                 value={draftKey}
-                placeholder={provider?.keyPrefix ?? ''}
+                placeholder={typeof prefix === 'string' ? prefix : ''}
                 disabled={busy}
                 onChange={(event) => { setDraftKey(event.target.value); setTest({ phase: 'idle' }); }}
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"

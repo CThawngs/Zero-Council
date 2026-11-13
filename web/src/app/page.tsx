@@ -51,5 +51,5 @@ const ChamberContent: React.FC = () => {
 };
 
 export default function App() {
-  return <AppProvider><ChamberContent /></AppProvider>;
+  return <ChamberContent />;
 }

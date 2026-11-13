@@ -22,7 +22,7 @@ import {
 import Link from 'next/link';
 
 export const OverviewView: React.FC = () => {
-  const { setCurrentView, t, language, authUser, authReady, requestCheckout, currentPlanId, currentPlanToFree } = useApp();
+  const { setCurrentView, t, language, authUser, authReady, requestCheckout, currentPlanId, cancelPlanToFree } = useApp();
 
   const flow = [
     { icon: MessageSquareText, title: t.flow1Title, body: t.flow1Body, badge: t.badgeStep1, tint: 'var(--tint-blue)' },
