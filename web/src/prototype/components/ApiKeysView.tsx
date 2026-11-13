@@ -1,13 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ModelProvider } from '../types';
-import { modelLabel, providerLabel } from '../data/mockData';
-import { Provider, fetchProviderModels, providerById } from '../chat/byok';
+import { providerLabel } from '../data/mockData';
+import { fetchProviderModels } from '../chat/byok';
 import { Check, Loader2, Eye, EyeOff, LockKeyhole, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
-import { createClient } from '@/lib/supabase/client';
-import { type } from 'node:os';
-import { error } from 'node:console';
+
 
 type TestState =
   | { phase: 'idle' }
@@ -31,22 +29,23 @@ const errorText = (t: Record<string, string>, state: TestState): string => {
 };
 
 export const ApiKeysView: React.FC = () => {
-  const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, t } = useApp();
+  const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, bots, t } = useApp();
 
+  // activeProvider is closer to activeProviderId
   const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isClearOpen, setIsClearOpen] = useState(false);
   const [draftKey, setDraftKey] = useState('');
   const [test, setTest] = useState<TestState>({ phase: 'idle' });
   const activeItem = activeProvider ? apiKeys.find((key) => key.provider === activeProvider) : undefined;
-  const provider = activeProvider ? providerById(activeProvider) : undefined;
-  const prefix = () => {
+  // const provider = activeProvider ? providerById(activeProvider) : undefined;
+  const prefix = (): string | undefined => {
     switch (activeProvider) {
       case 'openai':
         return 'sk-';
       
       case 'anthropic':
-        return 'sk-ant';
+        return 'sk-ant-';
 
       case 'google':
         return 'AIza';
@@ -55,10 +54,6 @@ export const ApiKeysView: React.FC = () => {
         return undefined;
     }
   };
-
-  function providerById(id: ModelProvider) {
-
-  }
 
   const openProvider = (next: ModelProvider) => {
     setActiveProvider(next);
@@ -72,18 +67,24 @@ export const ApiKeysView: React.FC = () => {
     setTest({ phase: 'idle' });
   };
 
-  const prefixCheck = (): boolean | undefined => {
-    if (typeof prefix === 'string') {
-      if (draftKey.startsWith( prefix ))
-        return true;
-      else
-        return false;
+  const prefixCheck = (): boolean => {
+    const expectedPrefix = prefix();
+
+    if (!expectedPrefix) return true;
+
+    if (!draftKey.startsWith(expectedPrefix)) {
+      setTest({ phase: 'error', message: 'INVALID_KEY' });
+      return false;
     }
-    setTest({ phase: 'error', message: ('Found no prefix.')})
-  }
+
+    return true;
+  };
 
   const testConnection = async () => {
     if (!activeProvider || test.phase === 'testing' || test.phase === 'saving') return;
+
+    if (!prefixCheck()) return;
+
     setTest({ phase: 'testing' });
     try {
       const models = await fetchProviderModels(activeProvider, draftKey);
@@ -143,73 +144,19 @@ export const ApiKeysView: React.FC = () => {
       <div className="grid gap-4">
         {apiKeys.map((item) => (
           <article key={item.provider} className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-serif text-lg text-ink">{providerLabel(item.provider)}</h2><span className="badge-neutral">{item.connected ? item.modelName : t.stateOff}</span><span className={item.connected ? 'badge-success' : 'badge-muted'}>{item.connected ? t.stateOn : t.stateOff}</span></div><p className="mt-2 text-sm leading-relaxed text-ink-muted">{item.connected ? t.stateOnBody : t.stateOffBody}</p></div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-serif text-lg text-ink">{providerLabel(item.provider)}</h2>
+                <span className={item.connected ? 'badge-success' : 'badge-muted'}>{item.connected ? t.stateOn : t.stateOff}</span>
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-ink-muted">{item.connected ? t.stateOnBody : t.stateOffBody}</p>
+            </div>
             <button type="button" onClick={() => openProvider(item.provider)} className={item.connected ? 'button-secondary min-h-11 shrink-0 justify-center' : 'button-primary min-h-11 shrink-0 justify-center'} aria-label={`${item.connected ? t.clearState : t.toggleState}: ${providerLabel(item.provider)}`}>{item.connected ? <><RotateCcw className="h-4 w-4" />{t.clearState}</> : <><Check className="h-4 w-4" />{t.toggleState}</>}</button>
           </article>
         ))}
       </div>
 
-      {/* Danh sách các providers */}
-      {loading ? (
-        <p className="text-sm text-ink-muted">Loading providers...</p>
-      ) : (
-        <div className="grid gap-4">
-          {providers.map((item) => {
-            const connected = apiKeys.some(
-              (key) => key.provider === item.id && key.connected
-            );
-
-            return (
-              <article
-                key={item.id}
-                className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-serif text-lg text-ink">
-                      {item.label}
-                    </h2>
-
-                    <span className={connected ? 'badge-success' : 'badge-muted'}>
-                      {connected ? t.stateOn : t.stateOff}
-                    </span>
-                  </div>
-
-                  <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                    {connected ? t.stateOnBody : t.stateOffBody}
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveProvider(item.id as ModelProvider);
-                  }}
-                  className={
-                    connected
-                      ? 'button-secondary min-h-11 shrink-0 justify-center'
-                      : 'button-primary min-h-11 shrink-0 justify-center'
-                  }
-                >
-                  {connected ? (
-                    <>
-                      <RotateCcw className="h-4 w-4" />
-                      {t.clearState}
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-4 w-4" />
-                      {t.toggleState}
-                    </>
-                  )}
-                </button>
-              </article>
-            );
-          })}
-        </div>
-      )}
-
-      {/** Pop up hiện đ */}
+      {/** Pop up hiện đăng ký */}
       <Modal
         isOpen={activeProvider !== null}
         onClose={closeModal}
@@ -251,7 +198,7 @@ export const ApiKeysView: React.FC = () => {
                 spellCheck={false}
                 inputMode="text"
                 value={draftKey}
-                placeholder={typeof prefix === 'string' ? prefix : ''}
+                placeholder={prefix() ?? ''}
                 disabled={busy}
                 onChange={(event) => { setDraftKey(event.target.value); setTest({ phase: 'idle' }); }}
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"

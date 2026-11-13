@@ -14,10 +14,10 @@
 
 import { splitDataUrl } from './read-image-web.ts';
 import { SILENT_TOKEN, USER_HANDLE, aliasTable, findMentions, type BotGenerator, type BotTurn, type ChatBot, type ChatTurnRequest } from './engine.ts';
-import { createClient } from '@/lib/supabase/client';
+import { ModelProvider } from '../types.ts';
+import { createClient } from '@/lib/supabase/client.ts';
 
-// Provider lấy từ Supabase xuống
-export type ProviderId = string;
+export type ProviderId = ModelProvider;
 
 export interface ProviderModel {
   id: string;
@@ -93,10 +93,17 @@ const getProviderAdapter = (provider: ProviderId) => {
  * answers 401 for a bad key and a model list for a good one, so this is the whole probe — no
  * server round-trip. The key is used here and discarded; nothing is stored by this function.
  */
-export const fetchProviderModels = async (provider: ProviderId, apiKey: string): Promise<string[]> => {
+
+export const fetchProviderModels = async (
+  provider: ProviderId,
+  apiKey: string
+): Promise<string[]> => {
   const key = apiKey.trim();
   if (!key) throw new Error('EMPTY_KEY');
+
   let response: Response;
+
+  // Thử gọi API
   try {
     if (provider === 'anthropic') {
       response = await fetch('https://api.anthropic.com/v1/models', {
@@ -107,22 +114,61 @@ export const fetchProviderModels = async (provider: ProviderId, apiKey: string):
           'anthropic-dangerous-direct-browser-access': 'true',
         },
       });
+    } else if (provider === 'google') {
+      response = await fetch(
+        'https://generativelanguage.googleapis.com/v1beta/models',
+        {
+          headers: {
+            'x-goog-api-key': key,
+          },
+        }
+      );
     } else {
       response = await fetch('https://api.openai.com/v1/models', {
-        headers: { Authorization: `Bearer ${key}` },
+        headers: {
+          Authorization: `Bearer ${key}`,
+        },
       });
     }
   } catch {
     throw new Error('NETWORK_FAILED');
   }
-  if (response.status === 401 || response.status === 403) throw new Error('INVALID_KEY');
-  if (!response.ok) throw new Error(`PROVIDER_${response.status}`);
-  const body = (await response.json().catch(() => null)) as { data?: { id?: unknown }[] } | null;
-  const ids = (body?.data ?? [])
-    .map((entry) => (typeof entry?.id === 'string' ? entry.id : null))
-    .filter((id): id is string => Boolean(id));
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('INVALID_KEY');
+  }
+
+  if (!response.ok) {
+    throw new Error(`PROVIDER_${response.status}`);
+  }
+
+  const body = (await response.json().catch(() => null)) as {
+    data?: { id?: unknown }[];
+    models?: { name?: unknown }[];
+  } | null;
+
+  let ids: string[];
+
+  // Riêng google trả về kết quả riêng
+  if (provider === 'google') {
+    ids = (body?.models ?? [])
+      .map((model) =>
+        typeof model?.name === 'string'
+          ? model.name.replace(/^models\//, '')
+          : null
+      )
+      .filter((id): id is string => Boolean(id));
+  } else {
+    ids = (body?.data ?? [])
+      .map((entry) =>
+        typeof entry?.id === 'string' ? entry.id : null
+      )
+      .filter((id): id is string => Boolean(id));
+  }
+
   return [...new Set(ids)].sort();
 };
+
 
 /**
  * The one tool an advisor may call. Same name and shape as Hermes' `message_agent`, because the

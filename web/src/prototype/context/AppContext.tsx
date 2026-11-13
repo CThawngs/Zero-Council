@@ -1065,34 +1065,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   // in-memory secrets. Scoped by the session (the route reads the email server-side), so
   // switching accounts never bleeds the previous account's keys into the new one.
   useEffect(() => {
-    if (!authUser) return;
-    let cancelled = false;
-    void fetch('/api/providers', { credentials: 'same-origin' })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { providers?: { provider: string; model: string; key?: string }[] } | null) => {
-        if (cancelled || !body?.providers) return;
-        const restored: Partial<Record<ModelProvider, string>> = {};
-        const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
-        for (const entry of body.providers) {
-          if (entry.provider === 'anthropic' || entry.provider === 'openai' || entry.provider === 'google') {
-            if (entry.key) restored[entry.provider] = entry.key;
-          }
-        }
-        setKeys(restored);
-        setApiKeys((value) =>
-          value.map((item) => {
-            const entry = saved.get(item.provider);
-            return entry ? { ...item, connected: true, modelName: entry.model } : item;
-          })
-        );
-      })
-      .catch(() => {
-        // Offline / store unconfigured: keep the seeded disconnected state, never crash boot.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [authUser]);
+  if (!authUser) return;
+
+  let cancelled = false;
+
+  void fetch('/api/providers', {
+    credentials: 'same-origin',
+  })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((body: {
+      providers?: {
+        provider: ModelProvider;
+        model: string;
+        key: string;
+      }[];
+    } | null) => {
+      if (cancelled || !body?.providers) return;
+
+      const saved = new Map(
+        body.providers.map((entry) => [entry.provider, entry])
+      );
+
+      const restored: Partial<Record<ModelProvider, string>> = {};
+
+      for (const entry of body.providers) {
+        restored[entry.provider] = entry.key;
+      }
+
+      setKeys(restored);
+
+      setApiKeys((current) =>
+        current.map((item) => {
+          const entry = saved.get(item.provider);
+
+          if (!entry) return item;
+
+          return {
+            ...item,
+            connected: true,
+            modelName: entry.model,
+          };
+        })
+      );
+    })
+    .catch((error) => {
+      // Offline / store unconfigured: keep the seeded disconnected state, never crash boot.
+    });
+
+  return () => {
+    cancelled = true;
+  };
+}, [authUser]);
 
   // Load this account's bots once sign-in settles. The route scopes by session email.
   useEffect(() => {

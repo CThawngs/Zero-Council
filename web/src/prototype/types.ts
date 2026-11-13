@@ -66,71 +66,31 @@ export const decisionFrameworkOf = (id: FrameworkId): DecisionFramework => {
   return 'Good / Normal / Bad Scenarios';
 };
 
+/** Cả Model và Provider nên lấy từ Supabase và khai báo theo kiểu:
+ * const Model = [ ... ] as const
+ * export type ModelProvider = typeof Model[number]
+ */
+
 /** Real providers. Model ids are the wire ids sent to the provider, not display labels. */
+export type SupportedModel =
+  // OpenAI
+  | 'gpt-6-luna'
+  | 'gpt-6.1-sol'
+  | 'gpt-6.1-terra'
+
+  // Anthropic
+  | 'claude-sonnet-5.5'
+  | 'claude-haiku-5.5'
+  
+  // Google
+  | 'gemini-3.8-flash'
+  | 'gemini-3.6-flash'
+  | 'gemini-3.5-flash-lite';
+
 export type ModelProvider =
   | 'openai'
   | 'anthropic'
-  | 'google'
-  | 'groq'
-  | 'deepseek';
-
-export type SupportedModel =
-  // OpenAI
-  | 'gpt-6-astra'
-  | 'gpt-6.1-sol'
-  | 'gpt-6-luna'
-  | 'gpt-5.6-sol'
-  | 'gpt-5.6-terra'
-  | 'gpt-5.6-luna'
-  | 'gpt-5.5'
-  | 'gpt-oss-120b'
-  | 'gpt-oss-20b'
-  | 'gpt-4o'
-  | 'gpt-4o-mini'
-  | 'o1-preview'
-  | 'o1-mini'
-
-  // Anthropic
-  | 'claude-opus-4-8'
-  | 'claude-opus-4-7'
-  | 'claude-opus-4-6'
-  | 'claude-sonnet-4-6'
-  | 'claude-sonnet-4-5'
-  | 'claude-haiku-4-5'
-  | 'claude-3-5-sonnet-20241022'
-  | 'claude-3-haiku-20240307'
-  | 'claude-3-opus-20240229'
-
-  // Google Gemini
-  | 'gemini-4-argon'
-  | 'gemini-3.8-flash'
-  | 'gemini-3.7-flash'
-  | 'gemini-3.6-flash'
-  | 'gemini-3.5-flash'
-  | 'gemini-3.5-flash-lite'
-  | 'gemini-3.1-flash-lite'
-  | 'gemini-2.5-pro'
-  | 'gemini-2.5-flash'
-  | 'gemini-1.5-pro'
-  | 'gemini-1.5-flash'
-
-  // Groq
-  | 'openai/gpt-oss-120b'
-  | 'openai/gpt-oss-20b'
-  | 'qwen/qwen3.8-27b'
-  | 'minimaxai/minimax-m2.7'
-  | 'meta-models/muse-spark-open'
-  | 'llama-3.3-70b-versatile'
-  | 'mixtral-8x7b-32768'
-
-  // DeepSeek
-  | 'deepseek-v4-pro'
-  | 'deepseek-flash'
-  | 'deepseek-v4-flash'
-  | 'deepseek-chat'
-  | 'deepseek-reasoner'
-  | 'deepseek-v3.2';
-
+  | 'google';
 
 export interface AdvisorPersona {
   id: string;

@@ -44,7 +44,7 @@ function ChamberContent () {
       setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
       window.scrollTo(0, 0);
     }
-    }, [])
+    }, [currentView, bots.length, setCurrentView])
 
     return (
         <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">

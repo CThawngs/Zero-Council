@@ -76,19 +76,26 @@ export const initialSessions: DeliberationSession[] = [
 
 /** One row per provider. The key itself is never stored here — it lives in memory only. */
 export const initialApiKeys: ApiKeyConfig[] = [
-  { provider: 'anthropic', connected: false },
-  { provider: 'openai', connected: false },
+  { provider: 'anthropic', modelName: 'claude-sonnet-4-5', connected: false },
+  { provider: 'openai', modelName: 'gpt-4o', connected: false },
+  { provider: 'google', modelName: 'gemini-3.5-flash-lite', connected: false},
 ];
 
 // Vendors and model names are proper nouns. Translating them was never useful and produced copy
 // that said "Provider label A" in every language.
 const modelLabels: Record<SupportedModel, string> = {
-  'claude-sonnet-4-5': 'Claude Sonnet 4.5',
-  'gpt-4o': 'GPT-4o',
-  'gpt-4o-mini': 'GPT-4o mini',
+  'gpt-6-luna': 'GPT-6 Luna',
+  'gpt-6.1-sol': 'GPT-6.1 Sol',
+  'gpt-6.1-terra': 'GPT-6.1 Terra',
+  'claude-sonnet-5.5': 'Claude Sonnet 5.5',
+  'claude-haiku-5.5': 'Claude Haiku 5.5',
+  'gemini-3.8-flash': 'Gemini 3.8 Flash',
+  'gemini-3.6-flash': 'Gemini 3.6 Flash',
+  'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite',
 };
 
-const providerLabels: Record<ModelProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
+
+const providerLabels: Record<ModelProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google'};
 
 export const modelLabel = (model: string) =>
   (modelLabels as Record<string, string>)[model] ?? model;
