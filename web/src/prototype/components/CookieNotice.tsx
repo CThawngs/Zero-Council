@@ -15,6 +15,14 @@ export const ANALYTICS_CONSENT_KEY = 'zc-analytics-consent';
 
 export type AnalyticsConsent = 'granted' | 'denied' | 'settled';
 
+/**
+ * Tách biệt ra so với consent thường để kiểm tra người dùng đã đọc chưa
+ * Dựa trên code cũ, nếu người dùng đã đồng ý rồi mà tải lại sẽ hiện lên lại trước khi mất
+ * `loading` chỉ tồn tại trong SSR và lần hydration đầu tiên.
+ * `null` nghĩa là đã đọc storage và người dùng chưa quyết định.
+ */
+export type AnalyticsConsentState = AnalyticsConsent | null | 'loading';
+
 export const readAnalyticsConsent = (): AnalyticsConsent | null => {
   try {
     const stored = localStorage.getItem(ANALYTICS_CONSENT_KEY);
@@ -31,7 +39,7 @@ export const readAnalyticsConsent = (): AnalyticsConsent | null => {
  * `null` — "not answered yet" — is the only choice that matches a first-time visitor's browser,
  * which is what keeps the two renders identical.
  */
-export const getServerAnalyticsConsent = (): AnalyticsConsent | null => null;
+export const getServerAnalyticsConsent = (): AnalyticsConsentState => 'loading';
 
 const analyticsConsentListeners = new Set<() => void>();
 

@@ -48,11 +48,13 @@ import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
 import { createClient } from '@/lib/supabase/client';
 import {
+  AnalyticsConsentState,
   getServerAnalyticsConsent,
   readAnalyticsConsent,
   subscribeAnalyticsConsent,
   type AnalyticsConsent,
 } from '../components/CookieNotice';
+import { redirect } from 'next/navigation';
 
 /** One live room. Deliberately not a `DeliberationSession`: that shape has no message list. */
 export interface ChatRoom {
@@ -121,6 +123,7 @@ interface AppContextType {
   deleteBot: (id: string) => Promise<void>;
   openBotChat: (botId: string) => void;
   apiKeys: ApiKeyConfig[];
+  refreshApiKeys: () => Promise<void>;
   connectApiKey: (provider: ModelProvider, key: string, model: string) => Promise<boolean>;
   removeApiKey: (provider: ModelProvider) => Promise<void>;
   revokeAllKeys: () => Promise<void>;
@@ -146,7 +149,8 @@ interface AppContextType {
   /** Plan awaiting payment. Non-null opens the checkout drawer. */
   checkoutPlan: Plan | null;
   /** `null` until the visitor answers the cookie dialog. Analytics loads only on `'granted'`. */
-  consent: AnalyticsConsent | null;
+  /** `loading` = chưa đọc storage; `null` = đã đọc nhưng chưa có quyết định. */
+  consent: AnalyticsConsentState;
   closeCheckout: () => void;
   /**
    * The one entry point to buying. Redirects to sign-in when nobody is signed in, and only then
@@ -354,12 +358,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       return next;
     });
   };
+
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
   const [bots, setBots] = useState<UserBot[]>([]);
   const [botsReady, setBotsReady] = useState(false);
+
+  /**
+   * API keys
+   * 
+   * apiKeysLoaded và apiKeysLoading tính được sử dụng để xem trạng thái
+   * danh sách apiKeys hiện tại, qua đó hiển thị chờ
+   */
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
+  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
+  const [apiKeysLoading, setApiKeysLoading] = useState(true);
+
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
   const [isDeliberating, setIsDeliberating] = useState(false);
@@ -392,20 +407,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   // reads as data loss). Runs once; nothing writes the store until a room exists, so this cannot clobber it.
   useIsomorphicLayoutEffect(() => {
     const restored = readStoredRoom();
-    if (!restored) return;
-    setCurrentRoom({
-      title: restored.title,
-      mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
-      roster: restored.roster,
-      messages: restored.messages,
-      pending: restored.pending ?? [],
-      turns: restored.turns,
-      stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
-      failures: (restored.failures as TurnFailure[]) ?? [],
-      held: restored.held ?? [],
-    });
-    setCurrentView('chat-room');
+
+    if (restored) {        
+      setCurrentRoom({
+        title: restored.title,
+        mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
+        roster: restored.roster,
+        messages: restored.messages,
+        pending: restored.pending ?? [],
+        turns: restored.turns,
+        stoppedBy: (restored.stoppedBy as WhyStop | null) ?? null,
+        failures: (restored.failures as TurnFailure[]) ?? [],
+        held: restored.held ?? [],
+      });
+
+      if (window.location.pathname.startsWith('/dashboard'))
+        setCurrentView('chat-room');
+    }
   }, []);
+
+  // Mirror every room change into the tab store. This is the only writer; nothing else touches it.
+  useLayoutEffect(() => {
+    if (currentRoom) writeStoredRoom(currentRoom);
+  }, [currentRoom]);
+
   const [isRoomBusy, setIsRoomBusy] = useState(false);
   const [isReadingLink, setIsReadingLink] = useState(false);
   const [isReadingFile, setIsReadingFile] = useState(false);
@@ -425,11 +450,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     document.title = copy[language].documentTitle;
     document.querySelector('meta[name="description"]')?.setAttribute('content', copy[language].documentDescription);
   }, [language]);
-
-  // Mirror every room change into the tab store. This is the only writer; nothing else touches it.
-  useEffect(() => {
-    if (currentRoom) writeStoredRoom(currentRoom);
-  }, [currentRoom]);
 
   /**
    * Read the session once on mount, then follow it.
@@ -478,10 +498,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       scope: 'local'
     });
     setAuthUser(null);
+
+    // Clear the everything that has been stored and reset to default
     setCheckoutPlan(null);
-    window.location.href = '/';
+    setCurrentRoom(null);
+    clearRoom();
+    
     setCurrentView('overview');
     window.scrollTo(0, 0);
+    redirect('/');
   };
 
   /**
@@ -684,7 +709,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
  * saw the list empty, reloaded, and the transcript came back. A button that reports success while
  * the data is still there is worse than no button, so both stores are cleared together.
  */
-const purgeSessions = () => {
+  const purgeSessions = () => {
     setSessions([]);
     setCurrentRoom(null);
     clearStoredRoom();
@@ -1019,6 +1044,12 @@ const purgeSessions = () => {
     startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
   };
 
+
+  const currentSession =
+  localizedSessions.find((session) => session.id === currentSessionId) ||
+  localizedSessions[0] ||
+  localizeSession(initialSessions[0], language);
+
   // Secrets live encrypted server-side (per account); the browser holds a decrypted copy in
   // memory for the tab only, so direct BYOK calls keep working. A reload re-fetches them from
   // the authenticated route — they are never in storage, the bundle, or logs.
@@ -1106,6 +1137,7 @@ const purgeSessions = () => {
     ]);
   }, [bots]);
 
+  // -------------BOTS-------------
   const createBot = async (input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
     try {
       const response = await fetch('/api/bots', {
@@ -1154,6 +1186,7 @@ const purgeSessions = () => {
     joinRoom([persona], 'round-robin', persona.name);
   };
 
+  // -------------API Keys-------------
   const connectApiKey = async (provider: ModelProvider, key: string, model: string): Promise<boolean> => {
     try {
       const response = await fetch('/api/providers', {
@@ -1197,13 +1230,8 @@ const purgeSessions = () => {
     setKeys({});
     setApiKeys((value) => value.map((item) => ({ ...item, connected: false })));
     showToast('toastProvidersCleared');
-  };
-
-  const currentSession =
-    localizedSessions.find((session) => session.id === currentSessionId) ||
-    localizedSessions[0] ||
-    localizeSession(initialSessions[0], language);
-
+  }
+  // -------------END-------------
   return (
     <AppContext.Provider
       value={{
@@ -1238,6 +1266,7 @@ const purgeSessions = () => {
         deleteBot,
         openBotChat,
         apiKeys,
+        refreshApiKeys,
         connectApiKey,
         removeApiKey,
         revokeAllKeys,

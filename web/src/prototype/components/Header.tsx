@@ -5,9 +5,10 @@ import type { ViewType } from '../types';
 import { Globe2, Menu, Moon, Sun, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
+import Link from 'next/link';
 
 export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
-  const { currentView, setCurrentView, language, setLanguage, theme, toggleTheme, authUser, signOut, t } = useApp();
+  const { currentView, setCurrentView, language, setLanguage, theme, toggleTheme, authReady, authUser, signOut, t } = useApp();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -60,17 +61,51 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   }, [menuOpen]);
 
   const navigate = (view: ViewType) => {
-    if ((view === 'sign-in' || view === 'sign-up' || view === 'set-password') && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth'))
-      window.location.href = '/auth';
+    const path = window.location.pathname;
+
+    if ((
+      view === 'overview' ||
+      view === 'legal-terms' ||
+      view === 'legal-privacy' ||
+      view === 'legal-refund' ||
+      view === 'legal-cookies' ||
+      view === 'legal-acceptable-use' ||
+      view === 'legal-disclaimer' ||
+      view === 'legal-contact'
+    ) && path !== '/') {
+      window.location.href = '/'
+      return
+    }
+    else if ((
+      view === 'empty-chamber' ||
+      view === 'session-active' ||
+      view === 'session-concluded' ||
+      view === 'sessions' ||
+      view === 'personas' ||
+      view === 'new-advisor' ||
+      view === 'api-keys' ||
+      view === 'settings' || 
+      view === 'billing' ||
+      view === 'room-summary' ||
+      view === 'chat-room'
+    ) && !path.startsWith('/dashboard')) {
+      window.location.href = '/dashboard'
+      return
+    }
+    else if ((
+      view === 'sign-up' ||
+      view === 'sign-in' ||
+      view === 'set-password'
+    ) && !path.startsWith('/auth')) {
+      window.location.href = '/auth'
+      return
+    }
 
     // /auth is a separate route with its own, isolated app state. It only
     // ever renders the sign-in/sign-up views, so switching to any other view
     // there leaves the page blank. Send those clicks back to the real home
     // page instead of changing local state that nothing on this route reads.
-    if (view !== 'sign-in' && view !== 'sign-up' && view !== 'set-password' && typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
-      window.location.href = '/';
-      return;
-    }
+
     setCurrentView(view);
     setMenuOpen(false);
     // Without this the scroll offset of the view being left is inherited by the
@@ -120,61 +155,90 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   return (
     <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <button type="button" onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
-          <span className="brand-mark">
-            <CouncilOrb />
-          </span>
-          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
-        </button>
+        <div className='flex justify-between gap-[45%]'>
+          <Link href={`/`} onClick={() => setCurrentView('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
+            <span className="brand-mark">
+                <CouncilOrb />
+            </span>
+            <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
+          </Link>
 
-        {!isWorkspace && (
-          <nav className="header-nav hidden min-w-0 items-center gap-1 lg:flex" aria-label={t.primaryNavigation}>
-            {links.map((link) => (
-              <a key={link.key} href={link.href} onClick={(event) => { event.preventDefault(); goToSection(link.href); }} className="nav-link whitespace-nowrap">
-                {link.label}
-              </a>
-            ))}
-          </nav>
-        )}
-
-        <div className="flex items-center gap-1.5">
-          <button type="button" onClick={changeLanguage} className="icon-button header-compact-control min-w-16 gap-2 px-3" aria-label={`${language === 'en' ? t.switchToVietnamese : t.switchToEnglish} (${language})`} title={language === 'en' ? 'Tiếng Việt' : 'English'}>
-            <Globe2 className="h-5 w-5 shrink-0" aria-hidden="true" />
-            <span className="text-sm font-extrabold uppercase leading-none">{language}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleTheme}
-            className="icon-button min-w-16 gap-2 px-3"
-            aria-label={theme === 'dark' ? t.themeToLight : t.themeToDark}
-            title={theme === 'dark' ? t.themeToLight : t.themeToDark}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
-          </button>
-
-          {!isWorkspace && !authUser && (
-            <button type="button" onClick={() => navigate('sign-in')} className="button-secondary header-cta">{labels.nav.signIn}</button>
-          )}
           {!isWorkspace && (
-            <button type="button" onClick={() => (authUser ? navigate('empty-chamber') : navigate('sign-in'))} className="button-primary header-cta">
-              {labels.nav.getStarted}
-            </button>
+            <nav className="header-nav hidden min-w-0 items-center gap-1 lg:flex" aria-label={t.primaryNavigation}>
+              {links.map((link) => (
+                <Link key={link.key} href={link.href} onClick={(event) => { event.preventDefault(); goToSection(link.href); }} className="nav-link whitespace-nowrap">
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
           )}
-          {authUser && (
+        </div>
+        
+
+        {authReady && (
+          <div className="flex items-center gap-1.5 header-fade-in">
             <button
               type="button"
-              onClick={() => void signOut()}
-              className="button-secondary header-cta max-w-[13rem] truncate"
-              title={authUser.email}
+              onClick={changeLanguage}
+              className="icon-button header-compact-control min-w-16 gap-2 px-3"
+              aria-label={`${language === 'en' ? t.switchToVietnamese : t.switchToEnglish} (${language})`}
+              title={language === 'en' ? 'Tiếng Việt' : 'English'}
             >
-              {t.signOut}
+              <Globe2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="text-sm font-extrabold uppercase leading-none">{language}</span>
             </button>
-          )}
-          <button ref={menuButtonRef} type="button" className="icon-button header-menu min-w-11" onClick={() => setMenuOpen((value) => !value)} aria-expanded={menuOpen} aria-controls="mobile-navigation" aria-label={menuOpen ? t.close : t.menu}>
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
+
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="icon-button min-w-16 gap-2 px-3"
+              aria-label={theme === 'dark' ? t.themeToLight : t.themeToDark}
+              title={theme === 'dark' ? t.themeToLight : t.themeToDark}
+            >
+              {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+            </button>
+
+            {!isWorkspace && !authUser && (
+              <button type="button" onClick={() => navigate('sign-in')} className="button-secondary header-cta">
+                {labels.nav.signIn}
+              </button>
+            )}
+
+            {!isWorkspace && (
+              <button
+                type="button"
+                onClick={() => (authUser ? navigate('empty-chamber') : navigate('sign-in'))}
+                className="button-primary header-cta"
+              >
+                {labels.nav.getStarted}
+              </button>
+            )}
+
+            {authUser && (
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="button-secondary header-cta max-w-[13rem] truncate"
+                title={authUser.email}
+              >
+                {t.signOut}
+              </button>
+            )}
+
+            <button
+              ref={menuButtonRef}
+              type="button"
+              className="icon-button header-menu min-w-11"
+              onClick={() => setMenuOpen((value) => !value)}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-navigation"
+              aria-label={menuOpen ? t.close : t.menu}
+            >
+              {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
+        )}
+        
       </div>
 
       {menuOpen && (
@@ -188,11 +252,16 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
                   {link.label}
                 </a>
               ))}
-              {authUser && (
+              {authUser ? (
                 <button type="button" onClick={() => { setMenuOpen(false); void signOut(); }} className="nav-link justify-between">
                   {t.signOut}
                 </button>
-              )}
+              ) : (
+                <Link href={'/auth'} onClick={() => { setMenuOpen(false)}} className="nav-link button-secondary border-brass!">
+                    {t.signInButton}
+                </Link>
+              )
+              }
             </nav>
           )}
           <p className="mx-auto mt-3 max-w-[1600px] border-t border-border/70 pt-3 text-[11px] leading-relaxed text-ink-muted">{t.boundaryShort}</p>

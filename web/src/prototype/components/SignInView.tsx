@@ -173,7 +173,6 @@ export const SignInView: React.FC = () => {
               </svg>
               {t.authContinueGoogle}
             </button>
-
           </form>
 
           <p className="text-center text-sm text-ink-muted">

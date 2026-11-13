@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ModelProvider } from '../types';
-import { providerLabel } from '../data/mockData';
-import { fetchProviderModels, providerById } from '../chat/byok';
-import { Check, Loader2, LockKeyhole, RotateCcw } from 'lucide-react';
+import { modelLabel, providerLabel } from '../data/mockData';
+import { Provider, fetchProviderModels, providerById } from '../chat/byok';
+import { Check, Loader2, Eye, EyeOff, LockKeyhole, RotateCcw } from 'lucide-react';
 import { Modal } from './Modal';
+import { createClient } from '@/lib/supabase/client';
 
 type TestState =
   | { phase: 'idle' }
@@ -29,12 +30,14 @@ const errorText = (t: Record<string, string>, state: TestState): string => {
 
 export const ApiKeysView: React.FC = () => {
   const { apiKeys, connectApiKey, removeApiKey, revokeAllKeys, t } = useApp();
-  const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
+
+  const [activeProviderId, setActiveProviderId] = useState<ModelProvider | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [isClearOpen, setIsClearOpen] = useState(false);
   const [draftKey, setDraftKey] = useState('');
   const [test, setTest] = useState<TestState>({ phase: 'idle' });
-  const activeItem = activeProvider ? apiKeys.find((key) => key.provider === activeProvider) : undefined;
-  const provider = activeProvider ? providerById(activeProvider) : undefined;
+  const activeItem = activeProviderId ? apiKeys.find((key) => key.provider === activeProviderId) : undefined;
+  const provider = activeProviderId ? providerById(activeProviderId) : undefined;
 
   const openProvider = (next: ModelProvider) => {
     setActiveProvider(next);
@@ -49,10 +52,10 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const testConnection = async () => {
-    if (!activeProvider || test.phase === 'testing' || test.phase === 'saving') return;
+    if (!activeProviderId || test.phase === 'testing' || test.phase === 'saving') return;
     setTest({ phase: 'testing' });
     try {
-      const models = await fetchProviderModels(activeProvider, draftKey);
+      const models = await fetchProviderModels(activeProviderId, draftKey);
       if (models.length === 0) throw new Error('NO_MODELS');
       setTest({ phase: 'tested', models, selected: models[0] });
     } catch (error) {
@@ -61,9 +64,9 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const save = async () => {
-    if (!activeProvider || test.phase !== 'tested') return;
+    if (!activeProviderId || test.phase !== 'tested') return;
     setTest({ phase: 'saving', models: test.models, selected: test.selected });
-    const ok = await connectApiKey(activeProvider, draftKey.trim(), test.selected);
+    const ok = await connectApiKey(activeProviderId, draftKey.trim(), test.selected);
     if (!ok) {
       setTest({ phase: 'error', message: 'SAVE_FAILED' });
       return;
@@ -72,8 +75,8 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const disconnect = async () => {
-    if (!activeProvider) return;
-    await removeApiKey(activeProvider);
+    if (!activeProviderId) return;
+    await removeApiKey(activeProviderId);
     closeModal();
   };
 
@@ -82,9 +85,26 @@ export const ApiKeysView: React.FC = () => {
 
   return (
     <div className="content-shell space-y-7">
+
+      {/* Phần header luôn hiên ở trang này */}
       <header className="page-header flex-col items-start sm:flex-row sm:items-end sm:justify-between">
-        <div><p className="eyebrow"><span className="status-dot" />{t.providersEyebrow}</p><h1>{t.providersTitle}</h1><p>{t.providersBody}</p></div>
-        <button type="button" onClick={() => setIsClearOpen(true)} className="button-secondary min-h-11 shrink-0"><RotateCcw className="h-4 w-4" />{t.clearStates}</button>
+        <div>
+          <p className="eyebrow">
+            <span className="status-dot" />
+            {t.providersEyebrow}
+          </p>
+          <h1>{t.providersTitle}</h1>
+          <p>{t.providersBody}</p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsClearOpen(true)}
+          className="button-secondary min-h-11 shrink-0"
+        >
+          <RotateCcw className="h-4 w-4" />
+          {t.clearStates}
+        </button>
       </header>
 
       <div className="panel flex gap-3 p-4 sm:p-5"><LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-brass" /><div><h2 className="font-medium text-ink">{t.noCredentialTitle}</h2><p className="mt-1 text-sm leading-relaxed text-ink-muted">{t.noCredentialBody}</p></div></div>
@@ -98,8 +118,71 @@ export const ApiKeysView: React.FC = () => {
         ))}
       </div>
 
+      {/* Danh sách các providers */}
+      {loading ? (
+        <p className="text-sm text-ink-muted">Loading providers...</p>
+      ) : (
+        <div className="grid gap-4">
+          {providers.map((item) => {
+            const connected = apiKeys.some(
+              (key) => key.provider === item.id && key.connected
+            );
+
+            return (
+              <article
+                key={item.id}
+                className="panel flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="font-serif text-lg text-ink">
+                      {item.label}
+                    </h2>
+
+                    <span className={connected ? 'badge-success' : 'badge-muted'}>
+                      {connected ? t.stateOn : t.stateOff}
+                    </span>
+                  </div>
+
+                  <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+                    {connected ? t.stateOnBody : t.stateOffBody}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveProviderId(item.id as ModelProvider);
+                    setError('');
+                    setMessage('');
+                  }}
+                  className={
+                    connected
+                      ? 'button-secondary min-h-11 shrink-0 justify-center'
+                      : 'button-primary min-h-11 shrink-0 justify-center'
+                  }
+                >
+                  {connected ? (
+                    <>
+                      <RotateCcw className="h-4 w-4" />
+                      {t.clearState}
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      {t.toggleState}
+                    </>
+                  )}
+                </button>
+              </article>
+            );
+          })}
+        </div>
+      )}
+
+      {/** Pop up hiện đ */}
       <Modal
-        isOpen={activeProvider !== null}
+        isOpen={activeProviderId !== null}
         onClose={closeModal}
         title={t.dialogTitle}
         description={t.dialogBody}
@@ -131,17 +214,35 @@ export const ApiKeysView: React.FC = () => {
         {!activeItem?.connected && !tested && (
           <label className="field mt-4">
             <span className="field-label">{t.keyLabel}</span>
-            <input
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              inputMode="text"
-              value={draftKey}
-              placeholder={provider?.keyHint ?? ''}
-              disabled={busy}
-              onChange={(event) => { setDraftKey(event.target.value); setTest({ phase: 'idle' }); }}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
-            />
+
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="off"
+                spellCheck={false}
+                inputMode="text"
+                value={draftKey}
+                placeholder={provider?.keyPrefix ?? ''}
+                disabled={busy}
+                onChange={(event) => { setDraftKey(event.target.value); setTest({ phase: 'idle' }); }}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
+              />
+
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className="icon-button absolute right-1.5 top-1/2 -translate-y-1/2"
+                aria-label={
+                  showPassword ? t.authHidePassword : t.authShowPassword
+                }
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </label>
         )}
         {test.phase === 'error' && (
@@ -168,6 +269,7 @@ export const ApiKeysView: React.FC = () => {
           </div>
         )}
       </Modal>
+
       <Modal
         isOpen={isClearOpen}
         onClose={() => setIsClearOpen(false)}
@@ -181,7 +283,9 @@ export const ApiKeysView: React.FC = () => {
           </>
         }
       >
-        <p className="text-sm leading-relaxed text-ink-muted">{t.clearStatesConfirm}</p>
+        <p className="text-sm leading-relaxed text-ink-muted">
+          {t.clearStatesConfirm}
+        </p>
       </Modal>
     </div>
   );
