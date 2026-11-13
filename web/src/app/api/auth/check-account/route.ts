@@ -5,6 +5,17 @@ export async function GET(request: Request) {
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return Response.json({ exists: false }, { status: 400 });
   }
-  const user = await getUser(email).catch(() => null);
-  return Response.json({ exists: Boolean(user) });
+  
+  try {
+    const user = await getUser(email);
+    
+    return Response.json({ exists: Boolean(user) });
+  } catch (error) {
+    console.error('[check-account] Error:', error);
+
+    return Response.json(
+      { error: 'Failed to check account' },
+      { status: 500 }
+    );
+  }
 }
