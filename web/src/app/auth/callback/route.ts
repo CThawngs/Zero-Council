@@ -74,7 +74,7 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${redirectOrigin}/auth?reset=1`)
       }
       // Force Google-new users (no password claim) to create one before dashboard.
-  // Merged email+Google accounts have has_password=true and pass straight through.
+      // Merged email+Google accounts have has_password=true and pass straight through.
       const isGoogleOnly = needsPasswordSet(user);
 
       if (isGoogleOnly) {
