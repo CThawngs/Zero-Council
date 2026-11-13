@@ -49,7 +49,12 @@ export const SignUpView: React.FC = () => {
     const supabase = await createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { 
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          prompt: 'select_account',
+        }
+      },
     });
     if (error) setError(error.message);
     // On success Supabase redirects the browser to the provider and back to /auth/callback,
