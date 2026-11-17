@@ -7,6 +7,7 @@ import { AppProvider } from '@/prototype/context/AppContext';
 import { createClient } from '@/lib/supabase/server';
 import { hasPasswordClaim } from '@/lib/auth-password';
 import { redirect } from 'next/navigation';
+import { cookieLanguage } from '@/prototype/types';
 
 export default async function RootLayout({
   children,
@@ -15,7 +16,7 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
 
-  const language = cookieStore.get('zc-lang')?.value === 'vi' ? 'vi' : 'en';
+  const language = cookieStore.get(cookieLanguage)?.value === 'vi' ? 'vi' : 'en';
 
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
