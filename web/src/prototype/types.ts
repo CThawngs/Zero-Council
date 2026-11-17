@@ -67,8 +67,8 @@ export const decisionFrameworkOf = (id: FrameworkId): DecisionFramework => {
 };
 
 /** Real providers. Model ids are the wire ids sent to the provider, not display labels. */
-export type SupportedModel = 'claude-sonnet-4-5' | 'gpt-4o' | 'gpt-4o-mini';
-export type ModelProvider = 'anthropic' | 'openai';
+export type SupportedModel = 'claude-sonnet-4-5' | 'gpt-4o' | 'gpt-4o-mini' | 'gemini-2.5-flash';
+export type ModelProvider = 'anthropic' | 'openai' | 'google';
 
 export interface AdvisorPersona {
   id: string;

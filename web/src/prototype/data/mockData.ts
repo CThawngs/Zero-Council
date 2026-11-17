@@ -78,6 +78,7 @@ export const initialSessions: DeliberationSession[] = [
 export const initialApiKeys: ApiKeyConfig[] = [
   { provider: 'anthropic', modelName: 'claude-sonnet-4-5', connected: false },
   { provider: 'openai', modelName: 'gpt-4o', connected: false },
+  { provider: 'google', modelName: 'gemini-2.5-flash', connected: false },
 ];
 
 // Vendors and model names are proper nouns. Translating them was never useful and produced copy
@@ -86,9 +87,10 @@ const modelLabels: Record<SupportedModel, string> = {
   'claude-sonnet-4-5': 'Claude Sonnet 4.5',
   'gpt-4o': 'GPT-4o',
   'gpt-4o-mini': 'GPT-4o mini',
+  'gemini-2.5-flash': 'Gemini 2.5 Flash',
 };
 
-const providerLabels: Record<ModelProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
+const providerLabels: Record<ModelProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Google Gemini' };
 
 export const modelLabel = (model: string) =>
   (modelLabels as Record<string, string>)[model] ?? model;

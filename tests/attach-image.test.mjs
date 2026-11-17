@@ -65,11 +65,13 @@ const capture = async (provider, attachments) => {
     const body =
       provider === 'anthropic'
         ? { content: [{ type: 'text', text: 'ok' }] }
-        : { choices: [{ message: { content: 'ok' } }] };
+        : provider === 'google'
+          ? { candidates: [{ content: { parts: [{ text: 'ok' }] } }] }
+          : { choices: [{ message: { content: 'ok' } }] };
     return { ok: true, status: 200, json: async () => body, text: async () => '' };
   };
   try {
-    const model = provider === 'anthropic' ? 'claude-sonnet-4-5' : 'gpt-4o';
+    const model = provider === 'anthropic' ? 'claude-sonnet-4-5' : provider === 'google' ? 'gemini-2.5-flash' : 'gpt-4o';
     await byokGenerator({ provider, model, apiKey: 'k' })(request(attachments));
   } finally {
     globalThis.fetch = original;
@@ -135,4 +137,13 @@ test('image bytes are not written to sessionStorage, and an unsent image is flag
   } finally {
     delete globalThis.window;
   }
+});
+
+test('Google Gemini: the picture rides on the latest user turn as inlineData', async () => {
+  const body = await capture('google', [image()]);
+  assert.equal(body.contents.length, 3);
+  assert.deepEqual(body.contents[2].parts, [
+    { inlineData: { mimeType: 'image/jpeg', data: '/9j/4AAQSkZJRg==' } },
+    { text: 'What is in this chart?' },
+  ]);
 });

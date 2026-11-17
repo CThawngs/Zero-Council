@@ -959,13 +959,28 @@ const purgeSessions = () => {
       // the generator seam.
       generate: (request) => {
         const persona = active.find((p) => p.id === request.bot.id);
-        const provider = persona?.provider;
-        const key = provider ? keys[provider] : undefined;
-        if (!provider || !key || !persona) {
+        if (!persona) {
+          return scriptedGenerator(activeBots, { lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '' })(request);
+        }
+        const isUserBot = persona.id.startsWith('bot:');
+        let resolvedProvider: ModelProvider | undefined = persona.provider;
+        let resolvedKey = keys[persona.provider];
+        let resolvedModel = isUserBot
+          ? persona.model
+          : apiKeys.find((item) => item.provider === persona.provider && item.connected)?.modelName ?? persona.model;
+        if (!resolvedKey && !isUserBot) {
+          const fallbackConnected = apiKeys.find((item) => item.connected && Boolean(keys[item.provider]));
+          if (fallbackConnected) {
+            resolvedProvider = fallbackConnected.provider;
+            resolvedKey = keys[fallbackConnected.provider];
+            resolvedModel = fallbackConnected.modelName;
+          }
+        }
+        if (!resolvedProvider || !resolvedKey) {
           return scriptedGenerator(activeBots, { lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '' })(request);
         }
         return byokGenerator(
-          { provider, model: persona.model, apiKey: key },
+          { provider: resolvedProvider, model: resolvedModel, apiKey: resolvedKey },
           { personaOf: (bot) => active.find((p) => p.id === bot.id)?.instructions }
         )(request);
       },
@@ -1099,7 +1114,7 @@ const purgeSessions = () => {
         const restored: Partial<Record<ModelProvider, string>> = {};
         const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
         for (const entry of body.providers) {
-          if (entry.provider === 'anthropic' || entry.provider === 'openai') {
+          if (entry.provider === 'anthropic' || entry.provider === 'openai' || entry.provider === 'google') {
             if (entry.key) restored[entry.provider] = entry.key;
           }
         }

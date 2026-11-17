@@ -11,7 +11,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { byokGenerator, PROVIDERS, providerById, resolveTarget } = await import('../web/src/prototype/chat/byok.ts');
+const { byokGenerator, completeByokText, PROVIDERS, providerById, resolveTarget } = await import('../web/src/prototype/chat/byok.ts');
 const { USER_HANDLE } = await import('../web/src/prototype/chat/engine.ts');
 
 const ROSTER = [
@@ -53,14 +53,15 @@ const withResponse = async (payload, ok = true, status = 200, run) => {
 
 const anthropicTurn = (content) => ({ choices: [], content });
 
-test('a provider registry exists for both vendors, with no invented entries', () => {
+test('a provider registry exists for all three BYOK vendors (anthropic, openai, google)', () => {
   assert.deepEqual(
     PROVIDERS.map((p) => p.id),
-    ['anthropic', 'openai'],
-    'exactly the two providers that were asked for'
+    ['anthropic', 'openai', 'google'],
+    'all three supported BYOK providers'
   );
   assert.equal(providerById('anthropic').models[0].id, 'claude-sonnet-4-5');
   assert.ok(providerById('openai').models.length >= 1);
+  assert.equal(providerById('google').models[0].id, 'gemini-2.5-flash');
 });
 
 test('an Anthropic tool_use call becomes a structured handoff', async () => {
@@ -170,4 +171,58 @@ test('target resolution accepts the shapes models actually return', () => {
   assert.deepEqual(resolveTarget('user', ROSTER), [USER_HANDLE]);
   assert.deepEqual(resolveTarget('', ROSTER), []);
   assert.deepEqual(resolveTarget('whoever is listening', ROSTER), [], 'nonsense resolves to nobody');
+});
+test('a Google Gemini functionCall part becomes a structured handoff and merges consecutive model turns', async () => {
+  let turn;
+  const multiHistory = [
+    { id: '0', authorId: USER_HANDLE, body: 'Should we ship?', mentioned: [] },
+    { id: '1', authorId: 'pragmatist', body: 'Ship behind a flag.', mentioned: [] },
+    { id: '2', authorId: 'skeptic', body: 'Rollback plan is missing.', mentioned: [] },
+  ];
+  const seen = await withResponse(
+    {
+      candidates: [
+        {
+          content: {
+            parts: [
+              { text: 'Stage the rollout in two cohorts.' },
+              { functionCall: { name: 'message_agent', args: { target: 'The Pragmatist' } } },
+            ],
+          },
+        },
+      ],
+    },
+    true,
+    200,
+    async () => {
+      turn = await byokGenerator({
+        provider: 'google',
+        model: 'models/gemini-2.5-flash',
+        apiKey: 'g-key',
+      })(request({ history: multiHistory }));
+    }
+  );
+  assert.match(seen.url, /models\/gemini-2\.5-flash:generateContent$/);
+  assert.equal(seen.headers['x-goog-api-key'], 'g-key');
+  assert.equal(seen.body.contents.length, 2, "two consecutive advisor turns merge into one model turn");
+  assert.equal(seen.body.contents[0].role, 'user');
+  assert.equal(seen.body.contents[1].role, 'model');
+  assert.equal(seen.body.contents[1].parts.length, 2);
+  assert.equal(turn.text, 'Stage the rollout in two cohorts.');
+  assert.deepEqual(turn.handoffs, ['pragmatist']);
+});
+
+test('completeByokText works across anthropic, openai, and google without tool declarations', async () => {
+  await withResponse({ content: [{ type: 'text', text: 'Anthropic synthesis' }] }, true, 200, async () => {
+    const res = await completeByokText({ provider: 'anthropic', model: 'claude-sonnet-4-5', apiKey: 'k' }, { system: 'sys', prompt: 'hi' });
+    assert.equal(res, 'Anthropic synthesis');
+  });
+  await withResponse({ choices: [{ message: { content: 'OpenAI synthesis' } }] }, true, 200, async () => {
+    const res = await completeByokText({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' }, { system: 'sys', prompt: 'hi' });
+    assert.equal(res, 'OpenAI synthesis');
+  });
+  await withResponse({ candidates: [{ content: { parts: [{ text: 'Google synthesis' }] } }] }, true, 200, async () => {
+    const res = await completeByokText({ provider: 'google', model: 'gemini-2.5-flash', apiKey: 'k' }, { system: 'sys', prompt: 'hi' });
+    assert.equal(res, 'Google synthesis');
+  });
 });

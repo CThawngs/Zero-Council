@@ -1,7 +1,7 @@
 // Pure bot input validation — no imports, safe for `node --test`.
 // Bounds mirror the wizard UI and the 0005 migration CHECKs.
 
-export const BOT_PROVIDERS = ['anthropic', 'openai'] as const;
+export const BOT_PROVIDERS = ['anthropic', 'openai', 'google'] as const;
 
 export interface BotInput {
   name?: unknown;

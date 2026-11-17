@@ -6,7 +6,7 @@ import {
   saveProviderKey,
 } from '@/lib/store/providerKeys';
 
-const ALLOWED_PROVIDERS = new Set(['anthropic', 'openai']);
+const ALLOWED_PROVIDERS = new Set(['anthropic', 'openai', 'google']);
 
 /** The caller's own connected providers. Secrets travel back to the owner's browser only, so a
  *  reload restores the in-memory keys chat needs; they are never stored client-side. */

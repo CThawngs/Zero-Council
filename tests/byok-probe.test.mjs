@@ -99,3 +99,35 @@ test('200 with no models returns an empty list (caller treats as NO_MODELS)', as
     }
   );
 });
+
+test('google 200 strips models/ prefix and filters generateContent models', async () => {
+  let sawHeader;
+  await withFetch(
+    async (_url, init) => {
+      sawHeader = init.headers['x-goog-api-key'];
+      return jsonResponse(200, {
+        models: [
+          { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+          { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
+        ],
+      });
+    },
+    async () => {
+      assert.deepEqual(await fetchProviderModels('google', 'AIza-real'), [
+        'gemini-2.5-flash',
+        'gemini-2.5-pro',
+      ]);
+    }
+  );
+  assert.equal(sawHeader, 'AIza-real');
+});
+
+test('google 400 invalid API key maps to INVALID_KEY', async () => {
+  await withFetch(
+    async () => jsonResponse(400, { error: { message: "API key not valid" } }),
+    async () => {
+      await assert.rejects(() => fetchProviderModels('google', 'AIza-bad'), /INVALID_KEY/);
+    }
+  );
+});

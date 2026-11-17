@@ -57,3 +57,9 @@ test('blank model rejected as MODEL_REQUIRED', () => {
 test('non-string name rejected as NAME_REQUIRED', () => {
   assert.deepEqual(validateBotInput({ ...valid, name: null }), { error: 'NAME_REQUIRED' });
 });
+
+test('google provider accepted', () => {
+  const result = validateBotInput({ ...valid, provider: 'google', model: 'gemini-2.5-flash' });
+  assert.equal(result.bot.provider, 'google');
+  assert.equal(result.bot.model, 'gemini-2.5-flash');
+});
