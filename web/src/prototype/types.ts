@@ -133,3 +133,10 @@ export interface UserBot {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Cookies constants
+/** 
+ * Tên các cookie được lưu chung một chỗ cho dễ sửa 
+ * */
+export const cookieLanguage = 'zc-lang'
+export const cookieTheme = 'zc-theme'
