@@ -1,18 +1,62 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ArrowLeft, CheckCircle2, ReceiptText } from 'lucide-react';
 import { planById, planPrice } from '../data/plans';
 
-/**
- * The account's live plan (from /api/me via AppContext), not a static Free.
- * Cancel/downgrade lives here: Pro -> Free cancels; Ultra -> Pro revokes Ultra
- * and opens a fresh Pro checkout; Ultra -> Free cancels.
- */
+interface OrderHistoryItem {
+  orderCode: number;
+  planId: string;
+  amountVnd: number;
+  status: string;
+  createdAt: string;
+  paidAt: string | null;
+}
+
+interface GrantHistoryItem {
+  id: string;
+  planId: string;
+  source: string;
+  startsAt: string;
+  expiresAt: string;
+}
+
 export const BillingHistoryView: React.FC = () => {
-  const { setCurrentView, goToPricing, currentPlanId, cancelPlanToFree, downgradeToPro, t, language } = useApp();
+  const {
+    setCurrentView,
+    goToPricing,
+    currentPlanId,
+    planExpiresAt,
+    cancelPlanToFree,
+    downgradeToPro,
+    authUser,
+    t,
+    language,
+  } = useApp();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
+  const [grants, setGrants] = useState<GrantHistoryItem[]>([]);
   const plan = planById(currentPlanId);
+
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+    void fetch('/api/orders', { credentials: 'same-origin' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          body: { orders?: OrderHistoryItem[]; grants?: GrantHistoryItem[] } | null
+        ) => {
+          if (cancelled || !body) return;
+          setOrders(body.orders ?? []);
+          setGrants(body.grants ?? []);
+        }
+      )
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser, currentPlanId]);
 
   const cancel = async () => {
     if (busy || !window.confirm(t.planCancelConfirm)) return;
@@ -31,39 +75,157 @@ export const BillingHistoryView: React.FC = () => {
     if (!ok) setMessage('');
   };
 
+  const paidOrders = orders.filter((o) => o.status === 'PAID');
+
   return (
     <div className="content-shell max-w-3xl space-y-7">
-      <button type="button" onClick={() => setCurrentView(typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard') ? 'settings' : 'overview')} className="button-quiet -ml-3"><ArrowLeft className="h-4 w-4" />{t.back}</button>
-      <header className="page-header"><p className="eyebrow"><span className="status-dot" />{t.localProfile}</p><h1>{t.billingTitle}</h1><p>{t.billingBody}</p></header>
+      <button
+        type="button"
+        onClick={() =>
+          setCurrentView(
+            typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard')
+              ? 'settings'
+              : 'overview'
+          )
+        }
+        className="button-quiet -ml-3"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        {t.back}
+      </button>
+
+      <header className="page-header">
+        <p className="eyebrow">
+          <span className="status-dot" />
+          {t.localProfile}
+        </p>
+        <h1>{t.billingTitle}</h1>
+        <p>{t.billingBody}</p>
+      </header>
 
       <section className="panel p-5 sm:p-7">
-        <h2 className="panel-title">{plan.name}</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="panel-title">{plan.name}</h2>
+          <span className="badge-success">{t.planCurrent}</span>
+        </div>
         <p className="mt-2 font-serif text-2xl text-ink">{planPrice(plan, language)}</p>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))}
+          {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))} ·{' '}
+          {`${plan.maxBots} bots`}
         </p>
+
+        {currentPlanId !== 'free' && planExpiresAt && (
+          <p className="mt-2 text-xs font-medium text-brass">
+            {t.billingActiveExpires.replace(
+              '{date}',
+              new Date(planExpiresAt).toLocaleDateString()
+            )}
+          </p>
+        )}
+
         <div className="mt-5 flex flex-wrap gap-3">
-          <button type="button" onClick={goToPricing} className="button-secondary min-h-11">{t.pricingTitle}</button>
+          <button type="button" onClick={goToPricing} className="button-secondary min-h-11">
+            {t.pricingTitle}
+          </button>
           {currentPlanId === 'ultra' && (
-            <button type="button" onClick={downgrade} disabled={busy} className="button-secondary min-h-11 disabled:opacity-50">
+            <button
+              type="button"
+              id="billing-downgrade-pro-btn"
+              onClick={downgrade}
+              disabled={busy}
+              className="button-secondary min-h-11 disabled:opacity-50"
+            >
               {t.planDowngradeToPro}
             </button>
           )}
           {currentPlanId !== 'free' && (
-            <button type="button" onClick={cancel} disabled={busy} className="button-secondary min-h-11 disabled:opacity-50">
+            <button
+              type="button"
+              id="billing-cancel-free-btn"
+              onClick={cancel}
+              disabled={busy}
+              className="button-secondary min-h-11 disabled:opacity-50"
+            >
               {t.planCancelToFree}
             </button>
           )}
         </div>
+
         {message && (
-          <div className="mt-4 flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink" aria-live="polite">
+          <div
+            className="mt-4 flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink"
+            aria-live="polite"
+          >
             <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
             <span>{message}</span>
           </div>
         )}
       </section>
 
-      <section className="panel flex gap-4 p-5 sm:p-7"><ReceiptText className="h-6 w-6 shrink-0 text-brass" /><div><h2 className="font-serif text-xl text-ink">{t.billingEmpty}</h2><p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.billingNote}</p></div></section>
+      {paidOrders.length === 0 && grants.length === 0 ? (
+        <section className="panel flex gap-4 p-5 sm:p-7">
+          <ReceiptText className="h-6 w-6 shrink-0 text-brass" />
+          <div>
+            <h2 className="font-serif text-xl text-ink">{t.billingEmpty}</h2>
+            <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.billingNote}</p>
+          </div>
+        </section>
+      ) : (
+        <div className="space-y-5">
+          {paidOrders.length > 0 && (
+            <section className="panel space-y-3 p-5 sm:p-6">
+              <h2 className="font-serif text-xl text-ink">{t.billingHistoryHeading}</h2>
+              <ul className="divide-y divide-border text-sm">
+                {paidOrders.map((order) => (
+                  <li
+                    key={order.orderCode}
+                    className="flex flex-wrap items-center justify-between gap-2 py-3"
+                  >
+                    <div>
+                      <p className="font-medium text-ink">
+                        #{order.orderCode} · {order.planId.toUpperCase()}
+                      </p>
+                      <p className="text-xs text-ink-muted">
+                        {new Date(order.paidAt ?? order.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-ink">
+                        {order.amountVnd.toLocaleString('vi-VN')} ₫
+                      </span>
+                      <span className="badge-success">{t.billingOrderPaid}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {grants.length > 0 && (
+            <section className="panel space-y-3 p-5 sm:p-6">
+              <h2 className="font-serif text-xl text-ink">{t.billingGrantsHeading}</h2>
+              <ul className="divide-y divide-border text-sm">
+                {grants.map((g) => (
+                  <li
+                    key={g.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-3"
+                  >
+                    <div>
+                      <p className="font-medium text-ink">
+                        {g.planId.toUpperCase()} ({g.source})
+                      </p>
+                      <p className="text-xs text-ink-muted">
+                        {new Date(g.startsAt).toLocaleDateString()} →{' '}
+                        {new Date(g.expiresAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      )}
     </div>
   );
 };

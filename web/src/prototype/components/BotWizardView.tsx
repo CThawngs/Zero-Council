@@ -1,11 +1,23 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
-import { Check, Loader2 } from 'lucide-react';
+import { planById } from '../data/plans';
+import { Check, Loader2, Lock } from 'lucide-react';
 import type { ModelProvider } from '../types';
 
 export const BotWizardView: React.FC = () => {
-  const { apiKeys, createBot, openBotChat, setCurrentView, t } = useApp();
+  const {
+    apiKeys,
+    bots,
+    botCap,
+    canCreateBot,
+    currentPlanId,
+    goToPricing,
+    createBot,
+    openBotChat,
+    setCurrentView,
+    t,
+  } = useApp();
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [instruction, setInstruction] = useState('');
@@ -15,9 +27,23 @@ export const BotWizardView: React.FC = () => {
   const [creating, setCreating] = useState(false);
 
   const connected = apiKeys.filter((key) => key.connected);
+  const selectedKey = provider ? connected.find((k) => k.provider === provider) : undefined;
+  const availableModels = selectedKey
+    ? selectedKey.models && selectedKey.models.length > 0
+      ? selectedKey.models
+      : [selectedKey.modelName].filter(Boolean)
+    : [];
   const total = 3;
+  const plan = planById(currentPlanId);
 
   const nextFromIdentity = () => {
+    if (!canCreateBot) {
+      return setError(
+        t.botCapReachedHint
+          .replace('{plan}', plan.name)
+          .replace('{cap}', String(botCap))
+      );
+    }
     if (!name.trim()) return setError(t.botErrorName);
     if (!instruction.trim()) return setError(t.botErrorInstruction);
     setError('');
@@ -33,7 +59,12 @@ export const BotWizardView: React.FC = () => {
   const submit = async () => {
     if (!provider || !model || creating) return;
     setCreating(true);
-    const bot = await createBot({ name: name.trim(), instruction: instruction.trim(), provider, model });
+    const bot = await createBot({
+      name: name.trim(),
+      instruction: instruction.trim(),
+      provider,
+      model,
+    });
     setCreating(false);
     if (!bot) {
       setError(t.botErrorSave);
@@ -47,11 +78,32 @@ export const BotWizardView: React.FC = () => {
       <header>
         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
           <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
-          {t.botWizardEyebrow} · {t.botStepOf.replace('{step}', String(step)).replace('{total}', String(total))}
+          {t.botWizardEyebrow} ·{' '}
+          {t.botStepOf.replace('{step}', String(step)).replace('{total}', String(total))} ·{' '}
+          {`${bots.length}/${botCap}`}
         </p>
         <h1 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{t.botWizardTitle}</h1>
         <p className="mt-3 text-sm leading-relaxed text-ink-muted sm:text-base">{t.botWizardBody}</p>
       </header>
+
+      {!canCreateBot && (
+        <div
+          role="status"
+          className="flex flex-col gap-3 rounded-2xl border border-brass/40 bg-brass/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p className="flex items-start gap-2 text-sm text-ink">
+            <Lock className="mt-0.5 h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
+            <span>
+              {t.botCapReachedHint
+                .replace('{plan}', plan.name)
+                .replace('{cap}', String(botCap))}
+            </span>
+          </p>
+          <button type="button" onClick={goToPricing} className="button-primary min-h-10 shrink-0">
+            {t.pricingTitle}
+          </button>
+        </div>
+      )}
 
       <div className="space-y-6 rounded-2xl border border-border bg-surface p-5 shadow-sm sm:p-7">
         {step === 1 && (
@@ -59,6 +111,7 @@ export const BotWizardView: React.FC = () => {
             <label className="field">
               <span className="field-label">{t.botNameLabel}</span>
               <input
+                id="bot-wizard-name"
                 autoFocus
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -70,6 +123,7 @@ export const BotWizardView: React.FC = () => {
             <label className="field">
               <span className="field-label">{t.botInstructionLabel}</span>
               <textarea
+                id="bot-wizard-instruction"
                 value={instruction}
                 onChange={(event) => setInstruction(event.target.value)}
                 placeholder={t.botInstructionPlaceholder}
@@ -90,32 +144,58 @@ export const BotWizardView: React.FC = () => {
             {connected.length === 0 ? (
               <div className="space-y-4">
                 <p className="text-sm text-ink-muted">{t.botNoProvider}</p>
-                <button type="button" onClick={() => setCurrentView('api-keys')} className="button-primary min-h-11">
+                <button
+                  type="button"
+                  onClick={() => setCurrentView('api-keys')}
+                  className="button-primary min-h-11"
+                >
                   {t.botConnectFirst}
                 </button>
               </div>
             ) : (
               <>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {connected.map((key) => (
-                    <button
-                      key={key.provider}
-                      type="button"
-                      onClick={() => {
-                        setProvider(key.provider);
-                        setModel(key.modelName);
-                      }}
-                      aria-pressed={provider === key.provider}
-                      className={`min-h-11 rounded-xl border px-4 text-left text-sm font-semibold ${provider === key.provider ? 'border-brass bg-brass/10 text-ink' : 'border-border text-ink-muted hover:text-ink'}`}
-                    >
-                      {providerLabel(key.provider)} · {modelLabel(key.modelName)}
-                    </button>
-                  ))}
+                  {connected.map((key) => {
+                    const displayLabel = key.label || providerLabel(key.provider);
+                    return (
+                      <button
+                        key={key.provider}
+                        type="button"
+                        onClick={() => {
+                          setProvider(key.provider);
+                          setModel(key.modelName || key.models?.[0] || '');
+                        }}
+                        aria-pressed={provider === key.provider}
+                        className={`min-h-11 rounded-xl border px-4 py-2.5 text-left text-sm font-semibold ${
+                          provider === key.provider
+                            ? 'border-brass bg-brass/10 text-ink'
+                            : 'border-border text-ink-muted hover:text-ink'
+                        }`}
+                      >
+                        <span className="block truncate">{displayLabel}</span>
+                        <span className="block truncate text-xs font-normal text-ink-muted">
+                          {modelLabel(key.modelName)}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
                 {provider && (
                   <label className="field">
                     <span className="field-label">{t.botModelLabel}</span>
-                    <input value={model} readOnly />
+                    <select
+                      id="bot-wizard-model-select"
+                      value={model}
+                      onChange={(event) => setModel(event.target.value)}
+                      className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
+                    >
+                      {availableModels.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-ink-muted">{t.botSelectModelHint}</span>
                   </label>
                 )}
               </>
@@ -127,28 +207,67 @@ export const BotWizardView: React.FC = () => {
           <div className="space-y-4">
             <h2 className="font-serif text-xl text-ink">{t.botReviewTitle}</h2>
             <dl className="grid gap-3 text-sm">
-              <div className="flex justify-between gap-4"><dt className="text-ink-muted">{t.botNameLabel}</dt><dd className="font-semibold text-ink">{name.trim()}</dd></div>
-              <div className="flex justify-between gap-4"><dt className="text-ink-muted">{t.botModelLabel}</dt><dd className="font-semibold text-ink">{providerLabel(provider)} · {modelLabel(model)}</dd></div>
-              <div><dt className="text-ink-muted">{t.botInstructionLabel}</dt><dd className="mt-1 whitespace-pre-wrap text-ink">{instruction.trim()}</dd></div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-muted">{t.botNameLabel}</dt>
+                <dd className="font-semibold text-ink">{name.trim()}</dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-ink-muted">{t.botModelLabel}</dt>
+                <dd className="font-semibold text-ink">
+                  {(selectedKey?.label || providerLabel(provider))} · {modelLabel(model)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-ink-muted">{t.botInstructionLabel}</dt>
+                <dd className="mt-1 whitespace-pre-wrap text-ink">{instruction.trim()}</dd>
+              </div>
             </dl>
           </div>
         )}
 
-        {error && <p role="alert" className="text-sm font-medium text-terracotta">{error}</p>}
+        {error && (
+          <p role="alert" className="text-sm font-medium text-terracotta">
+            {error}
+          </p>
+        )}
 
         <div className="flex gap-3">
           {step > 1 && (
-            <button type="button" onClick={() => { setError(''); setStep(step - 1); }} className="button-secondary min-h-11">
+            <button
+              type="button"
+              onClick={() => {
+                setError('');
+                setStep(step - 1);
+              }}
+              className="button-secondary min-h-11"
+            >
               {t.botBack}
             </button>
           )}
           {step < 3 ? (
-            <button type="button" onClick={step === 1 ? nextFromIdentity : nextFromModel} disabled={step === 2 && connected.length === 0} className="button-primary min-h-11 flex-1 justify-center">
+            <button
+              type="button"
+              id="bot-wizard-next"
+              onClick={step === 1 ? nextFromIdentity : nextFromModel}
+              disabled={(step === 1 && !canCreateBot) || (step === 2 && connected.length === 0)}
+              className="button-primary min-h-11 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-45"
+            >
               {t.botNext}
             </button>
           ) : (
-            <button type="button" onClick={() => void submit()} disabled={creating} className="button-primary min-h-11 flex-1 justify-center">
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}{creating ? t.botCreating : t.botCreate}
+            <button
+              type="button"
+              id="bot-wizard-submit"
+              onClick={() => void submit()}
+              disabled={creating || !canCreateBot}
+              className="button-primary min-h-11 flex-1 justify-center disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="h-4 w-4" />
+              )}
+              {creating ? t.botCreating : t.botCreate}
             </button>
           )}
         </div>

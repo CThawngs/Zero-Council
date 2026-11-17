@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, Lock, Tag } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Loader2, Tag } from 'lucide-react';
 import { planAmountLine, type Plan } from '../data/plans';
 import { Modal } from './Modal';
 
@@ -9,48 +9,39 @@ interface CheckoutDrawerProps {
   onClose: () => void;
 }
 
-interface QrPayment {
+interface QrSession {
   orderCode: number;
   qrCode: string;
-  expiredAt: number;
   amountVnd: number;
+  planName: string;
+  expiredAt: number;
 }
 
 const BILL_TTL_MS = 5 * 60 * 1000;
 
+const qrSrc = (qrCode: string): string => {
+  if (qrCode.startsWith('data:') || qrCode.startsWith('http')) return qrCode;
+  if (qrCode.startsWith('iVBOR')) return `data:image/png;base64,${qrCode}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&margin=12&data=${encodeURIComponent(qrCode)}`;
+};
+
 const formatCountdown = (ms: number): string => {
-  const totalSec = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 };
 
-/**
- * payOS returns the VietQR code as a base64 PNG (or, on some responses, a URL).
- * Normalise both to an <img> src.
- */
-const qrSrc = (qrCode: string): string =>
-  qrCode.startsWith('http') || qrCode.startsWith('data:') ? qrCode : `data:image/png;base64,${qrCode}`;
-
-/**
- * PayOS checkout surface. The Amount block always states the integer VND the gateway charges;
- * USD is reference only, because no gateway in this build takes a USD charge.
- *
- * Once a bill exists, the VietQR code shows in a popup with a 5-minute countdown.
- * Closing that popup (X / backdrop / Esc) cancels the bill permanently; the countdown
- * reaching zero does the same. Paying again always creates a brand-new bill ID.
- */
 export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose }) => {
   const { t, language, showToast, refreshPlan } = useApp();
   const [code, setCode] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
   const [granted, setGranted] = useState<string | null>(null);
-  const [qr, setQr] = useState<QrPayment | null>(null);
+  const [qr, setQr] = useState<QrSession | null>(null);
   const [qrExpired, setQrExpired] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const qrRef = useRef<QrPayment | null>(null);
+  const qrRef = useRef<QrSession | null>(null);
   useEffect(() => {
     qrRef.current = qr;
   }, [qr]);
@@ -60,14 +51,15 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
     try {
       await fetch(`/api/payos/orders/${orderCode}`, { method: 'POST' });
     } catch {
-      // Best effort: the server sweeps stale orders on the next request anyway.
+      // Best-effort cleanup; server sweeps stale orders automatically.
     }
   }, []);
 
   const startPayment = async () => {
-    if (!plan || pending) return;
+    if (!plan || plan.priceVnd <= 0 || pending) return;
     setPending(true);
     setError(null);
+    setGranted(null);
     setQrExpired(false);
     try {
       const response = await fetch('/api/payos/create-payment', {
@@ -82,36 +74,48 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         qrCode?: string | null;
         expiredAt?: number;
         grantedUntil?: string;
+        error?: string;
       };
-      if (!response.ok) throw new Error(t.checkoutError);
-      // 100% coupon: plan granted instantly in-system, no payOS QR (avoids fee).
-      if (!result.checkoutUrl && result.grantedUntil) {
-        setGranted(result.grantedUntil);
+      if (!response.ok) {
+        setError(t.checkoutError);
         setPending(false);
         return;
       }
-      if (!result.checkoutUrl) throw new Error(t.checkoutError);
-      // payOS did not return a QR (older response shape): fall back to the hosted page link.
-      if (!result.qrCode || !result.orderCode) {
+      if (!result.checkoutUrl && result.grantedUntil) {
+        setGranted(result.grantedUntil);
+        setPending(false);
+        showToast('toastPaymentSuccess');
+        await refreshPlan();
+        return;
+      }
+      if (result.qrCode && typeof result.orderCode === 'number') {
+        const rawExp = result.expiredAt ?? Date.now() + BILL_TTL_MS;
+        const expMs = rawExp < 10_000_000_000 ? rawExp * 1000 : rawExp;
+        paidRef.current = false;
+        setNow(Date.now());
+        setQr({
+          orderCode: result.orderCode,
+          qrCode: result.qrCode,
+          amountVnd: typeof result.amountVnd === 'number' ? result.amountVnd : plan.priceVnd,
+          planName: plan.name,
+          expiredAt: expMs,
+        });
+        setPending(false);
+        onClose();
+        return;
+      }
+      if (result.checkoutUrl) {
         window.location.assign(result.checkoutUrl);
         return;
       }
-      paidRef.current = false;
-      setQr({
-        orderCode: result.orderCode,
-        qrCode: result.qrCode,
-        expiredAt: result.expiredAt ?? Date.now() + BILL_TTL_MS,
-        amountVnd: result.amountVnd ?? plan.priceVnd,
-      });
-      setNow(Date.now());
+      setError(t.checkoutError);
       setPending(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : t.checkoutError);
+    } catch {
+      setError(t.checkoutError);
       setPending(false);
     }
   };
 
-  // Closing the QR popup = cancelling the bill (deleting the failed transaction).
   const closeQr = useCallback(async () => {
     const current = qrRef.current;
     setQr(null);
@@ -121,7 +125,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
     paidRef.current = false;
   }, [cancelBill]);
 
-  // Countdown tick + auto-cancel at zero.
   useEffect(() => {
     if (!qr) return;
     const timer = setInterval(() => setNow(Date.now()), 500);
@@ -131,7 +134,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
   useEffect(() => {
     if (!qr) return;
     if (now < qr.expiredAt) return;
-    // Hết 5 phút: vô hiệu hoá, hủy bill, đóng popup. Giao dịch không thành công bị xóa.
     void (async () => {
       await cancelBill(qr.orderCode);
       setQr(null);
@@ -139,7 +141,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
     })();
   }, [now, qr, cancelBill]);
 
-  // Poll the order while the popup is open; a PAID webhook grants the plan before its 200.
   useEffect(() => {
     if (!qr) return;
     let cancelled = false;
@@ -155,7 +156,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
           await refreshPlan();
         }
       } catch {
-        // Transient network failure: the next poll retries.
+        // Transient network error: next poll retries.
       }
     };
     void poll();
@@ -185,9 +186,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
               </p>
               <p className="mt-2 font-serif text-3xl text-ink">
                 {planAmountLine(plan)}
-                <span className="ml-2 font-sans text-xs font-normal text-ink-muted">{t.planPerMonth}</span>
+                <span className="ml-2 font-sans text-xs font-normal text-ink-muted">
+                  {t.planPerMonth}
+                </span>
               </p>
-              {/* EN-only: in this build nothing actually charges USD, so the EN reader must not think $ is the bill. */}
               {language === 'en' ? (
                 <p className="mt-2 text-xs leading-relaxed text-ink-muted">{t.checkoutUsdNote}</p>
               ) : null}
@@ -204,6 +206,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
               <label className="field mt-3">
                 <span className="sr-only">{t.discountTitle}</span>
                 <input
+                  id="checkout-promo-input"
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
                   placeholder={t.discountPlaceholder}
@@ -215,6 +218,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
 
             <button
               type="button"
+              id="checkout-pay-btn"
               onClick={startPayment}
               disabled={pending || plan.priceVnd <= 0}
               className="button-primary min-h-11 w-full justify-center disabled:opacity-60"
@@ -224,12 +228,20 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
             </button>
 
             {granted ? (
-              <p role="status" className="rounded-xl border border-sage/40 bg-sage/10 px-4 py-3 text-sm text-ink">
-                {t.planActiveUntil ? `${t.planActiveUntil}: ${new Date(granted).toLocaleDateString()}` : 'Đã kích hoạt gói.'}
+              <p
+                role="status"
+                className="rounded-xl border border-sage/40 bg-sage/10 px-4 py-3 text-sm text-ink"
+              >
+                {t.planActiveUntil
+                  ? `${t.planActiveUntil}: ${new Date(granted).toLocaleDateString()}`
+                  : 'Đã kích hoạt gói.'}
               </p>
             ) : null}
             {qrExpired ? (
-              <p role="status" className="rounded-xl border border-border bg-background/60 px-4 py-3 text-sm text-ink">
+              <p
+                role="status"
+                className="rounded-xl border border-border bg-background/60 px-4 py-3 text-sm text-ink"
+              >
                 {t.checkoutQrExpired}
               </p>
             ) : null}
@@ -242,6 +254,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         ) : null}
       </Modal>
 
+      {/* Locked QR Payment Popup */}
       <Modal
         isOpen={qr !== null}
         onClose={closeQr}
@@ -251,35 +264,80 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
       >
         {qr ? (
           <div className="flex flex-col items-center space-y-4">
-            {/* eslint-disable-next-line @next/next/no-img-element -- qrCode is a dynamic VietQR data URI/URL, not a bundled asset next/image can optimise */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
+              id="qr-code-image"
               src={qrSrc(qr.qrCode)}
               alt={t.checkoutQrAlt.replace('{bill}', String(qr.orderCode))}
-              className="h-64 w-64 rounded-xl border border-border bg-white object-contain"
+              className="h-60 w-60 rounded-xl border border-border bg-white object-contain p-2"
             />
+
             <div className="grid w-full gap-3 sm:grid-cols-2">
               <div className="field">
-                <label htmlFor="qr-amount">{t.checkoutQrAmount}</label>
+                <label htmlFor="qr-plan" className="field-label flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-brass" aria-hidden="true" />
+                  {t.checkoutQrPlan}
+                </label>
+                <input
+                  id="qr-plan"
+                  type="text"
+                  disabled
+                  readOnly
+                  value={qr.planName}
+                  className="cursor-not-allowed bg-surface-2 opacity-75"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="qr-order-id" className="field-label flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-brass" aria-hidden="true" />
+                  {t.checkoutQrOrderId}
+                </label>
+                <input
+                  id="qr-order-id"
+                  type="text"
+                  disabled
+                  readOnly
+                  value={`#${qr.orderCode}`}
+                  className="cursor-not-allowed font-mono bg-surface-2 opacity-75"
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="qr-amount" className="field-label flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-brass" aria-hidden="true" />
+                  {t.checkoutQrAmount}
+                </label>
                 <input
                   id="qr-amount"
                   type="text"
+                  disabled
                   readOnly
                   value={qr.amountVnd.toLocaleString('vi-VN') + ' ₫'}
-                  className="cursor-not-allowed bg-surface-elevated opacity-70"
+                  className="cursor-not-allowed font-semibold bg-surface-2 opacity-75"
                 />
               </div>
+
               <div className="field">
-                <label htmlFor="qr-bill">{t.checkoutQrBill}</label>
+                <label htmlFor="qr-bill" className="field-label flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-brass" aria-hidden="true" />
+                  {t.checkoutQrBill}
+                </label>
                 <input
                   id="qr-bill"
                   type="text"
+                  disabled
                   readOnly
                   value={`ZC ${qr.orderCode}`}
-                  className="cursor-not-allowed bg-surface-elevated opacity-70"
+                  className="cursor-not-allowed font-mono bg-surface-2 opacity-75"
                 />
               </div>
             </div>
-            <p className="text-center text-xs text-muted">{t.checkoutQrLocked}</p>
+
+            <p className="flex items-center gap-1.5 text-center text-xs text-ink-muted">
+              <Lock className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
+              {t.checkoutQrLocked}
+            </p>
             <p
               role="timer"
               aria-live="polite"
@@ -287,7 +345,9 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
             >
               {t.checkoutQrExpires.replace('{time}', formatCountdown(remaining))}
             </p>
-            <p className="text-xs leading-relaxed text-ink-muted">{t.checkoutQrCancelHint}</p>
+            <p className="text-center text-xs leading-relaxed text-ink-muted">
+              {t.checkoutQrCancelHint}
+            </p>
           </div>
         ) : null}
       </Modal>

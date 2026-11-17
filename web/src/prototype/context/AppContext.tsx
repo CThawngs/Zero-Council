@@ -1,13 +1,25 @@
-'use client'
+'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AdvisorPersona,
   ApiKeyConfig,
+  ConversationKind,
   DeliberationSession,
   Language,
   ModelProvider,
+  SavedConversation,
   UserBot,
   ViewType,
   frameworkIdOf,
@@ -19,7 +31,12 @@ import {
   type CommunicationMode,
   type Round,
 } from '@/lib/deliberation/engine';
-import { initialApiKeys, initialPersonas, initialSessions, localizePersona } from '../data/mockData';
+import {
+  initialApiKeys,
+  initialPersonas,
+  initialSessions,
+  localizePersona,
+} from '../data/mockData';
 import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
 import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
@@ -45,9 +62,11 @@ import { byokGenerator } from '../chat/byok';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
 import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
+import { isVideoFile, readVideoInBrowser } from '../chat/read-video-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
+import { disabledBotIdsForPlan, partitionRoomRosterByPlan } from '@/lib/store/planLimits';
 import { createClient, isSupabaseBrowserConfigured } from '@/lib/supabase/client';
 import {
   getServerAnalyticsConsent,
@@ -56,29 +75,29 @@ import {
   type AnalyticsConsent,
 } from '../components/CookieNotice';
 
-/** One live room. Deliberately not a `DeliberationSession`: that shape has no message list. */
 export interface ChatRoom {
+  conversationId?: string;
+  kind?: ConversationKind;
+  botId?: string;
   title: string;
   mode: ChatMode;
-  /** Advisor ids in join order — the order the roster speaks in. */
   roster: string[];
   messages: ChatMessage[];
-  /** Pinned to the next message but not sent. Sending moves them onto that message. */
   pending: ChatAttachment[];
-  /** Bot turns taken by the last user message, and why the loop parked. */
   turns: number;
   stoppedBy: WhyStop | null;
-  /** Why a generator produced nothing, when something went wrong rather than merely ended. */
   failures: TurnFailure[];
-  /** Advisors held by a `stop @bot` directive; they are skipped until `@all` or a room clear. */
   held: string[];
 }
 
-/**
- * Toast messages are always plain strings, so only string-valued copy keys qualify. A bare
- * `keyof typeof copy['en']` also picks up nested objects — the legal documents — and every toast
- * then has to defend against a value it can only render as `[object Object]`.
- */
+export interface ConnectProviderMeta {
+  models?: string[];
+  label?: string;
+  protocol?: 'anthropic' | 'openai' | 'google';
+  baseUrl?: string;
+  isCustom?: boolean;
+}
+
 type ToastKey = {
   [K in keyof (typeof copy)['en']]: (typeof copy)['en'][K] extends string ? K : never;
 }[keyof (typeof copy)['en']];
@@ -101,7 +120,6 @@ interface AppContextType {
     question?: string,
     framework?: DeliberationSession['framework'],
     advisors?: AdvisorPersona[],
-    /** Where to land once the session exists. Default is the live session page. */
     landOn?: ViewType
   ) => void;
   setCurrentFramework: (framework: DeliberationSession['framework']) => void;
@@ -118,12 +136,52 @@ interface AppContextType {
   addPersona: (persona: AdvisorPersona) => void;
   bots: UserBot[];
   botsReady: boolean;
-  createBot: (input: { name: string; instruction: string; provider: ModelProvider; model: string }) => Promise<UserBot | null>;
-  updateBot: (id: string, input: { name: string; instruction: string; provider: ModelProvider; model: string }) => Promise<UserBot | null>;
+  botCap: number;
+  canCreateBot: boolean;
+  disabledBotIds: Set<string>;
+  isBotDisabled: (botId: string) => boolean;
+  createBot: (input: {
+    name: string;
+    instruction: string;
+    provider: ModelProvider;
+    model: string;
+  }) => Promise<UserBot | null>;
+  updateBot: (
+    id: string,
+    input: { name: string; instruction: string; provider: ModelProvider; model: string }
+  ) => Promise<UserBot | null>;
   deleteBot: (id: string) => Promise<void>;
-  openBotChat: (botId: string) => void;
+  openBotChat: (botId: string, conversationId?: string) => void;
+  createSoloThread: (botId: string, title?: string) => Promise<void>;
+  conversations: SavedConversation[];
+  createGroupChat: (
+    roster: AdvisorPersona[],
+    mode: ChatMode,
+    title?: string
+  ) => Promise<SavedConversation | null>;
+  openGroupChat: (conversationId: string) => void;
+  updateGroupChat: (
+    id: string,
+    patch: { title?: string; mode?: ChatMode; roster?: string[] }
+  ) => Promise<boolean>;
+  renameConversation: (id: string, title: string) => Promise<void>;
+  deleteConversationById: (id: string) => Promise<void>;
+  editingGroupId: string | null;
+  openEditGroup: (id: string) => void;
+  closeEditGroup: () => void;
   apiKeys: ApiKeyConfig[];
-  connectApiKey: (provider: ModelProvider, key: string, model: string) => Promise<boolean>;
+  connectApiKey: (
+    provider: ModelProvider,
+    key: string,
+    model: string,
+    meta?: ConnectProviderMeta
+  ) => Promise<boolean>;
+  updateProviderModels: (
+    provider: ModelProvider,
+    model: string,
+    models: string[]
+  ) => Promise<boolean>;
+  getProviderSecret: (provider: ModelProvider) => string | undefined;
   removeApiKey: (provider: ModelProvider) => Promise<void>;
   revokeAllKeys: () => Promise<void>;
   isFrameworkModalOpen: boolean;
@@ -133,67 +191,41 @@ interface AppContextType {
   openCounterDraftModal: () => void;
   closeCounterDraftModal: () => void;
   currentPlanId: PlanId;
-  /** The signed-in account, or null. Null is the normal state for a visitor, not an error. */
+  planExpiresAt: string | null;
   authUser: { id: string; email: string } | null;
   isAdmin: boolean;
   isFounder: boolean;
-  /**
-   * False until the first session read resolves. Checkout stays disabled while this is false:
-   * treating "not checked yet" as "signed out" would bounce a signed-in user to the login page
-   * on a slow connection, and treating it as "signed in" would let an anonymous visitor start a
-   * purchase that the server then refuses with a bare 401.
-   */
   authReady: boolean;
   signOut: () => Promise<void>;
-  /** Plan awaiting payment. Non-null opens the checkout drawer. */
   checkoutPlan: Plan | null;
-  /** `null` until the visitor answers the cookie dialog. Analytics loads only on `'granted'`. */
   consent: AnalyticsConsent | null;
   closeCheckout: () => void;
-  /**
-   * The one entry point to buying. Redirects to sign-in when nobody is signed in, and only then
-   * opens checkout. The server refuses anonymous orders too — this stops the dead end client-side
-   * instead of after the click.
-   */
   requestCheckout: (plan: Plan) => void;
-  /** Re-reads the granted plan from /api/me. Used after a cancel/downgrade so caps update at once. */
   refreshPlan: () => Promise<void>;
-  /** Revokes the running grant: back to Free, no payment. False when the server refuses. */
   cancelPlanToFree: () => Promise<boolean>;
-  /** From Ultra: revokes Ultra, then opens a fresh Pro checkout. False on refusal. */
   downgradeToPro: () => Promise<boolean>;
-  /**
-   * Send the visitor to the pricing table on the landing page.
-   *
-   * Billing and Settings sit inside the workspace, where the table does not exist. Switching to
-   * the overview alone would dump them at the top of the page, so the scroll waits for that view
-   * to mount — one frame is not always enough for the section to be in the document.
-   */
   goToPricing: () => void;
-  /** True when the visitor must register before paying: never claims a signed-in user is anonymous. */
   isJoinRoomOpen: boolean;
   openJoinRoom: () => void;
   closeJoinRoom: () => void;
   joinRoom: (roster: AdvisorPersona[], mode: ChatMode, title?: string) => void;
-  /** Opens a room with the default roster and puts `question` to it as the first message. */
   startCouncilChat: (question: string, advisors?: AdvisorPersona[], mode?: ChatMode) => void;
-  /** Ends the meeting: aborts a round in flight, then shows the recap of what was said. */
   wrapUpRoom: () => void;
-  /** Opens the framework conclusion (Chair's recommendation + scenario branches) for this room's question and advisors. */
   openRoomConclusion: () => void;
   currentRoom: ChatRoom | null;
+  roomRosterPartition: { activeIds: string[]; disabledIds: string[] };
   sendMessage: (body: string) => Promise<void>;
   stopRoom: () => void;
   clearRoom: () => void;
-  /** True while the room is working, so the UI can offer Stop instead of a second send. */
   isRoomBusy: boolean;
-  /** Reads a link NOW and pins the text to the next message. Never called mid-round. */
   attachLink: (url: string) => Promise<void>;
-  /** Reads each file NOW, in the browser, and pins its text to the next message. */
   attachFiles: (files: File[]) => Promise<void>;
   removePending: (id: string) => void;
   isReadingLink: boolean;
   isReadingFile: boolean;
+  webSearchEnabled: boolean;
+  setWebSearchEnabled: (enabled: boolean) => void;
+  isSearchingWeb: boolean;
   canAddPersona: boolean;
   personaCap: number;
   toastMessage: ToastMessage | null;
@@ -201,12 +233,34 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
-const nextSessionId = () => `session-${crypto.randomUUID()}`;
+
+const nextSessionId = (() => {
+  let seq = 0;
+  return () => {
+    seq += 1;
+    return `session-${seq}`;
+  };
+})();
 
 const scenarioFixture = (t: Copy) => ({
-  good: { title: t.favorableTitle, subtitle: t.illustrativeOnly, description: t.favorableDescription, actions: [t.favorableActionOne, t.favorableActionTwo] },
-  normal: { title: t.baselineTitle, subtitle: t.illustrativeOnly, description: t.baselineDescription, actions: [t.baselineActionOne, t.baselineActionTwo] },
-  bad: { title: t.difficultTitle, subtitle: t.illustrativeOnly, description: t.difficultDescription, actions: [t.difficultActionOne, t.difficultActionTwo] },
+  good: {
+    title: t.favorableTitle,
+    subtitle: t.illustrativeOnly,
+    description: t.favorableDescription,
+    actions: [t.favorableActionOne, t.favorableActionTwo],
+  },
+  normal: {
+    title: t.baselineTitle,
+    subtitle: t.illustrativeOnly,
+    description: t.baselineDescription,
+    actions: [t.baselineActionOne, t.baselineActionTwo],
+  },
+  bad: {
+    title: t.difficultTitle,
+    subtitle: t.illustrativeOnly,
+    description: t.difficultDescription,
+    actions: [t.difficultActionOne, t.difficultActionTwo],
+  },
 });
 
 const stancesOf = (personas: AdvisorPersona[]) =>
@@ -218,21 +272,30 @@ const stancesOf = (personas: AdvisorPersona[]) =>
 const toChatBots = (roster: AdvisorPersona[]): ChatBot[] =>
   roster.map((persona) => ({ id: persona.id, name: persona.name }));
 
-/** Prefix keeps bot personas from colliding with fixture advisor ids. */
 export const botPersonaId = (botId: string) => `bot:${botId}`;
 
-const botToPersona = (bot: UserBot): AdvisorPersona => ({
-  id: botPersonaId(bot.id),
-  name: bot.name,
-  archetype: bot.name,
-  model: bot.model,
-  provider: bot.provider,
-  colorToken: 'persona-sage',
-  colorHex: '#7C9885',
-  stance: '',
-  instructions: bot.instruction,
-  sampleQuote: '',
-});
+const BOT_COLORS: { token: AdvisorPersona['colorToken']; hex: string }[] = [
+  { token: 'persona-sage', hex: '#7C9885' },
+  { token: 'persona-rose', hex: '#B98389' },
+  { token: 'persona-slate', hex: '#6E85A6' },
+  { token: 'persona-ochre', hex: '#C2955E' },
+];
+
+const botToPersona = (bot: UserBot, index = 0): AdvisorPersona => {
+  const palette = BOT_COLORS[index % BOT_COLORS.length];
+  return {
+    id: botPersonaId(bot.id),
+    name: bot.name,
+    archetype: bot.name,
+    model: bot.model,
+    provider: bot.provider,
+    colorToken: palette.token,
+    colorHex: palette.hex,
+    stance: bot.instruction.slice(0, 96),
+    instructions: bot.instruction,
+    sampleQuote: '',
+  };
+};
 
 const createSession = async (
   question: string,
@@ -266,7 +329,10 @@ const createSession = async (
   };
 };
 
-const localizeSession = (session: DeliberationSession, language: Language): DeliberationSession => {
+const localizeSession = (
+  session: DeliberationSession,
+  language: Language
+): DeliberationSession => {
   const t = copy[language];
   const localizedTitles: Record<string, string> = {
     'project-proposal': t.initialProjectTitle,
@@ -274,10 +340,6 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
     'process-change': t.initialProcessTitle,
   };
   const localizedAdvisors = session.advisors.map((persona) => localizePersona(persona, language));
-  // Rounds are historical content, not chrome. They keep the language they were
-  // produced in — a real engine would answer in whatever language it was asked
-  // in, and replaying the transcript must not rewrite history. The UI flags a
-  // round whose language differs from the interface.
   return {
     ...session,
     title: session.titlePinned ? session.title : localizedTitles[session.id] ?? session.title,
@@ -288,20 +350,13 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
   };
 };
 
-// `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialLanguage, initialAuthUser }) => {
-  // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
-  // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
-  // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
-  // and client-rendered everything, including the `<Script>` in the root layout — which is the
-  // "Encountered a script tag while rendering React component" overlay. A tab with no room never
-  // tripped it, which is why deleting the room made the error go away.
-  //
-  // So both start at the server's answer, and the restore happens once, after hydration but before
-  // paint (see the layout effect below). The room and the view are still set from the SAME read in
-  // one batch, so a reload cannot land on the marketing page with a live room sitting unread behind it.
+export const AppProvider: React.FC<{
+  children: React.ReactNode;
+  initialLanguage: Language;
+  initialAuthUser?: { id: string; email: string } | null;
+}> = ({ children, initialLanguage, initialAuthUser }) => {
   const router = useRouter();
   const [currentView, setCurrentViewState] = useState<ViewType>('overview');
 
@@ -334,41 +389,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     [router]
   );
 
-  // Starts at the server's answer ('en'), like the room and the theme: reading storage in this
-  // initializer would hydrate a Vietnamese tree against English HTML. The saved choice is adopted
-  // before first paint below. `zc-lang` was only ever read, never written, so a visitor who picked
-  // Vietnamese lost it on every reload — and, relying on the browser's translate bar instead, hit its
-  // DOM-rewriting crashes. Writing it here is what the cookie notice already says the app does.
   const [language, setLanguageState] = useState<Language>(initialLanguage);
 
   const setLanguage = async (next: Language) => {
     if (next === language) return;
-
     const response = await fetch('/api/language', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ language: next }),
     });
-
     if (!response.ok) {
       throw new Error('Could not save language preference');
     }
-
-    // Chỉ cập nhật giao diện sau khi cookie được lưu thành công.
     document.documentElement.lang = next;
     document.documentElement.dataset.language = next;
-
     setLanguageState(next);
   };
 
-  // The first client render has to match the server's, and the server cannot know the visitor's theme,
-  // so it renders 'light'. The initializer used to read <html data-theme> instead, which the bootstrap
-  // script has already set to 'dark' for anyone on a dark system: the header then hydrated with a Sun
-  // where the server had drawn a Moon, React found the trees different and discarded the server HTML.
-  // So start at the server's answer and adopt the real one before the browser paints (layout effect),
-  // which is the "adopt it on mount" step the comment in theme.ts has always described.
   const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
   useIsomorphicLayoutEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
@@ -379,18 +416,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       applyTheme(next);
       try {
         localStorage.setItem(THEME_STORAGE_KEY, next);
-      } catch {
-        // Private-mode storage refusal is not worth surfacing: the theme still
-        // applies for this page view, it just will not persist.
-      }
+      } catch {}
       return next;
     });
   };
+
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
   const [bots, setBots] = useState<UserBot[]>([]);
   const [botsReady, setBotsReady] = useState(false);
+  const [conversations, setConversations] = useState<SavedConversation[]>([]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
@@ -399,33 +436,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
-  // Server-mounted (page.tsx) when session cookie survived browser close: deterministic, no hydration mismatch.
-  const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(initialAuthUser ?? null);
+  const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(
+    initialAuthUser ?? null
+  );
   const [authReady, setAuthReady] = useState(!!initialAuthUser);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isFounder, setIsFounder] = useState(false);
-  /**
-   * Non-essential cookie consent. `null` means the visitor has not been asked yet, which is
-   * deliberately NOT the same as consent: analytics only loads on an explicit `'granted'`.
-   *
-   * `useSyncExternalStore` rather than `useState`, because `localStorage` does not exist on the
-   * server. A lazy `useState` initializer read the browser store while the server rendered
-   * `null`, so a visitor who had already answered got a different first client render than the
-   * server produced — React threw a hydration mismatch and re-rendered the whole tree.
-   * `getServerSnapshot` returns `null` for the server AND the first client render, so the two
-   * agree; the real value arrives on the following render, after hydration has finished.
-   */
-  const analyticsConsent = useSyncExternalStore(subscribeAnalyticsConsent, readAnalyticsConsent, getServerAnalyticsConsent);
+  const analyticsConsent = useSyncExternalStore(
+    subscribeAnalyticsConsent,
+    readAnalyticsConsent,
+    getServerAnalyticsConsent
+  );
   const [checkoutPlan, setCheckoutPlan] = useState<Plan | null>(null);
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
 
-  // Restore a room the tab still holds. A layout effect rather than a plain effect: it runs before the
-  // browser paints, so the user never sees the empty page flash before the transcript appears (which
-  // reads as data loss). Runs once; nothing writes the store until a room exists, so this cannot clobber it.
   useIsomorphicLayoutEffect(() => {
     const restored = readStoredRoom();
     if (!restored) return;
     setCurrentRoom({
+      conversationId: restored.conversationId,
+      kind: restored.kind,
+      botId: restored.botId,
       title: restored.title,
       mode: restored.mode === 'panel' ? 'panel' : 'round-robin',
       roster: restored.roster,
@@ -440,38 +471,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       setCurrentViewState('chat-room');
     }
   }, []);
+
   const [isRoomBusy, setIsRoomBusy] = useState(false);
   const [isReadingLink, setIsReadingLink] = useState(false);
   const [isReadingFile, setIsReadingFile] = useState(false);
-  /** The one controller for the round in flight; `stopRoom` aborts it. Null when the room is idle. */
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
+  const [isSearchingWeb, setIsSearchingWeb] = useState(false);
   const roomAbortRef = useRef<AbortController | null>(null);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /**
-   * Plan the account is on, read from `effectivePlan` through `/api/me` once sign-in settles.
-   * Defaults to Free; boosts like advisor caps derive from this via `planById`.
-   */
   const [currentPlanId, setCurrentPlanId] = useState<PlanId>('free');
-  const personaCap = planById(currentPlanId).maxActiveAdvisors;
+  const [planExpiresAt, setPlanExpiresAt] = useState<string | null>(null);
+
+  const activePlan = planById(currentPlanId);
+  const personaCap = activePlan.maxActiveAdvisors;
+  const botCap = activePlan.maxBots;
+
+  const disabledBotIds = useMemo(
+    () => disabledBotIdsForPlan(bots, currentPlanId),
+    [bots, currentPlanId]
+  );
+
+  const isBotDisabled = useCallback(
+    (botId: string) => disabledBotIds.has(botId),
+    [disabledBotIds]
+  );
+
+  const roomRosterPartition = useMemo(() => {
+    if (!currentRoom) return { activeIds: [], disabledIds: [] };
+    return partitionRoomRosterByPlan(currentRoom.roster, currentPlanId, disabledBotIds);
+  }, [currentRoom, currentPlanId, disabledBotIds]);
 
   useEffect(() => {
     document.documentElement.lang = language;
     document.title = copy[language].documentTitle;
-    document.querySelector('meta[name="description"]')?.setAttribute('content', copy[language].documentDescription);
+    document
+      .querySelector('meta[name="description"]')
+      ?.setAttribute('content', copy[language].documentDescription);
   }, [language]);
 
-  // Mirror every room change into the tab store. This is the only writer; nothing else touches it.
   useEffect(() => {
     if (currentRoom) writeStoredRoom(currentRoom);
   }, [currentRoom]);
 
-  /**
-   * Read the session once on mount, then follow it.
-   *
-   * `authReady` is flipped in BOTH paths on purpose. A Supabase failure leaves nobody signed in,
-   * and that has to end as "ready and anonymous" — leaving it pending would freeze every purchase
-   * button for the rest of the session instead of routing the visitor to login.
-   */
   useEffect(() => {
     let cancelled = false;
     const adoptFromServerIfNeeded = async () => {
@@ -512,7 +554,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       setAuthUser(null);
       setAuthReady(true);
     };
-    void supabase.auth.getUser().then(({ data }) => adopt(data.user)).catch(() => adopt(null));
+    void supabase.auth
+      .getUser()
+      .then(({ data }) => adopt(data.user))
+      .catch(() => adopt(null));
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) =>
       adopt(session?.user ?? null)
     );
@@ -531,24 +576,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     setCheckoutPlan(null);
     try {
       sessionStorage.removeItem('zc:initial-dashboard-redirect');
-    } catch {
-      // Ignore storage refusal
-    }
+    } catch {}
     setCurrentViewState('overview');
     router.push('/');
     router.refresh();
     window.scrollTo(0, 0);
   };
 
-  /**
-   * Buying always needs an identified account: the grant and any coupon use are recorded against
-   * an email, so an anonymous order could never deliver what it paid for.
-   *
-   * Anonymous visitors are sent to sign-in WITHOUT the plan being stored. Holding it and opening
-   * checkout after login is the friendlier flow, but it shows a payment drawer on top of the
-   * sign-in form — which reads as "you are being charged before you have an account". Refusing
-   * early and letting the server refuse again is the honest version of the same rule.
-   */
   const requestCheckout = (plan: Plan) => {
     if (plan.priceVnd <= 0) return;
     if (!authUser) {
@@ -566,15 +600,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       const body = (await response.json()) as {
         role?: string;
         isFounder?: boolean;
-        plan?: { planId?: string } | null;
+        plan?: { planId?: string; expiresAt?: string } | null;
       };
       setIsAdmin(body?.role === 'admin');
       setIsFounder(Boolean(body?.isFounder));
       const planId = body?.plan?.planId;
-      setCurrentPlanId(planId === 'pro' || planId === 'ultra' || planId === 'free' ? planId : 'free');
-    } catch {
-      // A failed refresh keeps the last known plan rather than pretending it changed.
-    }
+      setCurrentPlanId(
+        planId === 'pro' || planId === 'ultra' || planId === 'free' ? planId : 'free'
+      );
+      setPlanExpiresAt(typeof body?.plan?.expiresAt === 'string' ? body.plan.expiresAt : null);
+    } catch {}
   }, []);
 
   const postPlanChange = async (to: 'free' | 'pro'): Promise<boolean> => {
@@ -605,21 +640,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       try {
         sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
-      } catch {
-        // Ignore storage errors
-      }
+      } catch {}
       setCurrentViewState('overview');
       router.push('/#pricing');
       return;
     }
     setCurrentViewState('overview');
-    const scroll = () => document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const scroll = () =>
+      document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     requestAnimationFrame(() => requestAnimationFrame(scroll));
   };
 
   const localizedSessions = useMemo(() => {
     const visible = authUser
-      ? sessions.filter((session) => !['project-proposal', 'team-priority', 'process-change'].includes(session.id))
+      ? sessions.filter(
+          (session) => !['project-proposal', 'team-priority', 'process-change'].includes(session.id)
+        )
       : sessions;
     return visible.map((session) => localizeSession(session, language));
   }, [language, sessions, authUser]);
@@ -648,11 +684,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     landOn: ViewType = 'session-concluded'
   ) => {
     const normalizedQuestion = question.trim().toLowerCase();
-    // Same question with a different seating is a different meeting, not a reopen of the old one.
-    const seatingOf = (list: AdvisorPersona[]) => list.map((persona) => persona.id).sort().join('|');
+    const seatingOf = (list: AdvisorPersona[]) =>
+      list
+        .map((persona) => persona.id)
+        .sort()
+        .join('|');
     const existing = sessions.find((session) => {
       const originalTitle = localizedTitles[session.id] ?? session.title;
-      return originalTitle.toLowerCase() === normalizedQuestion && seatingOf(session.advisors) === seatingOf(advisors);
+      return (
+        originalTitle.toLowerCase() === normalizedQuestion &&
+        seatingOf(session.advisors) === seatingOf(advisors)
+      );
     });
     if (existing) {
       setCurrentSessionId(existing.id);
@@ -738,18 +780,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
 
   const selectRound = (index: number) => setSelectedRoundIndex(index);
 
-  /**
- * Clear the deliberation list *and* the cached transcript.
- *
- * These used to be two different places. `setSessions([])` emptied the React state while the
- * room object — every message, every roster — stayed in `sessionStorage`. The user clicked "purge",
- * saw the list empty, reloaded, and the transcript came back. A button that reports success while
- * the data is still there is worse than no button, so both stores are cleared together.
- */
-const purgeSessions = () => {
+  const purgeSessions = () => {
     setSessions([]);
+    setConversations([]);
     setCurrentRoom(null);
     clearStoredRoom();
+    if (authUser) {
+      void fetch('/api/conversations', { method: 'DELETE', credentials: 'same-origin' }).catch(
+        () => undefined
+      );
+    }
     showToast('toastSessionsReset');
   };
 
@@ -762,8 +802,8 @@ const purgeSessions = () => {
   };
 
   const addPersona = (persona: AdvisorPersona) => {
-    // Step 4: the plan cap is a cap, not a label. Checked here so no other caller can route around it.
-    if (personas.length >= personaCap) {
+    const presetCount = personas.filter((p) => !p.id.startsWith('bot:')).length;
+    if (presetCount >= personaCap) {
       showToast('toastPersonaCap', { cap: String(personaCap) });
       return;
     }
@@ -772,11 +812,130 @@ const purgeSessions = () => {
     setCurrentView('personas');
   };
 
-  const joinRoom = (roster: AdvisorPersona[], mode: ChatMode, title?: string) => {
-    const capped = roster.slice(0, personaCap);
+  const persistRoomSnapshot = useCallback(
+    async (snapshot: ChatRoom) => {
+      if (!authUser || !snapshot.conversationId) return;
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: snapshot.conversationId,
+            title: snapshot.title,
+            mode: snapshot.mode,
+            roster: snapshot.roster,
+            messages: snapshot.messages,
+            turns: snapshot.turns,
+            stoppedBy: snapshot.stoppedBy,
+            failures: snapshot.failures,
+            held: snapshot.held,
+          }),
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as { conversation?: SavedConversation };
+        if (body.conversation) {
+          setConversations((list) =>
+            [body.conversation!, ...list.filter((item) => item.id !== body.conversation!.id)].sort(
+              (a, b) => b.updatedAt.localeCompare(a.updatedAt)
+            )
+          );
+        }
+      } catch {}
+    },
+    [authUser]
+  );
+
+  const loadConversationIntoRoom = useCallback((conv: SavedConversation) => {
+    roomAbortRef.current?.abort();
     setCurrentRoom({
-      title: title ?? copy[language].chatRoomTitle,
+      conversationId: conv.id,
+      kind: conv.kind,
+      botId: conv.botId,
+      title: conv.title,
+      mode: conv.mode,
+      roster: conv.roster,
+      messages: conv.messages,
+      pending: [],
+      turns: conv.turns,
+      stoppedBy: conv.stoppedBy,
+      failures: conv.failures,
+      held: conv.held,
+    });
+    setIsJoinRoomOpen(false);
+    setEditingGroupId(null);
+    setCurrentView('chat-room');
+  }, [setCurrentView]);
+
+  const createGroupChat = async (
+    roster: AdvisorPersona[],
+    mode: ChatMode,
+    title?: string
+  ): Promise<SavedConversation | null> => {
+    const capped = roster.slice(0, personaCap);
+    // Group Chat invariant: requires at least 2 bots!
+    if (capped.length < 2) return null;
+    const resolvedTitle =
+      title && title.trim()
+        ? title.trim()
+        : capped.map((p) => p.name).join(' · ').slice(0, 80) || copy[language].chatRoomTitle;
+
+    if (authUser) {
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'group',
+            title: resolvedTitle,
+            mode,
+            roster: capped.map((p) => p.id),
+            messages: [],
+          }),
+        });
+        if (res.ok) {
+          const body = (await res.json()) as { conversation: SavedConversation };
+          setConversations((prev) => [body.conversation, ...prev]);
+          loadConversationIntoRoom(body.conversation);
+          return body.conversation;
+        }
+      } catch {}
+    }
+
+    const localId = `local-group-${Date.now()}`;
+    const fallback: SavedConversation = {
+      id: localId,
+      kind: 'group',
+      title: resolvedTitle,
       mode,
+      roster: capped.map((p) => p.id),
+      messages: [],
+      turns: 0,
+      stoppedBy: null,
+      failures: [],
+      held: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setConversations((prev) => [fallback, ...prev]);
+    loadConversationIntoRoom(fallback);
+    return fallback;
+  };
+
+  const joinRoom = (roster: AdvisorPersona[], mode: ChatMode, title?: string) => {
+    if (roster.length >= 2) {
+      void createGroupChat(roster, mode, title);
+      return;
+    }
+    const capped = roster.slice(0, Math.max(1, personaCap));
+    if (capped.length === 0) return;
+    const rawBotId = capped[0].id.startsWith('bot:') ? capped[0].id.slice(4) : undefined;
+    setCurrentRoom({
+      kind: capped.length === 1 ? 'solo' : 'group',
+      botId: rawBotId,
+      title: title ?? copy[language].chatRoomTitle,
+      mode: capped.length === 1 ? 'round-robin' : mode,
       roster: capped.map((persona) => persona.id),
       messages: [],
       pending: [],
@@ -789,34 +948,119 @@ const purgeSessions = () => {
     setCurrentView('chat-room');
   };
 
-  /**
-   * Stop means stop. Before the deadline landed this only rewrote a label, so the council kept
-   * answering a turn the user had walked away from and any provider call kept billing — the button
-   * looked like it worked and nothing had stopped. The abort kills the request in flight; the
-   * engine additionally refuses to commit an answer that arrives anyway.
-   */
+  const openGroupChat = (conversationId: string) => {
+    const found = conversations.find((c) => c.id === conversationId && c.kind === 'group');
+    if (found) loadConversationIntoRoom(found);
+  };
+
+  const updateGroupChat = async (
+    id: string,
+    patch: { title?: string; mode?: ChatMode; roster?: string[] }
+  ): Promise<boolean> => {
+    if (patch.roster && patch.roster.length < 2) return false;
+    if (authUser && !id.startsWith('local-')) {
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'PATCH',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...patch }),
+        });
+        if (!res.ok) return false;
+        const body = (await res.json()) as { conversation: SavedConversation };
+        setConversations((list) =>
+          list.map((item) => (item.id === id ? body.conversation : item))
+        );
+        setCurrentRoom((room) =>
+          room && room.conversationId === id
+            ? {
+                ...room,
+                title: body.conversation.title,
+                mode: body.conversation.mode,
+                roster: body.conversation.roster,
+              }
+            : room
+        );
+        setEditingGroupId(null);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    setConversations((list) =>
+      list.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              ...(patch.title ? { title: patch.title } : {}),
+              ...(patch.mode ? { mode: patch.mode } : {}),
+              ...(patch.roster ? { roster: patch.roster } : {}),
+              updatedAt: new Date().toISOString(),
+            }
+          : item
+      )
+    );
+    setCurrentRoom((room) =>
+      room && room.conversationId === id
+        ? {
+            ...room,
+            ...(patch.title ? { title: patch.title } : {}),
+            ...(patch.mode ? { mode: patch.mode } : {}),
+            ...(patch.roster ? { roster: patch.roster } : {}),
+          }
+        : room
+    );
+    setEditingGroupId(null);
+    return true;
+  };
+
+  const renameConversation = async (id: string, title: string) => {
+    const clean = title.trim();
+    if (!clean) return;
+    await updateGroupChat(id, { title: clean });
+  };
+
+  const deleteConversationById = async (id: string) => {
+    if (authUser && !id.startsWith('local-')) {
+      await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      }).catch(() => undefined);
+    }
+    const remaining = conversations.filter((item) => item.id !== id);
+    setConversations(remaining);
+    if (currentRoom?.conversationId === id) {
+      roomAbortRef.current?.abort();
+      clearStoredRoom();
+      const sameBotNext =
+        currentRoom.kind === 'solo' && currentRoom.botId
+          ? remaining.find((c) => c.kind === 'solo' && c.botId === currentRoom.botId)
+          : undefined;
+      if (sameBotNext) {
+        loadConversationIntoRoom(sameBotNext);
+      } else {
+        setCurrentRoom(null);
+        setCurrentView('empty-chamber');
+      }
+    }
+  };
+
   const stopRoom = () => {
     roomAbortRef.current?.abort();
     setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
   };
 
   const clearRoom = () => {
-    // Clearing the store too is the point: if it survived, the room the user just discarded would
-    // come back on reload and look like the delete button had not worked.
+    if (currentRoom?.conversationId) {
+      void deleteConversationById(currentRoom.conversationId);
+      return;
+    }
     roomAbortRef.current?.abort();
     clearStoredRoom();
     setCurrentRoom(null);
     setCurrentView('empty-chamber');
   };
 
-  /**
-   * Reads the link once, here, and pins its text to the next message.
-   *
-   * Not during a round: a fetch that hangs mid-round would look exactly like a provider hang, and
-   * the room would report the wrong thing. A link that cannot be read is still pinned, carrying the
-   * reason — a silently missing attachment reads as "the app ignored what I sent", and the council
-   * would answer from the human's words alone without ever saying so.
-   */
   const attachLink = async (url: string) => {
     const href = url.trim();
     if (!href) return;
@@ -831,7 +1075,33 @@ const purgeSessions = () => {
       const reading = await readLinkInBrowser(href);
       attachment.text = reading.text;
     } catch (error) {
-      attachment.problem = error instanceof UnreadableLinkError ? error.reason : String(error);
+      let resolvedViaServer = false;
+      if (authUser) {
+        try {
+          const res = await fetch('/api/read-link', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: href }),
+          });
+          if (res.ok) {
+            const data = (await res.json()) as {
+              title?: string;
+              text?: string;
+              truncated?: boolean;
+            };
+            if (data.text) {
+              attachment.text = data.text;
+              attachment.truncated = Boolean(data.truncated);
+              if (data.title) attachment.name = data.title;
+              resolvedViaServer = true;
+            }
+          }
+        } catch {}
+      }
+      if (!resolvedViaServer) {
+        attachment.problem = error instanceof UnreadableLinkError ? error.reason : String(error);
+      }
     } finally {
       setIsReadingLink(false);
       setCurrentRoom((room) =>
@@ -840,32 +1110,32 @@ const purgeSessions = () => {
     }
   };
 
-  /**
-   * Same contract as `attachLink`: read once, here, never mid-round, and an unreadable file is
-   * still pinned with its reason rather than dropped — the council would otherwise answer from the
-   * human's words alone and nobody would know a file was ignored.
-   */
   const attachFiles = async (files: File[]) => {
     if (files.length === 0) return;
     setIsReadingFile(true);
-    // Counted locally: `currentRoom` is a snapshot and would not see the images added in this loop.
-    let images = (currentRoom?.pending ?? []).filter((item) => item.kind === 'image' && !item.problem).length;
+    let images = (currentRoom?.pending ?? []).filter(
+      (item) => item.kind === 'image' && !item.problem
+    ).length;
     try {
       for (const file of files) {
-        const image = isImageFile(file);
+        const video = isVideoFile(file);
+        const image = !video && isImageFile(file);
+        const kind: ChatAttachment['kind'] = video ? 'video' : image ? 'image' : 'file';
         const attachment: ChatAttachment = {
-          // The random suffix matters: several files picked at once share the same millisecond.
           id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          kind: image ? 'image' : 'file',
+          kind,
           name: file.name,
-          // Nothing to open: the bytes stay in the browser. Non-empty because the request check
-          // in lib/deliberation/plan.ts rejects an attachment with no href.
-          href: `${image ? 'image' : 'file'}:${file.name}`,
+          href: `${kind}:${file.name}`,
         };
         try {
-          if (image) {
-            if (images >= MAX_IMAGES_PER_MESSAGE) {
-              throw new UnreadableFileError(`At most ${MAX_IMAGES_PER_MESSAGE} images per message.`);
+          if (video) {
+            const videoReading = await readVideoInBrowser(file);
+            attachment.previewUrl = videoReading.previewUrl;
+            attachment.frames = videoReading.frames;
+            attachment.text = videoReading.summary;
+          } else if (image) {
+            if (images >= MAX_IMAGES_PER_MESSAGE * 2) {
+              throw new UnreadableFileError(`At most ${MAX_IMAGES_PER_MESSAGE * 2} images per message.`);
             }
             attachment.dataUrl = (await readImageInBrowser(file)).dataUrl;
             images += 1;
@@ -892,40 +1162,100 @@ const purgeSessions = () => {
     );
   };
 
+  const [keys, setKeys] = useState<Record<string, string>>({});
+
   const sendMessage = async (body: string) => {
     if (!currentRoom) return;
-    const roster = currentRoom.roster
+    const isSolo = currentRoom.kind === 'solo' || currentRoom.roster.length === 1;
+    const { activeIds } = partitionRoomRosterByPlan(
+      currentRoom.roster,
+      currentPlanId,
+      disabledBotIds
+    );
+
+    // Enforce plan permission: if every bot in this chat is locked by plan downgrade/expiry, block sending.
+    if (activeIds.length === 0) {
+      showToast('toastPersonaCap', { cap: String(isSolo ? botCap : personaCap) });
+      return;
+    }
+
+    const roster = activeIds
       .map((id) => localizedPersonas.find((persona) => persona.id === id))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
     const rosterBots = toChatBots(roster);
 
-    // Directives are matched against the FULL roster, so an advisor can be released and held again
-    // by name even while they are currently out of the room.
-    const resume = isResumeDirective(body, rosterBots);
-    const stopping = isStopDirective(body, rosterBots);
-    const held = resume
+    const resume = !isSolo && isResumeDirective(body, rosterBots);
+    const stopping = !isSolo && isStopDirective(body, rosterBots);
+    const held = isSolo
       ? []
-      : stopping
-        ? [...new Set([...currentRoom.held, ...parseMentions(body, rosterBots).filter((id) => id !== USER_HANDLE && id !== RESUME_ALL)])]
-        : currentRoom.held;
+      : resume
+        ? []
+        : stopping
+          ? [
+              ...new Set([
+                ...currentRoom.held,
+                ...parseMentions(body, rosterBots).filter(
+                  (id) => id !== USER_HANDLE && id !== RESUME_ALL
+                ),
+              ]),
+            ]
+          : currentRoom.held;
 
-    // An advisor named by `stop @bot` is held FROM this turn, so they never answer the message that
-    // silences them; `@all` clears the held set and calls every one of them back.
     const active = resume ? roster : roster.filter((persona) => !held.includes(persona.id));
     const activeBots = toChatBots(active);
+
+    const turnAttachments: ChatAttachment[] = [...currentRoom.pending];
+
+    if (webSearchEnabled && !stopping) {
+      setIsSearchingWeb(true);
+      try {
+        const searchRes = await fetch(`/api/web-search?q=${encodeURIComponent(body.slice(0, 260))}`, {
+          credentials: 'same-origin',
+        });
+        if (searchRes.ok) {
+          const searchPayload = (await searchRes.json()) as {
+            query?: string;
+            results?: { title: string; url: string; snippet: string }[];
+            formattedText?: string;
+          };
+          if (searchPayload.results && searchPayload.results.length > 0) {
+            for (const source of searchPayload.results.slice(0, 4)) {
+              turnAttachments.push({
+                id: `web-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                kind: 'link',
+                name: source.title,
+                href: source.url,
+                text: source.snippet || source.title,
+              });
+            }
+          }
+        }
+      } catch {
+        // Best-effort live search; proceed with turn even if offline.
+      } finally {
+        setIsSearchingWeb(false);
+      }
+    }
 
     const userMessage: ChatMessage = {
       id: `${currentRoom.messages.length}`,
       authorId: USER_HANDLE,
       body,
-      mentioned: parseMentions(body, activeBots),
-      // Pinned attachments travel WITH this message. Reading them in the engine would mean one
-      // fetch per advisor per turn; the text was already read when they were pinned.
-      ...(currentRoom.pending.length > 0 ? { attachments: currentRoom.pending } : {}),
+      mentioned: isSolo ? [] : parseMentions(body, activeBots),
+      ...(turnAttachments.length > 0 ? { attachments: turnAttachments } : {}),
     };
+
+    const autoTitle =
+      currentRoom.messages.length === 0 &&
+      (currentRoom.title === 'New Chat' ||
+        currentRoom.title === copy.en.soloNewThread ||
+        currentRoom.title === copy.vi.soloNewThread)
+        ? body.slice(0, 60)
+        : currentRoom.title;
 
     const parked: ChatRoom = {
       ...currentRoom,
+      title: autoTitle,
       messages: [...currentRoom.messages, userMessage],
       pending: [],
       held,
@@ -933,12 +1263,9 @@ const purgeSessions = () => {
     setCurrentRoom(parked);
     setIsRoomBusy(true);
 
-    // `stop @bot` is a control message, not a prompt, so it must not run a round: the @ would read as a
-    // request for that advisor's answer, and because they are now held it resolved to nobody and the
-    // room reported "nobody answered" — a lie about what happened. `@all` DOES run a round: the user
-    // is telling the council to carry on, so silence would be its own failure.
     if (stopping) {
       setIsRoomBusy(false);
+      void persistRoomSnapshot(parked);
       return;
     }
 
@@ -947,92 +1274,95 @@ const purgeSessions = () => {
 
     try {
       const result = await runTurn({
-      roster: activeBots,
-      mode: currentRoom.mode,
-      // WITHOUT this turn's user message — runTurn appends it. Passing `parked.messages` here
-      // duplicated every user message in the transcript.
-      history: currentRoom.messages,
-      userMessage,
-      // Each advisor answers through its own vendor, so the room is a mix: one key per provider, and any
-      // advisor whose vendor has no key falls back to the scripted reply instead of failing the round.
-      // The engine cannot see this choice — it only ever sees `BotTurn`, which is the whole point of
-      // the generator seam.
-      generate: (request) => {
-        const persona = active.find((p) => p.id === request.bot.id);
-        if (!persona) {
-          return scriptedGenerator(activeBots, { lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '' })(request);
-        }
-        const isUserBot = persona.id.startsWith('bot:');
-        let resolvedProvider: ModelProvider | undefined = persona.provider;
-        let resolvedKey = keys[persona.provider];
-        let resolvedModel = isUserBot
-          ? persona.model
-          : apiKeys.find((item) => item.provider === persona.provider && item.connected)?.modelName ?? persona.model;
-        if (!resolvedKey && !isUserBot) {
-          const fallbackConnected = apiKeys.find((item) => item.connected && Boolean(keys[item.provider]));
-          if (fallbackConnected) {
-            resolvedProvider = fallbackConnected.provider;
-            resolvedKey = keys[fallbackConnected.provider];
-            resolvedModel = fallbackConnected.modelName;
+        roster: activeBots,
+        mode: isSolo ? 'round-robin' : currentRoom.mode,
+        soloMode: isSolo,
+        history: currentRoom.messages,
+        userMessage,
+        generate: (request) => {
+          const persona = active.find((p) => p.id === request.bot.id);
+          if (!persona) {
+            return scriptedGenerator(activeBots, {
+              lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '',
+            })(request);
           }
-        }
-        if (!resolvedProvider || !resolvedKey) {
-          return scriptedGenerator(activeBots, { lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '' })(request);
-        }
-        return byokGenerator(
-          { provider: resolvedProvider, model: resolvedModel, apiKey: resolvedKey },
-          { personaOf: (bot) => active.find((p) => p.id === bot.id)?.instructions }
-        )(request);
-      },
-      maxTurns: DEFAULT_MAX_TURNS,
-      rounds: COUNCIL_ROUNDS,
-      roomBudget: DEFAULT_ROOM_BUDGET,
-      turnsUsed: currentRoom.turns,
-      language,
-      roundIndex: parked.messages.filter((message) => message.authorId === USER_HANDLE).length,
-      signal: controller.signal,
-      turnTimeoutMs: DEFAULT_TURN_TIMEOUT_MS,
-      // Each advisor appears the moment it answers instead of the room staying blank until the
-      // whole round ends. The state update is functional because a stalled round can otherwise
-      // overwrite an appended message with the transcript it started from.
-      onTurn: (message) => {
-        setCurrentRoom((room) =>
-          room ? { ...room, messages: [...room.messages, message] } : room
-        );
-      },
-    });
-
-      setCurrentRoom((room) =>
-        room
-          ? {
-              ...room,
-              messages: result.messages,
-              turns: currentRoom.turns + result.speakers.length,
-              stoppedBy: result.stoppedBy,
-              failures: result.failures,
+          const isUserBot = persona.id.startsWith('bot:');
+          let resolvedProvider: ModelProvider | undefined = persona.provider;
+          let resolvedKey = keys[persona.provider];
+          let keyMeta = apiKeys.find((item) => item.provider === persona.provider);
+          let resolvedModel = isUserBot
+            ? persona.model
+            : keyMeta?.connected
+              ? keyMeta.modelName
+              : persona.model;
+          if (!resolvedKey && !isUserBot) {
+            const fallbackConnected = apiKeys.find(
+              (item) => item.connected && Boolean(keys[item.provider])
+            );
+            if (fallbackConnected) {
+              resolvedProvider = fallbackConnected.provider;
+              resolvedKey = keys[fallbackConnected.provider];
+              resolvedModel = fallbackConnected.modelName;
+              keyMeta = fallbackConnected;
             }
-          : room
-      );
+          }
+          if (!resolvedProvider || !resolvedKey) {
+            return scriptedGenerator(activeBots, {
+              lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '',
+            })(request);
+          }
+          return byokGenerator(
+            {
+              provider: resolvedProvider,
+              model: resolvedModel,
+              apiKey: resolvedKey,
+              protocol: keyMeta?.protocol,
+              baseUrl: keyMeta?.baseUrl,
+            },
+            { personaOf: (bot) => active.find((p) => p.id === bot.id)?.instructions }
+          )(request);
+        },
+        maxTurns: isSolo ? 1 : DEFAULT_MAX_TURNS,
+        rounds: isSolo ? 1 : COUNCIL_ROUNDS,
+        roomBudget: DEFAULT_ROOM_BUDGET,
+        turnsUsed: currentRoom.turns,
+        language,
+        roundIndex: parked.messages.filter((message) => message.authorId === USER_HANDLE).length,
+        signal: controller.signal,
+        turnTimeoutMs: DEFAULT_TURN_TIMEOUT_MS,
+        onTurn: (message) => {
+          setCurrentRoom((room) =>
+            room ? { ...room, messages: [...room.messages, message] } : room
+          );
+        },
+      });
+
+      const finalSnapshot: ChatRoom = {
+        ...parked,
+        messages: result.messages,
+        turns: currentRoom.turns + result.speakers.length,
+        stoppedBy: result.stoppedBy,
+        failures: result.failures,
+      };
+      setCurrentRoom(finalSnapshot);
+      void persistRoomSnapshot(finalSnapshot);
     } finally {
       roomAbortRef.current = null;
       setIsRoomBusy(false);
     }
   };
 
-  /**
-   * The decision form's primary button lands here. `joinRoom` only queues a state update, so
-   * `sendMessage` called in the same tick would still see no room and return silently. The question
-   * is parked in a ref and sent by the effect below, on the render where the room exists.
-   */
   const openingQuestionRef = useRef<string | null>(null);
 
-  const startCouncilChat = (question: string, advisors?: AdvisorPersona[], mode: ChatMode = 'round-robin') => {
+  const startCouncilChat = (
+    question: string,
+    advisors?: AdvisorPersona[],
+    mode: ChatMode = 'round-robin'
+  ) => {
     const body = question.trim();
     if (!body) return;
     const title = body.length > 72 ? `${body.slice(0, 69).trimEnd()}…` : body;
     const seated = (advisors ?? localizedPersonas).slice(0, personaCap);
-    // Asking again for a question whose meeting is already open reopens it. Starting a new room here
-    // would throw away a transcript the user has not finished reading.
     if (
       currentRoom &&
       currentRoom.messages.length > 0 &&
@@ -1050,9 +1380,6 @@ const purgeSessions = () => {
       begin();
       return;
     }
-    // A round from the previous room is still in flight. When it settles it writes its result into
-    // whatever room is current, so a room opened now would be overwritten by the old transcript and
-    // its opening question never sent. Abort it and open the new room once it has let go.
     roomAbortRef.current.abort();
     const startedAt = Date.now();
     const wait = setInterval(() => {
@@ -1068,8 +1395,6 @@ const purgeSessions = () => {
     if (opening === null || !currentRoom || currentRoom.messages.length > 0) return;
     openingQuestionRef.current = null;
     void sendMessage(opening);
-    // sendMessage is rebuilt every render and reads the room from that render; this effect runs on
-    // the render where the new room first exists, which is exactly the one it must read.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoom]);
 
@@ -1082,63 +1407,87 @@ const purgeSessions = () => {
     setCurrentView('room-summary');
   };
 
-  // The room is a free conversation; the framework conclusion is the structured read-out of the same
-  // question. The conclusion is built by the deliberation engine from the question and the advisors,
-  // not from the transcript, and the recap page says so. Creating the session is async, so the view
-  // change has to wait for it (`landOn`): switching now would show whatever session was open before.
   const openRoomConclusion = () => {
     if (!currentRoom) return;
     const seated = currentRoom.roster
       .map((id) => localizedPersonas.find((persona) => persona.id === id))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
     if (seated.length === 0) return;
-    const question = currentRoom.messages.find((message) => message.authorId === USER_HANDLE)?.body ?? currentRoom.title;
+    const question =
+      currentRoom.messages.find((message) => message.authorId === USER_HANDLE)?.body ??
+      currentRoom.title;
     startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
   };
 
-  // Secrets live encrypted server-side (per account); the browser holds a decrypted copy in
-  // memory for the tab only, so direct BYOK calls keep working. A reload re-fetches them from
-  // the authenticated route — they are never in storage, the bundle, or logs.
-  const [keys, setKeys] = useState<Partial<Record<ModelProvider, string>>>({});
-
-  // Restore this account's connected providers on sign-in: connected state + chosen model +
-  // in-memory secrets. Scoped by the session (the route reads the email server-side), so
-  // switching accounts never bleeds the previous account's keys into the new one.
+  // Restore connected providers (all 8 built-ins + any custom OpenAI/Anthropic endpoints).
   useEffect(() => {
     if (!authUser) return;
     let cancelled = false;
     void fetch('/api/providers', { credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : null))
-      .then((body: { providers?: { provider: string; model: string; key?: string }[] } | null) => {
-        if (cancelled || !body?.providers) return;
-        const restored: Partial<Record<ModelProvider, string>> = {};
-        const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
-        for (const entry of body.providers) {
-          if (entry.provider === 'anthropic' || entry.provider === 'openai' || entry.provider === 'google') {
+      .then(
+        (
+          body: {
+            providers?: {
+              provider: string;
+              model: string;
+              models?: string[];
+              label?: string;
+              protocol?: 'anthropic' | 'openai' | 'google';
+              baseUrl?: string;
+              key?: string;
+            }[];
+          } | null
+        ) => {
+          if (cancelled || !body?.providers) return;
+          const restored: Record<string, string> = {};
+          const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
+          for (const entry of body.providers) {
             if (entry.key) restored[entry.provider] = entry.key;
           }
+          setKeys(restored);
+          setApiKeys(() => {
+            const builtinUpdated = initialApiKeys.map((item) => {
+              const entry = saved.get(item.provider);
+              if (!entry) return item;
+              return {
+                ...item,
+                connected: true,
+                modelName: entry.model,
+                models:
+                  entry.models && entry.models.length > 0
+                    ? entry.models
+                    : [entry.model, ...(item.models ?? [])],
+              };
+            });
+            const builtinIds = new Set(initialApiKeys.map((item) => item.provider));
+            const customEntries: ApiKeyConfig[] = body.providers!
+              .filter((entry) => !builtinIds.has(entry.provider))
+              .map((entry) => ({
+                provider: entry.provider,
+                modelName: entry.model,
+                models: entry.models && entry.models.length > 0 ? entry.models : [entry.model],
+                connected: true,
+                label: entry.label ?? entry.provider,
+                protocol: entry.protocol ?? (entry.provider.startsWith('custom:anthropic:') ? 'anthropic' : 'openai'),
+                baseUrl: entry.baseUrl ?? '',
+                isCustom: true,
+              }));
+            return [...builtinUpdated, ...customEntries];
+          });
         }
-        setKeys(restored);
-        setApiKeys((value) =>
-          value.map((item) => {
-            const entry = saved.get(item.provider);
-            return entry ? { ...item, connected: true, modelName: entry.model } : item;
-          })
-        );
-      })
-      .catch(() => {
-        // Offline / store unconfigured: keep the seeded disconnected state, never crash boot.
-      });
+      )
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [authUser]);
 
-  // Load this account's bots once sign-in settles. The route scopes by session email.
+  // Load account bots on sign-in.
   useEffect(() => {
     if (!authUser) return;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset readiness when the account changes, before the fetch settles
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset readiness when account changes
     setBotsReady(false);
     void fetch('/api/bots', { credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : null))
@@ -1155,35 +1504,52 @@ const purgeSessions = () => {
     };
   }, [authUser]);
 
-  // Load this account's role + plan once sign-in settles. The route scopes by session email.
+  // Load durable solo & group conversations on sign-in.
   useEffect(() => {
     if (!authUser) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- plan refresh mirrors server state, not local UI state
+    let cancelled = false;
+    void fetch('/api/conversations', { credentials: 'same-origin' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { conversations?: SavedConversation[] } | null) => {
+        if (cancelled || !body?.conversations) return;
+        setConversations(body.conversations);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
+    if (!authUser) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync server plan state
     void refreshPlan();
   }, [authUser, refreshPlan]);
 
-  // Landed back from payOS as a confirmed payment (`/checkout/return` sends `/?paid=1`):
-  // toast once, then drop the flag so a refresh does not re-toast.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     if (url.searchParams.get('paid') !== '1') return;
     url.searchParams.delete('paid');
     window.history.replaceState(null, '', url.toString());
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot toast on mount, guarded by ?paid=1 flag
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot toast on return
     showToast('toastPaymentSuccess');
   }, []);
 
-  // Mirror bots into the advisor roster so single-bot chat reuses runTurn/byok unchanged.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- roster mirrors server-owned bots, not local UI state
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- mirror server bots into personas roster
     setPersonas((value) => [
       ...value.filter((persona) => !persona.id.startsWith('bot:')),
-      ...bots.map(botToPersona),
+      ...bots.map((bot, idx) => botToPersona(bot, idx)),
     ]);
   }, [bots]);
 
-  const createBot = async (input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
+  const createBot = async (input: {
+    name: string;
+    instruction: string;
+    provider: ModelProvider;
+    model: string;
+  }): Promise<UserBot | null> => {
     try {
       const response = await fetch('/api/bots', {
         method: 'POST',
@@ -1200,7 +1566,10 @@ const purgeSessions = () => {
     }
   };
 
-  const updateBot = async (id: string, input: { name: string; instruction: string; provider: ModelProvider; model: string }): Promise<UserBot | null> => {
+  const updateBot = async (
+    id: string,
+    input: { name: string; instruction: string; provider: ModelProvider; model: string }
+  ): Promise<UserBot | null> => {
     try {
       const response = await fetch('/api/bots', {
         method: 'PATCH',
@@ -1223,33 +1592,169 @@ const purgeSessions = () => {
       credentials: 'same-origin',
     }).catch(() => undefined);
     setBots((value) => value.filter((bot) => bot.id !== id));
+    const soloThreads = conversations.filter((c) => c.kind === 'solo' && c.botId === id);
+    for (const thread of soloThreads) {
+      void deleteConversationById(thread.id);
+    }
   };
 
-  const openBotChat = (botId: string) => {
-    const persona = personas.find((item) => item.id === botPersonaId(botId)) ?? bots.map(botToPersona).find((item) => item.id === botPersonaId(botId));
+  const createSoloThread = async (botId: string, title?: string) => {
+    const bot = bots.find((item) => item.id === botId);
+    const persona =
+      personas.find((item) => item.id === botPersonaId(botId)) ??
+      (bot ? botToPersona(bot, 0) : undefined);
     if (!persona) return;
-    joinRoom([persona], 'round-robin', persona.name);
+    const threadTitle = title?.trim() || copy[language].soloNewThread;
+
+    if (authUser) {
+      try {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'solo',
+            botId,
+            title: threadTitle,
+            mode: 'round-robin',
+            roster: [persona.id],
+            messages: [],
+          }),
+        });
+        if (res.ok) {
+          const body = (await res.json()) as { conversation: SavedConversation };
+          setConversations((prev) => [body.conversation, ...prev]);
+          loadConversationIntoRoom(body.conversation);
+          return;
+        }
+      } catch {}
+    }
+
+    const fallback: SavedConversation = {
+      id: `local-solo-${Date.now()}`,
+      kind: 'solo',
+      botId,
+      title: threadTitle,
+      mode: 'round-robin',
+      roster: [persona.id],
+      messages: [],
+      turns: 0,
+      stoppedBy: null,
+      failures: [],
+      held: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setConversations((prev) => [fallback, ...prev]);
+    loadConversationIntoRoom(fallback);
   };
 
-  const connectApiKey = async (provider: ModelProvider, key: string, model: string): Promise<boolean> => {
+  const openBotChat = (botId: string, conversationId?: string) => {
+    if (conversationId) {
+      const specific = conversations.find((c) => c.id === conversationId && c.kind === 'solo');
+      if (specific) {
+        loadConversationIntoRoom(specific);
+        return;
+      }
+    }
+    const existing = conversations.find((c) => c.kind === 'solo' && c.botId === botId);
+    if (existing) {
+      loadConversationIntoRoom(existing);
+      return;
+    }
+    const bot = bots.find((item) => item.id === botId);
+    void createSoloThread(botId, bot?.name ?? copy[language].soloNewThread);
+  };
+
+  const connectApiKey = async (
+    provider: ModelProvider,
+    key: string,
+    model: string,
+    meta: ConnectProviderMeta = {}
+  ): Promise<boolean> => {
+    const modelList =
+      meta.models && meta.models.length > 0
+        ? [...new Set([model, ...meta.models])]
+        : [model];
     try {
       const response = await fetch('/api/providers', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider, model, key }),
+        body: JSON.stringify({
+          provider,
+          model,
+          models: modelList,
+          key,
+          ...(meta.label ? { label: meta.label } : {}),
+          ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
+        }),
       });
       if (!response.ok) return false;
     } catch {
       return false;
     }
     setKeys((value) => ({ ...value, [provider]: key }));
-    setApiKeys((value) =>
-      value.map((item) => (item.provider === provider ? { ...item, connected: true, modelName: model } : item))
-    );
-    showToast('toastProviderOn', { provider });
+    setApiKeys((value) => {
+      const exists = value.some((item) => item.provider === provider);
+      if (exists) {
+        return value.map((item) =>
+          item.provider === provider
+            ? {
+                ...item,
+                connected: true,
+                modelName: model,
+                models: modelList,
+                ...(meta.label ? { label: meta.label } : {}),
+                ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
+              }
+            : item
+        );
+      }
+      return [
+        ...value,
+        {
+          provider,
+          modelName: model,
+          models: modelList,
+          connected: true,
+          label: meta.label ?? provider,
+          protocol: meta.protocol ?? 'openai',
+          baseUrl: meta.baseUrl ?? '',
+          isCustom: true,
+        },
+      ];
+    });
+    showToast('toastProviderOn', { provider: meta.label ?? provider });
     return true;
   };
+
+  const updateProviderModels = async (
+    provider: ModelProvider,
+    model: string,
+    models: string[]
+  ): Promise<boolean> => {
+    const deduped = [...new Set([model, ...models])];
+    try {
+      const response = await fetch('/api/providers', {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider, model, models: deduped }),
+      });
+      if (!response.ok) return false;
+    } catch {
+      return false;
+    }
+    setApiKeys((value) =>
+      value.map((item) =>
+        item.provider === provider ? { ...item, modelName: model, models: deduped } : item
+      )
+    );
+    return true;
+  };
+
+  const getProviderSecret = (provider: ModelProvider): string | undefined => keys[provider];
 
   const removeApiKey = async (provider: ModelProvider) => {
     await fetch(`/api/providers?provider=${encodeURIComponent(provider)}`, {
@@ -1262,17 +1767,19 @@ const purgeSessions = () => {
       return next;
     });
     setApiKeys((value) =>
-      value.map((item) => (item.provider === provider ? { ...item, connected: false } : item))
+      value
+        .filter((item) => !(item.provider === provider && item.isCustom))
+        .map((item) => (item.provider === provider ? { ...item, connected: false } : item))
     );
     showToast('toastProviderOff', { provider });
   };
 
   const revokeAllKeys = async () => {
-    await fetch('/api/providers', { method: 'DELETE', credentials: 'same-origin' }).catch(() =>
-      undefined
+    await fetch('/api/providers', { method: 'DELETE', credentials: 'same-origin' }).catch(
+      () => undefined
     );
     setKeys({});
-    setApiKeys((value) => value.map((item) => ({ ...item, connected: false })));
+    setApiKeys(initialApiKeys.map((item) => ({ ...item, connected: false })));
     showToast('toastProvidersCleared');
   };
 
@@ -1281,8 +1788,7 @@ const purgeSessions = () => {
     localizedSessions[0] ||
     localizeSession(initialSessions[0], language);
 
-
-
+  const presetPersonaCount = personas.filter((p) => !p.id.startsWith('bot:')).length;
 
   return (
     <AppContext.Provider
@@ -1313,12 +1819,31 @@ const purgeSessions = () => {
         addPersona,
         bots,
         botsReady,
+        botCap,
+        canCreateBot: bots.length < botCap,
+        disabledBotIds,
+        isBotDisabled,
         createBot,
         updateBot,
         deleteBot,
         openBotChat,
+        createSoloThread,
+        conversations,
+        createGroupChat,
+        openGroupChat,
+        updateGroupChat,
+        renameConversation,
+        deleteConversationById,
+        editingGroupId,
+        openEditGroup: (id: string) => {
+          setEditingGroupId(id);
+          setIsJoinRoomOpen(true);
+        },
+        closeEditGroup: () => setEditingGroupId(null),
         apiKeys,
         connectApiKey,
+        updateProviderModels,
+        getProviderSecret,
         removeApiKey,
         revokeAllKeys,
         isFrameworkModalOpen,
@@ -1328,6 +1853,7 @@ const purgeSessions = () => {
         openCounterDraftModal: () => setIsCounterDraftModalOpen(true),
         closeCounterDraftModal: () => setIsCounterDraftModalOpen(false),
         currentPlanId,
+        planExpiresAt,
         authUser,
         isAdmin,
         isFounder,
@@ -1342,15 +1868,22 @@ const purgeSessions = () => {
         downgradeToPro,
         goToPricing,
         personaCap,
-        canAddPersona: personas.length < personaCap,
+        canAddPersona: presetPersonaCount < personaCap,
         isJoinRoomOpen,
-        openJoinRoom: () => setIsJoinRoomOpen(true),
-        closeJoinRoom: () => setIsJoinRoomOpen(false),
+        openJoinRoom: () => {
+          setEditingGroupId(null);
+          setIsJoinRoomOpen(true);
+        },
+        closeJoinRoom: () => {
+          setEditingGroupId(null);
+          setIsJoinRoomOpen(false);
+        },
         joinRoom,
         startCouncilChat,
         wrapUpRoom,
         openRoomConclusion,
         currentRoom,
+        roomRosterPartition,
         sendMessage,
         stopRoom,
         clearRoom,
@@ -1360,6 +1893,9 @@ const purgeSessions = () => {
         isReadingLink,
         isReadingFile,
         attachFiles,
+        webSearchEnabled,
+        setWebSearchEnabled,
+        isSearchingWeb,
         toastMessage,
         showToast,
       }}

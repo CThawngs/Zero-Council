@@ -259,3 +259,18 @@ export const sweepStaleOrders = async (): Promise<number> => {
   if (removed > 0) await writeAll(orders);
   return removed;
 };
+
+export const listOrdersByUser = async (userEmail: string): Promise<Order[]> => {
+  assertStoreAvailable();
+  const email = userEmail.trim().toLowerCase();
+  if (supabaseConfig()) {
+    const rows = (await request(
+      `${TABLE}?user_email=eq.${encodeURIComponent(email)}&select=*&order=created_at.desc`
+    )) as OrderRow[];
+    return rows.map(toOrder);
+  }
+  const orders = await readAll();
+  return Object.values(orders)
+    .filter((order) => order.userEmail?.toLowerCase() === email)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+};

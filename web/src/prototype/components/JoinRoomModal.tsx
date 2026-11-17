@@ -1,62 +1,116 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { planById } from '../data/plans';
-import type { AdvisorPersona } from '../types';
-import { Bot, Check, Eye, LayoutList, MessagesSquare, Repeat } from 'lucide-react';
-import { Modal } from './Modal';
+import { Bot, Check, Eye, LayoutList, Lock, MessagesSquare } from 'lucide-react';
 import type { ChatMode } from '../chat/engine';
+import type { AdvisorPersona, SavedConversation } from '../types';
 import type { CommunicationMode } from '@/lib/deliberation/engine';
+import { Modal } from './Modal';
 
-/**
- * Step 6 of the council flow: which advisors join this room, and how they take turns.
- *
- * The plan cap is enforced here rather than in the context, because this is the only place a
- * roster is chosen — a cap the user can simply route around by picking fewer advisors elsewhere
- * would not be a cap.
- */
 export const JoinRoomModal: React.FC = () => {
-  const { isJoinRoomOpen, closeJoinRoom, joinRoom, personas, currentPlanId, t } = useApp();
-  const cap = planById(currentPlanId).maxActiveAdvisors;
-  const defaultSelection = () => personas.slice(0, cap).map((persona) => persona.id);
-  const [selected, setSelected] = useState<string[]>(defaultSelection);
-  // Cách các cố vấn trao đổi với nhau
-  const [communicationMode, setCommunicationMode] =
-    useState<CommunicationMode>('independent');
+  const { isJoinRoomOpen, editingGroupId, conversations } = useApp();
+  const editingGroup = editingGroupId
+    ? conversations.find((c) => c.id === editingGroupId && c.kind === 'group')
+    : undefined;
+  const isOpen = isJoinRoomOpen || Boolean(editingGroup);
+  if (!isOpen) return null;
+  return (
+    <JoinRoomDialog
+      key={editingGroup ? `edit-${editingGroup.id}` : 'create-group'}
+      editingGroup={editingGroup}
+    />
+  );
+};
 
-  // Cách phân phối lượt phát biểu hiện tại
-  const [mode, setMode] = useState<ChatMode>('round-robin');
+const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editingGroup }) => {
+  const {
+    closeJoinRoom,
+    editingGroupId,
+    closeEditGroup,
+    updateGroupChat,
+    joinRoom,
+    personas,
+    isBotDisabled,
+    currentPlanId,
+    t,
+  } = useApp();
 
-  // Reset on close, not on open: an effect that writes state re-renders the whole tree for no
-  // reason, and `closeJoinRoom` is already an event handler this component owns.
+  const plan = planById(currentPlanId);
+  const cap = plan.maxActiveAdvisors;
+
+  const orderedPersonas = useMemo(() => {
+    const userBots = personas.filter((p) => p.id.startsWith('bot:'));
+    const presets = personas.filter((p) => !p.id.startsWith('bot:'));
+    return [...userBots, ...presets];
+  }, [personas]);
+
+  const activePersonas = useMemo(
+    () =>
+      orderedPersonas.filter((p) => {
+        if (!p.id.startsWith('bot:')) return true;
+        return !isBotDisabled(p.id.slice(4));
+      }),
+    [orderedPersonas, isBotDisabled]
+  );
+
+  const initialSelection = editingGroup
+    ? editingGroup.roster
+    : activePersonas
+        .slice(0, Math.min(Math.max(2, Math.min(activePersonas.length, 3)), cap))
+        .map((p) => p.id);
+
+  const [groupTitle, setGroupTitle] = useState(editingGroup?.title ?? '');
+  const [selected, setSelected] = useState<string[]>(initialSelection);
+  const [communicationMode, setCommunicationMode] = useState<CommunicationMode>(
+    editingGroup?.mode === 'panel' ? 'independent' : 'debate'
+  );
+  const [mode, setMode] = useState<ChatMode>(editingGroup?.mode ?? 'round-robin');
+  const [saving, setSaving] = useState(false);
+
   const dismiss = () => {
-    setSelected(defaultSelection());
-    setCommunicationMode('independent');
-    setMode('round-robin');
-    closeJoinRoom();
+    if (editingGroupId) {
+      closeEditGroup();
+    } else {
+      closeJoinRoom();
+    }
   };
 
   const toggle = (id: string) => {
-    setSelected((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : current.length >= cap
-          ? current
-          : [...current, id]
-    );
+    const isLockedBot = id.startsWith('bot:') && isBotDisabled(id.slice(4));
+    setSelected((current) => {
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+      if (isLockedBot || current.length >= cap) return current;
+      return [...current, id];
+    });
   };
 
   const atCap = selected.length >= cap;
+  const activeSelectedCount = selected.filter((id) => {
+    if (!id.startsWith('bot:')) return true;
+    return !isBotDisabled(id.slice(4));
+  }).length;
+  const meetsGroupMinimum =
+    selected.length >= 2 && (editingGroup ? selected.length >= 2 : activeSelectedCount >= 2);
 
-  const start = () => {
+  const submit = async () => {
+    if (!meetsGroupMinimum || saving) return;
+    if (editingGroup) {
+      setSaving(true);
+      await updateGroupChat(editingGroup.id, {
+        title: groupTitle.trim() || editingGroup.title,
+        mode,
+        roster: selected,
+      });
+      setSaving(false);
+      return;
+    }
     const roster = selected
-      .map((id) => personas.find((persona) => persona.id === id))
+      .map((id) => orderedPersonas.find((persona) => persona.id === id))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
-    if (roster.length === 0) return;
-    // Reset here too, or the next open pre-selects whatever the last room happened to use.
-    setSelected(defaultSelection());
-    setCommunicationMode('independent');
-    setMode('round-robin');
-    joinRoom(roster, mode);
+    if (roster.length < 2) return;
+    joinRoom(roster, mode, groupTitle.trim() || undefined);
   };
 
   const communicationModes = [
@@ -65,148 +119,189 @@ export const JoinRoomModal: React.FC = () => {
       title: t.modeIndependentTitle,
       body: t.modeIndependentBody,
       icon: Eye,
+      chatMode: 'panel' as ChatMode,
     },
     {
       id: 'debate' as const,
       title: t.modeDebateTitle,
       body: t.modeDebateBody,
       icon: MessagesSquare,
+      chatMode: 'round-robin' as ChatMode,
     },
     {
       id: 'chain' as const,
       title: t.modeChainTitle,
       body: t.modeChainBody,
       icon: LayoutList,
+      chatMode: 'round-robin' as ChatMode,
     },
   ];
 
   return (
     <Modal
-      isOpen={isJoinRoomOpen}
+      isOpen={true}
       onClose={dismiss}
-      title={t.joinTitle}
+      title={editingGroup ? t.groupEditTitle : t.joinTitle}
       description={t.joinBody}
       closeLabel={t.close}
       footer={
         <>
-          <button type="button" onClick={dismiss} className="button-secondary min-h-11 justify-center">
+          <button
+            type="button"
+            onClick={dismiss}
+            className="button-secondary min-h-11 justify-center"
+          >
             {t.cancel}
           </button>
           <button
             type="button"
-            onClick={start}
-            disabled={selected.length === 0}
+            id="group-chat-submit-btn"
+            onClick={() => void submit()}
+            disabled={!meetsGroupMinimum || saving}
             className="button-primary min-h-11 justify-center disabled:cursor-not-allowed disabled:opacity-45"
           >
             <MessagesSquare className="h-4 w-4" aria-hidden="true" />
-            {t.joinStart}
+            {editingGroup ? t.groupSaveChanges : t.joinStart}
           </button>
         </>
       }
     >
-      <fieldset className="space-y-3">
-        <legend className="field-label">{t.joinRoster}</legend>
-        <p id="join-cap-hint" className="text-xs leading-relaxed text-ink-muted">
-          {t.joinCap.replace('{used}', String(selected.length)).replace('{cap}', String(cap))} {t.joinOrderHint}
-        </p>
-        <ul className="grid gap-2 sm:grid-cols-2" aria-describedby="join-cap-hint">
-          {personas.map((persona) => {
-            const isSelected = selected.includes(persona.id);
-            // Disabled only when the cap is reached AND this advisor is not already in — a control
-            // that goes dead while you still need it to deselect someone is a bug, not a limit.
-            const isBlocked = atCap && !isSelected;
-            return (
-              <li key={persona.id}>
-                <button
-                  type="button"
-                  onClick={() => toggle(persona.id)}
-                  aria-pressed={isSelected}
-                  disabled={isBlocked}
-                  className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 ${
-                    isSelected ? 'border-brass bg-background' : 'border-border bg-background/50 hover:border-brass/50'
-                  }`}
-                >
-                  <span
-                    className="h-3 w-3 shrink-0 rounded-full"
-                    style={{ backgroundColor: persona.colorHex }}
-                    aria-hidden="true"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block min-w-0 truncate text-sm font-medium text-ink">{persona.name}</span>
-                    <span className="block min-w-0 truncate text-[11px] text-ink-muted">{persona.stance}</span>
-                  </span>
-                  {isSelected && (
-                    // The number IS the speaking order: the first advisor picked answers first when the
-                    // user does not @mention anyone. Showing it here is how that rule is discoverable.
+      <div className="space-y-5">
+        <label className="field">
+          <span className="field-label">{t.groupChatTitleLabel}</span>
+          <input
+            id="group-chat-title"
+            type="text"
+            value={groupTitle}
+            maxLength={100}
+            placeholder={t.groupChatTitlePlaceholder}
+            onChange={(event) => setGroupTitle(event.target.value)}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
+          />
+        </label>
+
+        <fieldset className="space-y-3">
+          <legend className="field-label">{t.joinRoster}</legend>
+          <p id="join-cap-hint" className="text-xs leading-relaxed text-ink-muted">
+            {t.joinCap
+              .replace('{used}', String(selected.length))
+              .replace('{cap}', String(cap))}{' '}
+            {t.joinOrderHint}
+          </p>
+
+          {!meetsGroupMinimum && (
+            <p
+              role="alert"
+              className="rounded-lg border border-brass/40 bg-brass/10 px-3 py-2 text-xs font-medium text-ink"
+            >
+              {t.groupMinTwoHint.replace('{count}', String(selected.length))}
+            </p>
+          )}
+
+          <ul className="grid gap-2 sm:grid-cols-2" aria-describedby="join-cap-hint">
+            {orderedPersonas.map((persona) => {
+              const isSelected = selected.includes(persona.id);
+              const isLockedBot =
+                persona.id.startsWith('bot:') && isBotDisabled(persona.id.slice(4));
+              const isBlocked = (atCap && !isSelected) || (isLockedBot && !isSelected);
+              return (
+                <li key={persona.id}>
+                  <button
+                    type="button"
+                    data-group-bot-option={persona.id}
+                    onClick={() => toggle(persona.id)}
+                    aria-pressed={isSelected}
+                    disabled={isBlocked}
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 ${
+                      isSelected
+                        ? 'border-brass bg-background'
+                        : 'border-border bg-background/50 hover:border-brass/50'
+                    }`}
+                  >
                     <span
-                      className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold"
-                      style={{ color: 'var(--color-accent-ink)' }}
-                      aria-label={`${selected.indexOf(persona.id) + 1}`}
-                    >
-                      {selected.indexOf(persona.id) + 1}
+                      className="h-3 w-3 shrink-0 rounded-full"
+                      style={{ backgroundColor: persona.colorHex }}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-ink">
+                          {persona.name}
+                        </span>
+                        {isLockedBot && (
+                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-brass">
+                            <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                            {t.botDisabledBadge}
+                          </span>
+                        )}
+                      </span>
+                      <span className="block min-w-0 truncate text-[11px] text-ink-muted">
+                        {persona.stance}
+                      </span>
                     </span>
-                  )}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </fieldset>
-
-      <fieldset className="mt-6 space-y-3">
-        <legend className="field-label">
-          {t.modeLabel}
-        </legend>
-
-        <p className="text-xs leading-relaxed text-ink-muted">
-          {t.modeHint}
-        </p>
-
-        <div className="grid gap-2">
-          {communicationModes.map(({ id, title, body, icon: Icon }) => {
-            const isSelected = communicationMode === id;
-
-            return (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setCommunicationMode(id)}
-                aria-pressed={isSelected}
-                className={`option-card relative w-full text-left ${
-                  isSelected ? 'option-card-selected' : ''
-                }`}
-              >
-                <span className="flex items-start gap-3">
-                  <span className="icon-tile shrink-0">
-                    <Icon className="h-4 w-4" aria-hidden="true" />
-                  </span>
-
-                  <span className="min-w-0 flex-1">
-                    <span className="block w-full pr-24 font-medium text-ink">
-                      {title}
-                    </span>
-
                     {isSelected && (
-                      <span className="badge-success absolute right-4 top-4 shrink-0">
-                        <Check className="h-3 w-3" aria-hidden="true" />
-                        {t.selected}
+                      <span
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold"
+                        style={{ color: 'var(--color-accent-ink)' }}
+                        aria-label={`${selected.indexOf(persona.id) + 1}`}
+                      >
+                        {selected.indexOf(persona.id) + 1}
                       </span>
                     )}
-                    <span className="mt-2 block text-xs leading-relaxed text-ink-muted">
-                      {body}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </fieldset>
+
+        <fieldset className="space-y-3">
+          <legend className="field-label">{t.modeLabel}</legend>
+          <p className="text-xs leading-relaxed text-ink-muted">{t.modeHint}</p>
+          <div className="grid gap-2">
+            {communicationModes.map(({ id, title, body, icon: Icon, chatMode }) => {
+              const isSelected = communicationMode === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setCommunicationMode(id);
+                    setMode(chatMode);
+                  }}
+                  aria-pressed={isSelected}
+                  className={`option-card relative w-full text-left ${
+                    isSelected ? 'option-card-selected' : ''
+                  }`}
+                >
+                  <span className="flex items-start gap-3">
+                    <span className="icon-tile shrink-0">
+                      <Icon className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block w-full pr-24 font-medium text-ink">{title}</span>
+                      {isSelected && (
+                        <span className="badge-success absolute right-4 top-4 shrink-0">
+                          <Check className="h-3 w-3" aria-hidden="true" />
+                          {t.selected}
+                        </span>
+                      )}
+                      <span className="mt-2 block text-xs leading-relaxed text-ink-muted">
+                        {body}
+                      </span>
                     </span>
                   </span>
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </fieldset>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
-      <p className="mt-5 flex items-start gap-2 rounded-lg border border-border bg-background/60 p-3 text-xs leading-relaxed text-ink-muted">
-        <Bot className="mt-0.5 h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
-        {t.joinA2a}
-      </p>
+        <p className="flex items-start gap-2 rounded-lg border border-border bg-background/60 p-3 text-xs leading-relaxed text-ink-muted">
+          <Bot className="mt-0.5 h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
+          {t.joinA2a}
+        </p>
+      </div>
     </Modal>
   );
 };

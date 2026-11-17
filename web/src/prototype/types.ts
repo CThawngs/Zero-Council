@@ -1,4 +1,5 @@
 import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
+import type { ChatMessage, ChatMode, TurnFailure, WhyStop } from './chat/engine';
 
 export type ViewType =
   | 'overview'
@@ -17,15 +18,8 @@ export type ViewType =
   | 'room-summary'
   | 'set-password'
   | 'chat-room'
-  | 'bot-wizard'
+  | 'bot-wizard';
 
-/**
- * Legal documents, one view each.
- *
- * `'pricing'` used to be a view of its own. It is gone: the pricing table is a section of the
- * landing page, and buying opens the checkout drawer from there. A separate pricing screen meant
- * the visitor left the page to find out what things cost, then had to find their way back.
- */
 export const LEGAL_DOCUMENTS = [
   'terms',
   'privacy',
@@ -66,9 +60,29 @@ export const decisionFrameworkOf = (id: FrameworkId): DecisionFramework => {
   return 'Good / Normal / Bad Scenarios';
 };
 
-/** Real providers. Model ids are the wire ids sent to the provider, not display labels. */
-export type SupportedModel = 'claude-sonnet-4-5' | 'gpt-4o' | 'gpt-4o-mini' | 'gemini-2.5-flash';
-export type ModelProvider = 'anthropic' | 'openai' | 'google';
+/** Built-in provider slugs + custom:(openai|anthropic):<slug> IDs. */
+export type BuiltinModelProvider =
+  | 'anthropic'
+  | 'openai'
+  | 'google'
+  | 'groq'
+  | 'xai'
+  | 'openrouter'
+  | 'nvidia'
+  | 'deepseek';
+
+export type ModelProvider = BuiltinModelProvider | (string & {});
+
+export type SupportedModel =
+  | 'claude-sonnet-4-5'
+  | 'gpt-4o'
+  | 'gpt-4o-mini'
+  | 'gemini-2.5-flash'
+  | 'llama-3.3-70b-versatile'
+  | 'grok-2-latest'
+  | 'openai/gpt-4o-mini'
+  | 'meta/llama-3.1-70b-instruct'
+  | 'deepseek-chat';
 
 export interface AdvisorPersona {
   id: string;
@@ -94,20 +108,14 @@ export interface ScenarioBranch {
 export interface DeliberationSession {
   id: string;
   title: string;
-  /**
-   * Set once the user renames a session: their text then wins over the seed
-   * title localization, which otherwise re-translates the canned title.
-   */
   titlePinned?: boolean;
   summary: string;
   framework: DecisionFramework;
-  /** How advisors talk to each other. Applies to rounds started from now on. */
   mode: CommunicationMode;
   timestamp: string;
   relativeTime: string;
   status: 'Concluded' | 'Deliberating' | 'Active';
   advisors: AdvisorPersona[];
-  /** Ordered, 1-based. Never empty: the first question is round 1. */
   rounds: Round[];
   scenarios: {
     good: ScenarioBranch;
@@ -118,9 +126,15 @@ export interface DeliberationSession {
 
 export interface ApiKeyConfig {
   provider: ModelProvider;
-  /** Wire model id from the live /v1/models list — any provider-returned id, not a fixed catalog. */
+  /** Default wire model id selected for this provider. */
   modelName: string;
+  /** Full list of discovered + custom-tested model ids available on this provider. */
+  models?: string[];
   connected: boolean;
+  label?: string;
+  protocol?: 'anthropic' | 'openai' | 'google';
+  baseUrl?: string;
+  isCustom?: boolean;
 }
 
 /** A user-owned AI bot: one persona, one brain. Persisted server-side per account. */
@@ -134,9 +148,26 @@ export interface UserBot {
   updatedAt?: string;
 }
 
-// Cookies constants
-/** 
- * Tên các cookie được lưu chung một chỗ cho dễ sửa 
- * */
-export const cookieLanguage = 'zc-lang'
-export const cookieTheme = 'zc-theme'
+/** Durable chat conversation: either a 1-on-1 Solo Bot thread or a Multi-Bot Group Chat (>= 2 bots). */
+export type ConversationKind = 'solo' | 'group';
+
+export interface SavedConversation {
+  id: string;
+  kind: ConversationKind;
+  /** Set when `kind === 'solo'` (raw UserBot id). */
+  botId?: string;
+  title: string;
+  mode: ChatMode;
+  /** Persona IDs (`bot:<id>` or preset advisor IDs). Group chats require >= 2 entries. */
+  roster: string[];
+  messages: ChatMessage[];
+  turns: number;
+  stoppedBy: WhyStop | null;
+  failures: TurnFailure[];
+  held: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const cookieLanguage = 'zc-lang';
+export const cookieTheme = 'zc-theme';

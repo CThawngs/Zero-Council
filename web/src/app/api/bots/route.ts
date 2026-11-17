@@ -1,7 +1,9 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
+import { effectivePlan } from '@/lib/store/account';
 import { createBot, deleteBot, listBots, updateBot } from '@/lib/store/bots';
 import { listProviderKeys } from '@/lib/store/providerKeys';
 import { validateBotInput } from '@/lib/store/botValidation';
+import { planById } from '@/prototype/data/plans';
 
 /** The caller's own bots. The account email comes from the session, never the body. */
 export async function GET() {
@@ -16,10 +18,14 @@ export async function GET() {
   }
 }
 
-/** A bot is only valid when its provider+model matches a connected key on this account. */
+/** A bot is valid when its provider is connected on this account and the model is in its model list. */
 const assertBrainConnected = async (email: string, provider: string, model: string) => {
   const keys = await listProviderKeys(email);
-  return keys.some((entry) => entry.provider === provider && entry.model === model);
+  return keys.some(
+    (entry) =>
+      entry.provider === provider &&
+      (entry.model === model || (entry.models ?? []).includes(model))
+  );
 };
 
 export async function POST(request: Request) {
@@ -34,6 +40,12 @@ export async function POST(request: Request) {
   const parsed = validateBotInput((body ?? {}) as Parameters<typeof validateBotInput>[0]);
   if ('error' in parsed) return Response.json({ error: parsed.error }, { status: 400 });
   try {
+    const planRecord = await effectivePlan(user.email).catch(() => null);
+    const plan = planById(planRecord?.planId ?? 'free');
+    const existing = await listBots(user.email);
+    if (existing.length >= plan.maxBots) {
+      return Response.json({ error: 'BOT_CAP_REACHED', cap: plan.maxBots }, { status: 403 });
+    }
     if (!(await assertBrainConnected(user.email, parsed.bot.provider, parsed.bot.model))) {
       return Response.json({ error: 'MODEL_NOT_CONNECTED' }, { status: 400 });
     }

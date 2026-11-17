@@ -1,0 +1,16 @@
+{
+  "founder@example.com|b3bbe000-2e0c-42ec-91be-cc427f9884fd": {
+    "id": "b3bbe000-2e0c-42ec-91be-cc427f9884fd",
+    "kind": "group",
+    "title": "Invalid Single Bot Group",
+    "roster": [
+      "bot:1"
+    ],
+    "turns": 0,
+    "stoppedBy": null,
+    "failures": [],
+    "held": [],
+    "createdAt": "2026-11-17T18:07:37.948Z",
+    "updatedAt": "2026-11-17T18:07:37.948Z"
+  }
+}

@@ -2,25 +2,40 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
-import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from 'lucide-react';
 import { WORKSPACE_NAV } from '../navigation';
 
-/**
- * The single desktop navigation surface. It renders `WORKSPACE_NAV`, which the
- * mobile panel in Header.tsx also renders — one array, two presentations, no
- * second hand-maintained copy to drift.
- *
- * Below the nav sits the Grok-style council list: every session the account
- * has made, open / rename / delete from the bar itself. Rename is inline
- * (Enter commits, Escape cancels), delete is a two-step inline confirm so a
- * hover-speed click cannot wipe a council.
- */
 export const Sidebar: React.FC = () => {
-  const { bots, currentSessionId, currentView, deleteSession, isAdmin, language, openBotChat, openJoinRoom, renameSession, setCurrentSessionId, setCurrentView, sessions, t } = useApp();
+  const {
+    bots,
+    botCap,
+    isBotDisabled,
+    conversations,
+    currentRoom,
+    currentSessionId,
+    currentView,
+    deleteConversationById,
+    deleteSession,
+    isAdmin,
+    language,
+    openBotChat,
+    openEditGroup,
+    openGroupChat,
+    openJoinRoom,
+    renameSession,
+    setCurrentSessionId,
+    setCurrentView,
+    sessions,
+    t,
+  } = useApp();
+
   const labels = translations[language];
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [confirmingGroupId, setConfirmingGroupId] = useState<string | null>(null);
+
+  const groupChats = conversations.filter((c) => c.kind === 'group');
 
   const go = (view: ViewType) => {
     setCurrentView(view);
@@ -45,10 +60,19 @@ export const Sidebar: React.FC = () => {
 
   return (
     <aside className="sticky top-[76px] hidden h-[calc(100dvh-76px)] w-72 shrink-0 border-r border-border bg-surface-2/50 p-4 lg:flex lg:flex-col">
-      <button type="button" onClick={openJoinRoom} className="button-primary mb-5 w-full justify-center">
-        <Plus className="h-4 w-4" aria-hidden="true" /> {labels.nav.newDeliberation}
+      <button
+        type="button"
+        id="sidebar-new-group-btn"
+        onClick={openJoinRoom}
+        className="button-primary mb-5 w-full justify-center"
+      >
+        <Plus className="h-4 w-4" aria-hidden="true" /> {t.newGroupChat}
       </button>
-      <nav className="grid min-w-0 grid-cols-1 gap-1 overflow-y-auto overflow-x-hidden" aria-label={t.workspaceNavigation}>
+
+      <nav
+        className="grid min-w-0 grid-cols-1 gap-1 overflow-y-auto overflow-x-hidden pr-0.5"
+        aria-label={t.workspaceNavigation}
+      >
         {WORKSPACE_NAV.map((group) => (
           <div key={group.labelKey} className="min-w-0">
             <p className="nav-group-label">{labels.navGroup[group.labelKey]}</p>
@@ -69,27 +93,52 @@ export const Sidebar: React.FC = () => {
           </div>
         ))}
 
+        {/* Solo 1-on-1 AI Bots */}
         <div className="mt-3 min-w-0">
-          <p className="nav-group-label">{t.botsTitle}</p>
+          <div className="flex items-center justify-between pr-2">
+            <p className="nav-group-label">{t.botsTitle}</p>
+            <span className="text-[10px] font-semibold text-ink-muted">
+              {bots.length}/{botCap}
+            </span>
+          </div>
           {bots.length === 0 ? (
             <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.botsEmpty}</p>
           ) : (
             <ul className="grid grid-cols-1 gap-1">
-              {bots.map((bot) => (
-                <li key={bot.id}>
-                  <button
-                    type="button"
-                    onClick={() => openBotChat(bot.id)}
-                    className="min-h-9 w-full truncate rounded-md px-2 text-left text-sm text-ink-muted hover:text-ink"
-                  >
-                    {bot.name}
-                  </button>
-                </li>
-              ))}
+              {bots.map((bot) => {
+                const locked = isBotDisabled(bot.id);
+                const isActive =
+                  currentView === 'chat-room' &&
+                  currentRoom?.kind === 'solo' &&
+                  currentRoom?.botId === bot.id;
+                return (
+                  <li key={bot.id}>
+                    <button
+                      type="button"
+                      data-sidebar-bot={bot.id}
+                      onClick={() => openBotChat(bot.id)}
+                      className={`flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition ${
+                        isActive
+                          ? 'bg-surface font-semibold text-ink'
+                          : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      <span className="min-w-0 flex-1 truncate">{bot.name}</span>
+                      {locked && (
+                        <Lock
+                          className="h-3.5 w-3.5 shrink-0 text-brass"
+                          aria-label={t.botDisabledBadge}
+                        />
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <button
             type="button"
+            id="sidebar-new-bot-btn"
             onClick={() => go('bot-wizard')}
             className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-brass hover:text-ink"
           >
@@ -106,20 +155,118 @@ export const Sidebar: React.FC = () => {
           ) : null}
         </div>
 
+        {/* Multi-Bot Group Chats (>= 2 bots) */}
+        <div className="mt-3 min-w-0">
+          <p className="nav-group-label">{t.groupChatsTitle}</p>
+          {groupChats.length === 0 ? (
+            <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">
+              {t.groupChatsEmpty}
+            </p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-1">
+              {groupChats.map((group) => {
+                const isActive =
+                  currentView === 'chat-room' && currentRoom?.conversationId === group.id;
+                const isConfirming = confirmingGroupId === group.id;
+                return (
+                  <li
+                    key={group.id}
+                    data-sidebar-group={group.id}
+                    className={`group flex min-w-0 items-center gap-1 rounded-lg px-1 ${
+                      isActive ? 'bg-surface' : ''
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => openGroupChat(group.id)}
+                      className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 truncate rounded-md px-2 text-left text-sm ${
+                        isActive ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink'
+                      }`}
+                    >
+                      <Users className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
+                      <span className="truncate">{group.title}</span>
+                      <span className="ml-auto shrink-0 text-[10px] text-ink-muted">
+                        {group.roster.length}
+                      </span>
+                    </button>
+
+                    {isConfirming ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void deleteConversationById(group.id);
+                            setConfirmingGroupId(null);
+                          }}
+                          aria-label={t.deleteSession}
+                          className="icon-button min-h-8 min-w-8 text-terracotta hover:bg-terracotta/10"
+                        >
+                          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingGroupId(null)}
+                          aria-label={t.cancel}
+                          className="icon-button min-h-8 min-w-8"
+                        >
+                          <X className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => openEditGroup(group.id)}
+                          aria-label={t.groupEditTitle}
+                          className="icon-button min-h-8 min-w-8 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
+                        >
+                          <Settings2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmingGroupId(group.id)}
+                          aria-label={t.deleteSession}
+                          className="icon-button min-h-8 min-w-8 opacity-0 transition hover:bg-terracotta/10 hover:text-terracotta group-hover:opacity-100 focus-visible:opacity-100"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <button
+            type="button"
+            onClick={openJoinRoom}
+            className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-brass hover:text-ink"
+          >
+            <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {t.newGroupChat}
+          </button>
+        </div>
+
+        {/* Deliberation Council Sessions */}
         <div className="mt-3 min-w-0">
           <p className="nav-group-label">{t.councilsTitle}</p>
           {sessions.length === 0 ? (
-            <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.emptySessionsBody}</p>
+            <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">
+              {t.emptySessionsBody}
+            </p>
           ) : (
             <ul className="grid grid-cols-1 gap-1">
               {sessions.map((session) => {
-                const isActive = currentView === 'session-concluded' && currentSessionId === session.id;
+                const isActive =
+                  currentView === 'session-concluded' && currentSessionId === session.id;
                 const isEditing = editingId === session.id;
                 const isConfirming = confirmingId === session.id;
                 return (
                   <li
                     key={session.id}
-                    className={`group flex min-w-0 items-center gap-1 rounded-lg px-1 ${isActive ? 'bg-surface' : ''}`}
+                    className={`group flex min-w-0 items-center gap-1 rounded-lg px-1 ${
+                      isActive ? 'bg-surface' : ''
+                    }`}
                   >
                     {isEditing ? (
                       <>
@@ -157,7 +304,9 @@ export const Sidebar: React.FC = () => {
                           type="button"
                           onClick={() => openSession(session.id)}
                           aria-current={isActive ? 'page' : undefined}
-                          className={`min-h-9 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm ${isActive ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink'}`}
+                          className={`min-h-9 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm ${
+                            isActive ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink'
+                          }`}
                         >
                           {session.title}
                         </button>
@@ -165,7 +314,10 @@ export const Sidebar: React.FC = () => {
                           <>
                             <button
                               type="button"
-                              onClick={() => { deleteSession(session.id); setConfirmingId(null); }}
+                              onClick={() => {
+                                deleteSession(session.id);
+                                setConfirmingId(null);
+                              }}
                               aria-label={t.deleteSession}
                               className="icon-button min-h-9 min-w-9 text-terracotta hover:bg-terracotta/10"
                             >
@@ -209,6 +361,7 @@ export const Sidebar: React.FC = () => {
           )}
         </div>
       </nav>
+
       <div className="mt-auto rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink-muted">
         <p className="font-bold text-ink">{t.localBadge}</p>
         <p className="mt-1">{t.boundaryShort}</p>

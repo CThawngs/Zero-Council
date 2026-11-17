@@ -77,7 +77,7 @@ export interface ChatBot {
   name: string;
 }
 
-export type AttachmentKind = 'link' | 'image' | 'file';
+export type AttachmentKind = 'link' | 'image' | 'video' | 'file';
 
 /**
  * Something the human pinned to a message, the way a Messenger attachment is pinned.
@@ -102,6 +102,10 @@ export interface ChatAttachment {
    * fails is the one that saves the whole room. See `storage.ts`.
    */
   dataUrl?: string;
+  /** Extracted JPEG keyframes for multimodal video understanding (in-memory only). */
+  frames?: string[];
+  /** Object URL for inline <video> preview in the browser session (in-memory only). */
+  previewUrl?: string;
   /** Why it could not be read, in words safe to show a user. */
   problem?: string;
 }
@@ -157,6 +161,8 @@ export interface ChatTurnRequest {
   attachments: ChatAttachment[];
   /** Aborted when the human stops the room, so a provider call in flight actually dies. */
   signal?: AbortSignal;
+  /** True when chatting 1-on-1 with a single solo bot (no cross-bot handoff tools). */
+  soloMode?: boolean;
 }
 
 export type BotGenerator = (request: ChatTurnRequest) => Promise<BotTurn> | BotTurn;
@@ -185,6 +191,7 @@ export interface RunTurnInput {
   /** Called as each advisor's message is committed, so the room fills in as it happens. */
   onTurn?: (message: ChatMessage) => void;
   turnTimeoutMs?: number;
+  soloMode?: boolean;
 }
 
 export interface RunTurnResult {
@@ -402,6 +409,7 @@ export const runTurn = async ({
   signal,
   onTurn,
   turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
+  soloMode = false,
 }: RunTurnInput): Promise<RunTurnResult> => {
   const messages = [...history, userMessage];
 
@@ -427,7 +435,7 @@ export const runTurn = async ({
   // A queue rather than an index into `speakers`: an advisor pulled in by a handoff is not
   // necessarily one this round had scheduled, and dropping that reply would lose the A2A handoff.
   const queue = [...speakers];
-  const effectiveRounds = mode === 'panel' ? 1 : Math.max(1, Math.floor(rounds));
+  const effectiveRounds = soloMode || mode === 'panel' ? 1 : Math.max(1, Math.floor(rounds));
   const turnsBy = new Map<string, number>();
   const countTurn = (id: string) => turnsBy.set(id, (turnsBy.get(id) ?? 0) + 1);
   // Ceiling for this message when advisors loop. The advisor holding the last allowed turn is told to
@@ -473,6 +481,7 @@ export const runTurn = async ({
       language,
       attachments: userMessage.attachments ?? [],
       signal,
+      soloMode,
     };
 
     let turn: BotTurn | null = null;

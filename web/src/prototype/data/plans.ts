@@ -10,19 +10,20 @@ export interface Plan {
   priceVnd: number;
   /**
    * Static display value from the published conversion table (AGENTS.md 28.3 — supplied by the
-   * lead, never computed). Do not derive it from `priceVnd` at runtime: a live FX call or a
-   * recomputed rate would make the USD figure drift away from the published table.
+   * lead, never computed).
    */
   priceUsd: string;
-  /** Personas allowed to be active at once in one session — not a count of distinct models. */
+  /** Personas / bots allowed to be active at once in one group room or session. */
   maxActiveAdvisors: number;
+  /** Custom AI bots allowed active on the account before excess bots are disabled on downgrade/expiry. */
+  maxBots: number;
   popular?: boolean;
 }
 
 export const PLANS: Plan[] = [
-  { id: 'free', name: 'Free', priceVnd: 0, priceUsd: '0', maxActiveAdvisors: 2 },
-  { id: 'pro', name: 'Pro', priceVnd: 139000, priceUsd: '5.99', maxActiveAdvisors: 4, popular: true },
-  { id: 'ultra', name: 'Ultra', priceVnd: 379000, priceUsd: '16.99', maxActiveAdvisors: 8 },
+  { id: 'free', name: 'Free', priceVnd: 0, priceUsd: '0', maxActiveAdvisors: 2, maxBots: 2 },
+  { id: 'pro', name: 'Pro', priceVnd: 139000, priceUsd: '5.99', maxActiveAdvisors: 4, maxBots: 6, popular: true },
+  { id: 'ultra', name: 'Ultra', priceVnd: 379000, priceUsd: '16.99', maxActiveAdvisors: 8, maxBots: 20 },
 ];
 
 const viNumber = new Intl.NumberFormat('vi-VN');

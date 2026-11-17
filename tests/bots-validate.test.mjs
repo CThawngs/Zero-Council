@@ -1,10 +1,11 @@
-// validateBotInput: bounds mirror the wizard UI and the 0005 migration CHECKs.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-const { validateBotInput } = await import(
-  '../web/src/lib/store/botValidation.ts?bots=1'
-);
+const {
+  validateBotInput,
+  BUILTIN_BOT_PROVIDERS,
+  slugifyCustomProvider,
+} = await import('../web/src/lib/store/botValidation.ts?bots=1');
 
 const valid = {
   name: ' Atlas ',
@@ -19,9 +20,22 @@ test('valid input is trimmed and accepted', () => {
   });
 });
 
-test('openai provider accepted', () => {
-  const result = validateBotInput({ ...valid, provider: 'openai', model: 'gpt-4o' });
-  assert.equal(result.bot.provider, 'openai');
+test('all 8 verified built-in providers are accepted', () => {
+  assert.equal(BUILTIN_BOT_PROVIDERS.length, 8);
+  for (const prov of BUILTIN_BOT_PROVIDERS) {
+    const result = validateBotInput({ ...valid, provider: prov, model: 'test-model' });
+    assert.equal(result.bot.provider, prov);
+  }
+});
+
+test('custom OpenAI and Anthropic provider slugs are accepted', () => {
+  const oaiId = slugifyCustomProvider('openai', 'Together AI Gateway!');
+  assert.equal(oaiId, 'custom:openai:together-ai-gateway');
+  assert.equal(validateBotInput({ ...valid, provider: oaiId, model: 'qwen-2.5' }).bot.provider, oaiId);
+
+  const antId = slugifyCustomProvider('anthropic', 'Claude Proxy');
+  assert.equal(antId, 'custom:anthropic:claude-proxy');
+  assert.equal(validateBotInput({ ...valid, provider: antId, model: 'claude-custom' }).bot.provider, antId);
 });
 
 test('blank name rejected as NAME_REQUIRED', () => {
@@ -44,6 +58,9 @@ test('instruction over 4000 chars rejected', () => {
 
 test('unknown provider rejected as UNKNOWN_PROVIDER', () => {
   assert.deepEqual(validateBotInput({ ...valid, provider: 'gemini' }), { error: 'UNKNOWN_PROVIDER' });
+  assert.deepEqual(validateBotInput({ ...valid, provider: 'custom:google:foo' }), {
+    error: 'UNKNOWN_PROVIDER',
+  });
 });
 
 test('non-string provider rejected as UNKNOWN_PROVIDER', () => {
@@ -56,10 +73,4 @@ test('blank model rejected as MODEL_REQUIRED', () => {
 
 test('non-string name rejected as NAME_REQUIRED', () => {
   assert.deepEqual(validateBotInput({ ...valid, name: null }), { error: 'NAME_REQUIRED' });
-});
-
-test('google provider accepted', () => {
-  const result = validateBotInput({ ...valid, provider: 'google', model: 'gemini-2.5-flash' });
-  assert.equal(result.bot.provider, 'google');
-  assert.equal(result.bot.model, 'gemini-2.5-flash');
 });
