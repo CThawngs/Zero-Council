@@ -456,58 +456,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     };
   }, []);
 
-  /**
-   * Post-login dashboard: a signed-in user lands on the workspace (the new-council
-   * composer with the Grok-style left-bar), not the marketing landing. Fires once
-   * per sign-in — navigating back to the landing via the brand mark stays put.
-   * 
-   * When logged in:
-   * - First time each tab access website -> redirect to dashboard
-   * - Re logged in -> redirect to dashboard
-   * 
-   * Not logged in:
-   * - No redirect
-   * 
-   * Hiện còn chờ tải các điều kiện cho phép rồi mới đổi trang.
-   */
-  const TAB_REDIRECT_KEY = 'zc:initial-dashboard-redirect';
-
-  useEffect(() => {
-    if (!authReady || !authUser || !botsReady) return;
-
-    const pathName = window.location.pathname;
-
-    // Only auto-redirect from Home.
-    if (pathName !== '/'){
-      
-      if (pathName === '/dashboard') {
-        setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
-      }
-      return;
-    }
-
-    // Already handled in this tab.
-    if (sessionStorage.getItem(TAB_REDIRECT_KEY) === 'true') {console.log('Staisfied'); return};
-    
-    // Mark before redirecting to prevent repeated redirects.
-    sessionStorage.setItem(TAB_REDIRECT_KEY, 'true');
-
-    console.log('Not Staisfied');
-
-    window.location.href = '/dashboard';
-  }, [authReady, authUser, botsReady, bots.length]);
-
-  // const landedRef = useRef(false);
-  // useEffect(() => {
-  //   if (!authUser || !botsReady || landedRef.current) return;
-  //   landedRef.current = true;
-  //   if (currentView === 'overview') {
-  //     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot landing after sign-in, guarded by landedRef
-  //     setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
-  //     window.scrollTo(0, 0);
-  //   }
-  // }, [authUser, botsReady, bots.length, currentView]);
-
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut({
@@ -1240,6 +1188,14 @@ const purgeSessions = () => {
     localizedSessions.find((session) => session.id === currentSessionId) ||
     localizedSessions[0] ||
     localizeSession(initialSessions[0], language);
+
+
+    //Debug
+    useEffect(() => {
+      console.log({
+        currentView: currentView.valueOf(),
+      })
+    }, [currentView])
 
   return (
     <AppContext.Provider
