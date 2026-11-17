@@ -29,7 +29,7 @@ import HomeLoading from '@/app/loading';
 import { redirect } from 'next/navigation';
 
 const ChamberContent: React.FC = () => {
-  const { currentView, authReady, t, checkoutPlan, closeCheckout } = useApp();
+  const { currentView, authReady, authUser, t, checkoutPlan, closeCheckout } = useApp();
   const [alreadyRedirect, setAlreadyRedirect] = useState(false);
   
   const mainRef = useRef<HTMLElement>(null);
@@ -42,7 +42,11 @@ const ChamberContent: React.FC = () => {
   }, [currentView]);
 
   useEffect(() => {
-    if (!authReady) return
+    console.log({
+      authUser: authUser,
+      authReady: authReady,
+    })
+    if (!authReady && !authUser) return
     else {
       if (sessionStorage.getItem(TAB_REDIRECT_KEY) === 'true') {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -57,7 +61,7 @@ const ChamberContent: React.FC = () => {
       sessionStorage.setItem(TAB_REDIRECT_KEY, 'true');
       redirect('/dashboard')
     }
-  }, [authReady, setAlreadyRedirect])
+  }, [authReady, authUser, setAlreadyRedirect])
 
   return (
     <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
