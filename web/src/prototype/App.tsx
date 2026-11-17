@@ -25,11 +25,11 @@ import { LegalView } from './components/LegalView';
 import { CookieNotice, AnalyticsLoader } from './components/CookieNotice';
 import { CheckoutDrawer } from './components/CheckoutDrawer';
 import { legalDocumentOf } from './types';
-import HomeLoading, { HeaderLoading } from '@/app/loading';
+import HomeLoading from '@/app/loading';
 import { redirect } from 'next/navigation';
 
 const ChamberContent: React.FC = () => {
-  const { currentView, authUser, t, checkoutPlan, closeCheckout } = useApp();
+  const { currentView, authReady, t, checkoutPlan, closeCheckout } = useApp();
   const [alreadyRedirect, setAlreadyRedirect] = useState(false);
   
   const mainRef = useRef<HTMLElement>(null);
@@ -42,7 +42,7 @@ const ChamberContent: React.FC = () => {
   }, [currentView]);
 
   useEffect(() => {
-    if (!authUser) return
+    if (!authReady) return
     else {
       if (sessionStorage.getItem(TAB_REDIRECT_KEY) === 'true') {
         // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -57,13 +57,13 @@ const ChamberContent: React.FC = () => {
       sessionStorage.setItem(TAB_REDIRECT_KEY, 'true');
       redirect('/dashboard')
     }
-  }, [authUser, setAlreadyRedirect])
+  }, [authReady, setAlreadyRedirect])
 
   return (
     <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
       <a href="#main-content" className="skip-link">{t.skipToContent}</a>
       {
-        (!alreadyRedirect || !authUser) ? <HomeLoading /> : (
+        (!alreadyRedirect || !authReady) ? <HomeLoading /> : (
           <div>
             <Header isWorkspace={!isPublicPage} />
             <div className="flex min-h-screen flex-1 pt-[76px]">
