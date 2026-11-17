@@ -7,3 +7,7 @@
 
 # Bang chung smoke cuc bo � CI tao evidence/ roi upload artifact, khong commit.
 evidence/
+
+# Zero Council runtime artifacts - never commit
+.zc-*.json
+.zc-tmp/

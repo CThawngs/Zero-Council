@@ -411,6 +411,8 @@ export const ApiKeysView: React.FC = () => {
               <div className="flex items-center justify-end gap-2 pt-1">
                 <button
                   type="button"
+                  id={`provider-connect-${item.provider}`}
+                  data-provider-connect={item.provider}
                   onClick={() => openProvider(item.provider)}
                   className={
                     item.connected

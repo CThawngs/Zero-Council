@@ -4,7 +4,7 @@ import { Suspense, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, Globe2, RefreshCw } from 'lucide-react';
-import { AppProvider, useApp } from '@/prototype/context/AppContext';
+import { useApp } from '@/prototype/context/AppContext';
 
 function cleanParam(value: string | null | undefined): string | null {
   if (!value) return null;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { AppProvider, useApp } from '@/prototype/context/AppContext';
+import { useApp } from '@/prototype/context/AppContext';
 import { Footer } from '@/prototype/components/Footer';
 import { Header } from '@/prototype/components/Header';
 import { Toast } from '@/prototype/components/Toast';
@@ -15,6 +15,10 @@ function AuthContent() {
     const { currentView, setCurrentView, t } = useApp();
     const isPublicPage = true;
     const mainRef = useRef<HTMLElement>(null);
+    // Keep a ref so the auth listener callback can read the current view
+    // without being listed as a dependency (listener is registered once).
+    const currentViewRef = useRef(currentView);
+    useEffect(() => { currentViewRef.current = currentView; });
 
     // This route has its own fresh AppProvider (separate from the main app),
     // so currentView always starts at its default ('overview'). Point it at
@@ -66,12 +70,14 @@ function AuthContent() {
             }
 
             // 3. Các trường hợp còn lại mặc định về sign-in
-            setCurrentView((currentView === 'sign-up' || currentView === 'set-password') ? currentView : 'sign-in');
+            const cv = currentViewRef.current;
+            if (cv !== 'sign-up' && cv !== 'set-password') setCurrentView('sign-in');
         });
 
         return () => {
             subscription.unsubscribe();
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (

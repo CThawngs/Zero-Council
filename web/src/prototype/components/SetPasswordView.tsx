@@ -2,12 +2,14 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { FormEvent, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
 import { Eye, EyeOff, LockKeyhole, Mail, RefreshCw, Save } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SetPasswordView: React.FC = () => {
     const { t } = useApp();
+    const router = useRouter();
     const [email, setEmail] = useState(''); 
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
@@ -54,18 +56,18 @@ export const SetPasswordView: React.FC = () => {
 
     const supabase = await createClient();
     const { error } = await supabase.auth.updateUser({
-      password: password,
+      password,
       data: {
         has_password: true,
       }
-    })
+    });
     
     if (error) {
       setError(error.message);
       return;
     }
 
-    window.location.href = '/';
+    router.push('/');
   }
 
   

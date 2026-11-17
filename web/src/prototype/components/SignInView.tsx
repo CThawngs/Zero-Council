@@ -2,12 +2,14 @@
 
 import { createClient } from '@/lib/supabase/client';
 import { FormEvent, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
 import { CheckCircle2, Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SignInView: React.FC = () => {
     const { setCurrentView, t } = useApp();
+    const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [message, setMessage] = useState('');
@@ -31,7 +33,7 @@ export const SignInView: React.FC = () => {
     // A full navigation, not a client-side route change: the workspace reads the session on
     // mount, so only a fresh load turns the visitor into a signed-in user. Pushing a route would
     // leave the same page rendering as if nobody were logged in.
-    window.location.href = '/';
+    router.push('/');
   }
 
   const oauth = async (provider: 'google') => {

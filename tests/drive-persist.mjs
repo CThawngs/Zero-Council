@@ -136,14 +136,20 @@ try {
   await sleep(3500);
 
   await clickVisible('Start free council');
-  await sleep(1800);
-  await clickVisible('Open room');
-  await sleep(1600);
+  await sleep(1500);
+  await evaluate(`
+    const openBtn = [...document.querySelectorAll('button')].find(b => /new group chat|open room|start a room first|mở phòng/i.test(b.textContent));
+    openBtn?.click();
+  `);
+  await sleep(1500);
   await evaluate(`
     const d = document.querySelector('dialog[open]');
-    const button = [...d.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Open room');
-    button.click();
-    return 'joined';
+    if (d) {
+      const button = [...d.querySelectorAll('button')].find((b) => /open room|start council|mở phòng/i.test(b.textContent));
+      button?.click();
+      return 'joined';
+    }
+    return 'already-joined';
   `);
   await sleep(1400);
 
