@@ -26,7 +26,6 @@ import { CookieNotice, AnalyticsLoader } from './components/CookieNotice';
 import { CheckoutDrawer } from './components/CheckoutDrawer';
 import { legalDocumentOf } from './types';
 import HomeLoading from '@/app/loading';
-import HomeLoading from '@/app/loading';
 import { redirect } from 'next/navigation';
 
 const ChamberContent: React.FC = () => {
@@ -69,7 +68,6 @@ const ChamberContent: React.FC = () => {
       <a href="#main-content" className="skip-link">{t.skipToContent}</a>
       {
         (!alreadyRedirect || !authReady) ? <HomeLoading /> : (
-        (!alreadyRedirect || !authReady) ? <HomeLoading /> : (
           <div>
             <Header isWorkspace={!isPublicPage} />
             <div className="flex min-h-screen flex-1 pt-[76px]">
@@ -93,23 +91,6 @@ const ChamberContent: React.FC = () => {
                 {currentView === 'room-summary' && <RoomSummaryView />} */}
               </main>
             </div>
-            {isPublicPage && <Footer />}
-            {/* The plan survives the trip to the sign-in page, so a visitor who clicks "Sign in to buy"
-                comes back to a checkout that is already filled in. */}
-            <CheckoutDrawer plan={checkoutPlan} onClose={closeCheckout} />
-            <CounterDraftModal />
-            <JoinRoomModal />
-            <Toast />
-            {/* Sits below the modals in the tree but above them in `z-index`, so a cookie notice can
-                never cover the checkout drawer or a room the visitor is trying to use. */}
-            <CookieNotice />
-            {/* Renders nothing until `consent === 'granted'`, and nothing at all when no analytics
-                endpoint is configured. Safe to leave mounted unconditionally. */}
-            <AnalyticsLoader />
-            <span className="sr-only" aria-live="polite">{t.localBadge}</span>
-          </div>
-        )
-      }
             {isPublicPage && <Footer />}
             {/* The plan survives the trip to the sign-in page, so a visitor who clicks "Sign in to buy"
                 comes back to a checkout that is already filled in. */}
