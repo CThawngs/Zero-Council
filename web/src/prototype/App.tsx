@@ -37,29 +37,27 @@ const ChamberContent: React.FC = () => {
 
   const TAB_REDIRECT_KEY = 'zc:initial-dashboard-redirect'
 
-  function checkRedirect() {
-    if (!authUser) return
-
-    if (sessionStorage.getItem(TAB_REDIRECT_KEY) === 'true') {
-      setAlreadyRedirect(true);
-      return;
-    }
-
-    console.log({
-      alreadyRedirect: alreadyRedirect.valueOf(),
-    })
-
-    sessionStorage.setItem(TAB_REDIRECT_KEY, 'true');
-    redirect('/dashboard')
-  }
-
   useEffect(() => {
     mainRef.current?.focus({ preventScroll: true });
   }, [currentView]);
 
   useEffect(() => {
-    checkRedirect();
-  }, [authUser])
+    if (!authUser) return
+    else {
+      if (sessionStorage.getItem(TAB_REDIRECT_KEY) === 'true') {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setAlreadyRedirect(true);
+        return;
+      }
+
+      console.log({
+        alreadyRedirect: alreadyRedirect.valueOf(),
+      })
+
+      sessionStorage.setItem(TAB_REDIRECT_KEY, 'true');
+      redirect('/dashboard')
+    }
+  }, [authUser, setAlreadyRedirect])
 
   return (
     <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
