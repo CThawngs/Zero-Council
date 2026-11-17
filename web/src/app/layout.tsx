@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 import { AppProvider } from '@/prototype/context/AppContext';
 import { createClient } from '@/lib/supabase/server';
 import { hasPasswordClaim } from '@/lib/auth-password';
+import { devLoginEmail, isSupabaseServerConfigured } from '@/lib/devAuth';
 import { redirect } from 'next/navigation';
 import { cookieLanguage } from '@/prototype/types';
 
@@ -15,43 +16,36 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-
   const language = cookieStore.get(cookieLanguage)?.value === 'vi' ? 'vi' : 'en';
 
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  let initialAuthUser: { id: string; email: string } | undefined;
+  const devEmail = devLoginEmail();
 
-  // A returning signed-in user (session cookie survived the browser close) is
-  // mounted straight into the dashboard, never shown the marketing landing.
-  // Google-only accounts without a password must create one first.
-  if (user?.email) {
-    if (!hasPasswordClaim(user)) {
-      redirect("/auth");
+  if (devEmail) {
+    initialAuthUser = { id: devEmail, email: devEmail };
+  } else if (isSupabaseServerConfigured()) {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.email) {
+        if (!hasPasswordClaim(user)) {
+          redirect('/auth');
+        }
+        initialAuthUser = { id: user.id, email: user.email.trim().toLowerCase() };
+      }
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'digest' in error &&
+        typeof (error as { digest?: unknown }).digest === 'string' &&
+        (error as { digest: string }).digest.startsWith('NEXT_REDIRECT')
+      ) {
+        throw error;
+      }
     }
-
-    return (
-      <html lang={language} suppressHydrationWarning>
-        <head>
-        {/*
-          Runs synchronously before first paint so a dark-theme visitor never sees a white flash.
-          dangerouslySetInnerHTML in <head> guarantees execution prior to rendering <body>.
-        */}
-        <script
-          id="zc-theme-bootstrap"
-          dangerouslySetInnerHTML={{
-            __html: THEME_BOOTSTRAP_SCRIPT,
-          }}
-        />
-      </head>
-        <body suppressHydrationWarning>
-          <AppProvider
-          initialLanguage={language}
-          initialAuthUser={{ id: user.id, email: user.email?.trim().toLowerCase() }}>
-            {children}
-          </AppProvider>
-        </body>
-      </html>
-    );
   }
 
   return (
@@ -65,7 +59,7 @@ export default async function RootLayout({
         />
       </head>
       <body suppressHydrationWarning>
-        <AppProvider initialLanguage={language}>
+        <AppProvider initialLanguage={language} initialAuthUser={initialAuthUser}>
           {children}
         </AppProvider>
       </body>
@@ -77,8 +71,5 @@ export const metadata: Metadata = {
   title: 'Zero Council — AI decision council',
   description:
     'Convene multiple AI advisors — each with a distinct model and perspective — to think through your decision before you commit.',
-  // Chrome's translate bar reads this. The app ships its own English/Vietnamese (see i18n.ts), and
-  // machine translation rewrites text nodes that React is still holding, which crashes it with
-  // "Failed to execute 'removeChild' on 'Node'" the next time that text changes.
   other: { google: 'notranslate' },
 };

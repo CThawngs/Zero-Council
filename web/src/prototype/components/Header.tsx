@@ -1,15 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
-import { legalDocumentOf, type ViewType } from '../types';
+import { type ViewType } from '../types';
 import { Globe2, Menu, Moon, Sun, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
 
 export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
-  const { currentView, setCurrentView, language, setLanguage, theme, toggleTheme, authUser, signOut, t } = useApp();
+  const { setCurrentView, language, setLanguage, theme, toggleTheme, authUser, signOut, t } = useApp();
+  const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const headerRef = useRef<HTMLElement>(null);
@@ -62,77 +62,33 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   }, [menuOpen]);
 
   const navigate = (view: ViewType) => {
-    setCurrentView(view);
     setMenuOpen(false);
-    // Without this the scroll offset of the view being left is inherited by the
-    // view being entered — arriving half-way down the page — and clicking the
-    // brand while already on the target view is a no-op, because setCurrentView
-    // to the same value never re-renders.
     window.scrollTo(0, 0);
-
     setCurrentView(view);
-    if ((
-      view === 'sign-in' ||
-      view === 'sign-up' ||
-      view === 'set-password'
-    ) && window.location.pathname !== '/auth') {
-      redirect('/auth')
-    }
-
-    if ((
-      view === 'empty-chamber' ||
-      view === 'session-concluded' ||
-      view === 'sessions' ||
-      view === 'api-keys' ||
-      view === 'personas' ||
-      view === 'new-advisor' ||
-      view === 'settings' ||
-      view === 'chat-room' ||
-      view === 'room-summary'
-    ) && window.location.pathname !== '/dashboard') {
-      redirect('/dashboard')
-    }
-
-    if ((
-      view === 'overview' ||
-      view === 'guide' ||
-      legalDocumentOf(view)
-    ) && window.location.pathname !== '/') {
-      redirect('/')
-    }
   };
+
   const changeLanguage = () => {
-    setLanguage(language === 'en' ? 'vi' : 'en');
+    void setLanguage(language === 'en' ? 'vi' : 'en');
     setMenuOpen(false);
   };
 
-  // All three destinations are sections of the landing page, so none of them is a
-  // "current page" — `aria-current` would be a lie for each of them.
   const links = MARKETING_NAV.map((item) => ({
     key: item.labelKey,
     label: labels.nav[item.labelKey],
     href: item.href,
   }));
 
-  /**
-   * Scroll to a landing section, leaving any other view first.
-   *
-   * On a workspace view the section is not in the document at all, so querying it finds nothing
-   * and the click silently does nothing. Switching to the overview and scrolling on the next frame
-   * is what makes the link mean the same thing from anywhere in the app.
-   */
   const goToSection = (href: string) => {
     setMenuOpen(false);
     const scroll = () => document.querySelector(href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (currentView === 'overview') {
-      scroll();
-      return;
-    }
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
-      // `assign`, not `href = ...`: the lint rule for react-compiler immutability rejects
-      // assigning a property on `location`, and the rule for Next routing flags it too. Same
-      // navigation, no suppression comment needed.
-      window.location.assign(`/${href}`);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      try {
+        sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+      } catch {
+        // Ignore storage errors
+      }
+      setCurrentView('overview');
+      router.push(`/${href}`);
       return;
     }
     setCurrentView('overview');
@@ -142,11 +98,11 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   return (
     <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <button onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
+        <button type="button" onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
           <span className="brand-mark">
             <CouncilOrb />
           </span>
-          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>          
+          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
         </button>
 
         {!isWorkspace && (
@@ -178,6 +134,11 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
           {!isWorkspace && !authUser && (
             <button type="button" onClick={() => navigate('sign-in')} className="button-secondary header-cta">{labels.nav.signIn}</button>
           )}
+          {!isWorkspace && authUser && (
+            <button type="button" onClick={() => navigate('empty-chamber')} className="button-primary header-cta">
+              {labels.nav.newDeliberation}
+            </button>
+          )}
           {authUser && (
             <button
               type="button"
@@ -205,6 +166,16 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
                   {link.label}
                 </a>
               ))}
+              {!authUser && (
+                <button type="button" onClick={() => navigate('sign-in')} className="nav-link justify-between">
+                  {labels.nav.signIn}
+                </button>
+              )}
+              {authUser && (
+                <button type="button" onClick={() => navigate('empty-chamber')} className="nav-link justify-between">
+                  {labels.nav.newDeliberation}
+                </button>
+              )}
               {authUser && (
                 <button type="button" onClick={() => { setMenuOpen(false); void signOut(); }} className="nav-link justify-between">
                   {t.signOut}
@@ -219,11 +190,6 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   );
 };
 
-/**
- * Mobile panel for signed-in screens. Renders the SAME grouped array the
- * desktop sidebar renders, so the two can never drift — the failure that left
- * the old mobile menu without `Council room` and `Billing`.
- */
 const WorkspaceMenu: React.FC<{ onNavigate: (view: ViewType) => void; onClose: () => void }> = ({ onNavigate, onClose }) => {
   const { currentView, language, openJoinRoom, t } = useApp();
   const labels = translations[language];

@@ -1,6 +1,7 @@
 'use client'
 
 import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   AdvisorPersona,
   ApiKeyConfig,
@@ -10,6 +11,7 @@ import {
   UserBot,
   ViewType,
   frameworkIdOf,
+  legalDocumentOf,
 } from '../types';
 import {
   DeliberationCancelled,
@@ -46,7 +48,7 @@ import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
 import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, isSupabaseBrowserConfigured } from '@/lib/supabase/client';
 import {
   getServerAnalyticsConsent,
   readAnalyticsConsent,
@@ -300,7 +302,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   // So both start at the server's answer, and the restore happens once, after hydration but before
   // paint (see the layout effect below). The room and the view are still set from the SAME read in
   // one batch, so a reload cannot land on the marketing page with a live room sitting unread behind it.
-  const [currentView, setCurrentView] = useState<ViewType>('overview');
+  const router = useRouter();
+  const [currentView, setCurrentViewState] = useState<ViewType>('overview');
+
+  const setCurrentView = useCallback(
+    (next: ViewType) => {
+      setCurrentViewState(next);
+      if (typeof window === 'undefined') return;
+      const pathname = window.location.pathname;
+      if (next === 'sign-in' || next === 'sign-up' || next === 'set-password') {
+        if (!pathname.startsWith('/auth')) router.push('/auth');
+        return;
+      }
+      if (next === 'overview' || legalDocumentOf(next) !== null) {
+        try {
+          sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+        } catch {
+          // Ignore storage refusal
+        }
+        if (pathname !== '/') router.push('/');
+        return;
+      }
+      if (next === 'guide') {
+        if (pathname.startsWith('/auth')) router.push('/');
+        return;
+      }
+      if (!pathname.startsWith('/dashboard')) {
+        router.push('/dashboard');
+      }
+    },
+    [router]
+  );
 
   // Starts at the server's answer ('en'), like the room and the theme: reading storage in this
   // initializer would hydrate a Vietnamese tree against English HTML. The saved choice is adopted
@@ -404,7 +436,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       failures: (restored.failures as TurnFailure[]) ?? [],
       held: restored.held ?? [],
     });
-    setCurrentView('chat-room');
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard')) {
+      setCurrentViewState('chat-room');
+    }
   }, []);
   const [isRoomBusy, setIsRoomBusy] = useState(false);
   const [isReadingLink, setIsReadingLink] = useState(false);
@@ -440,13 +474,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
    */
   useEffect(() => {
     let cancelled = false;
+    const adoptFromServerIfNeeded = async () => {
+      try {
+        const res = await fetch('/api/me', { credentials: 'same-origin' });
+        if (!res.ok) return null;
+        const body = (await res.json()) as { email?: string };
+        return body?.email ? { id: body.email, email: body.email.trim().toLowerCase() } : null;
+      } catch {
+        return null;
+      }
+    };
+    if (!isSupabaseBrowserConfigured()) {
+      if (!initialAuthUser) {
+        void adoptFromServerIfNeeded().then((fallbackUser) => {
+          if (cancelled) return;
+          setAuthUser(fallbackUser);
+          setAuthReady(true);
+        });
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
     const supabase = createClient();
     const adopt = (user: { id: string; email?: string | null } | null) => {
       if (cancelled) return;
-      setAuthUser(user?.email ? { id: user.id, email: user.email.trim().toLowerCase() } : null);
+      if (user?.email) {
+        setAuthUser({ id: user.id, email: user.email.trim().toLowerCase() });
+        setAuthReady(true);
+        return;
+      }
+      if (initialAuthUser) {
+        setAuthUser(initialAuthUser);
+        setAuthReady(true);
+        return;
+      }
+      setAuthUser(null);
       setAuthReady(true);
     };
-    void supabase.auth.getUser().then(({ data }) => adopt(data.user));
+    void supabase.auth.getUser().then(({ data }) => adopt(data.user)).catch(() => adopt(null));
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) =>
       adopt(session?.user ?? null)
     );
@@ -454,18 +520,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
       cancelled = true;
       subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [initialAuthUser]);
 
   const signOut = async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut({
-      scope: 'local'
-    });
+    if (isSupabaseBrowserConfigured()) {
+      const supabase = createClient();
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    }
     setAuthUser(null);
     setCheckoutPlan(null);
-    sessionStorage.removeItem('zc:initial-dashboard-redirect');
-    window.location.href = '/';
-    setCurrentView('overview');
+    try {
+      sessionStorage.removeItem('zc:initial-dashboard-redirect');
+    } catch {
+      // Ignore storage refusal
+    }
+    setCurrentViewState('overview');
+    router.push('/');
+    router.refresh();
     window.scrollTo(0, 0);
   };
 
@@ -531,11 +602,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   };
 
   const goToPricing = () => {
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
-      window.location.assign('/#pricing');
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      try {
+        sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+      } catch {
+        // Ignore storage errors
+      }
+      setCurrentViewState('overview');
+      router.push('/#pricing');
       return;
     }
-    setCurrentView('overview');
+    setCurrentViewState('overview');
     const scroll = () => document.querySelector('#pricing')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     requestAnimationFrame(() => requestAnimationFrame(scroll));
   };
@@ -1190,12 +1267,7 @@ const purgeSessions = () => {
     localizeSession(initialSessions[0], language);
 
 
-    //Debug
-    useEffect(() => {
-      console.log({
-        currentView: currentView.valueOf(),
-      })
-    }, [currentView])
+
 
   return (
     <AppContext.Provider

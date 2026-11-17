@@ -5,7 +5,7 @@ import { PLANS, planPrice } from '../data/plans';
 import { Modal } from './Modal';
 
 export const SettingsView: React.FC = () => {
-  const { language, setLanguage, setCurrentView, goToPricing, purgeSessions, revokeAllKeys, t } = useApp();
+  const { language, setLanguage, setCurrentView, goToPricing, purgeSessions, revokeAllKeys, currentPlanId, t } = useApp();
   const [isPurgeOpen, setIsPurgeOpen] = useState(false);
   const [isProviderOpen, setIsProviderOpen] = useState(false);
 
@@ -43,10 +43,10 @@ export const SettingsView: React.FC = () => {
         </div>
         <dl className="mt-4 grid gap-3 sm:grid-cols-3">
           {PLANS.map((plan) => (
-            <div key={plan.id} className={`rounded-lg border p-3 ${plan.id === 'free' ? 'border-brass/50' : 'border-border'}`}>
+            <div key={plan.id} className={`rounded-lg border p-3 ${plan.id === currentPlanId ? 'border-brass/50' : 'border-border'}`}>
               <dt className="field-label">
                 {plan.name}
-                {plan.id === 'free' ? <span className="ml-2 text-brass">{t.planCurrent}</span> : null}
+                {plan.id === currentPlanId ? <span className="ml-2 text-brass">{t.planCurrent}</span> : null}
               </dt>
               <dd className="mt-1 text-sm text-ink">{planPrice(plan, language)}</dd>
               <dd className="mt-1 text-xs leading-relaxed text-ink-muted">

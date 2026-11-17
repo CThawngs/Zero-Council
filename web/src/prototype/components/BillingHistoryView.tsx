@@ -33,7 +33,7 @@ export const BillingHistoryView: React.FC = () => {
 
   return (
     <div className="content-shell max-w-3xl space-y-7">
-      <button type="button" onClick={() => setCurrentView('overview')} className="button-quiet -ml-3"><ArrowLeft className="h-4 w-4" />{t.back}</button>
+      <button type="button" onClick={() => setCurrentView(typeof window !== 'undefined' && window.location.pathname.startsWith('/dashboard') ? 'settings' : 'overview')} className="button-quiet -ml-3"><ArrowLeft className="h-4 w-4" />{t.back}</button>
       <header className="page-header"><p className="eyebrow"><span className="status-dot" />{t.localProfile}</p><h1>{t.billingTitle}</h1><p>{t.billingBody}</p></header>
 
       <section className="panel p-5 sm:p-7">
