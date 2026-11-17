@@ -456,22 +456,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     };
   }, []);
 
-  /**
-   * Post-login dashboard: a signed-in user lands on the workspace (the new-council
-   * composer with the Grok-style left-bar), not the marketing landing. Fires once
-   * per sign-in — navigating back to the landing via the brand mark stays put.
-   */
-  const landedRef = useRef(false);
-  useEffect(() => {
-    if (!authUser || !botsReady || landedRef.current) return;
-    landedRef.current = true;
-    if (currentView === 'overview') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot landing after sign-in, guarded by landedRef
-      setCurrentView(bots.length === 0 ? 'bot-wizard' : 'empty-chamber');
-      window.scrollTo(0, 0);
-    }
-  }, [authUser, botsReady, bots.length, currentView]);
-
   const signOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut({
@@ -479,6 +463,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
     });
     setAuthUser(null);
     setCheckoutPlan(null);
+    sessionStorage.removeItem('zc:initial-dashboard-redirect');
     window.location.href = '/';
     setCurrentView('overview');
     window.scrollTo(0, 0);
@@ -1203,6 +1188,14 @@ const purgeSessions = () => {
     localizedSessions.find((session) => session.id === currentSessionId) ||
     localizedSessions[0] ||
     localizeSession(initialSessions[0], language);
+
+
+    //Debug
+    useEffect(() => {
+      console.log({
+        currentView: currentView.valueOf(),
+      })
+    }, [currentView])
 
   return (
     <AppContext.Provider

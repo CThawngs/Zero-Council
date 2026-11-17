@@ -151,18 +151,26 @@ export const ensureUser = async (email: string): Promise<AccountUser> => {
   const key = email.trim().toLowerCase();
   const initialRole: Role = isFounder(key) ? 'admin' : 'user';
   if (supabaseConfig()) {
-    const rows = await request('zc_users?on_conflict=email', {
-      method: 'POST',
-      body: JSON.stringify({ email: key, role: initialRole }),
-      headers: { Prefer: 'return=representation' },
-    });
-    const [row] = rows as UserRow[];
-    if (row) return toUser(row);
-    // Nothing returned: the conflict branch of the upsert reports no row, so read the account back.
-    const fetched = await getUser(key);
-    if (fetched) return fetched;
-    throw new Error('ENSURE_USER_FAILED');
-  }
+  const rows = await request('zc_users?on_conflict=email', {
+    method: 'POST',
+    body: JSON.stringify({
+      email: key,
+      role: initialRole,
+    }),
+    headers: {
+      Prefer: 'resolution=ignore-duplicates,return=representation',
+    },
+  });
+
+  const [row] = rows as UserRow[];
+  if (row) return toUser(row);
+
+  // Nothing returned: the conflict branch of the upsert reports no row, so read the account back.
+  const existing = await getUser(key);
+  if (existing) return existing;
+
+  throw new Error('ENSURE_USER_FAILED');
+}
   const data = await readAll();
   const existing = data.users[key];
   if (existing) return existing;

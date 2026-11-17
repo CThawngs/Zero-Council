@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
-import type { ViewType } from '../types';
+import { legalDocumentOf, type ViewType } from '../types';
 import { Globe2, Menu, Moon, Sun, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   const { currentView, setCurrentView, language, setLanguage, theme, toggleTheme, authUser, signOut, t } = useApp();
@@ -60,17 +62,6 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   }, [menuOpen]);
 
   const navigate = (view: ViewType) => {
-    if ((view === 'sign-in' || view === 'sign-up' || view === 'set-password') && typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth'))
-      window.location.href = '/auth';
-
-    // /auth is a separate route with its own, isolated app state. It only
-    // ever renders the sign-in/sign-up views, so switching to any other view
-    // there leaves the page blank. Send those clicks back to the real home
-    // page instead of changing local state that nothing on this route reads.
-    if (view !== 'sign-in' && view !== 'sign-up' && view !== 'set-password' && typeof window !== 'undefined' && window.location.pathname.startsWith('/auth')) {
-      window.location.href = '/';
-      return;
-    }
     setCurrentView(view);
     setMenuOpen(false);
     // Without this the scroll offset of the view being left is inherited by the
@@ -78,6 +69,37 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
     // brand while already on the target view is a no-op, because setCurrentView
     // to the same value never re-renders.
     window.scrollTo(0, 0);
+
+    setCurrentView(view);
+    if ((
+      view === 'sign-in' ||
+      view === 'sign-up' ||
+      view === 'set-password'
+    ) && window.location.pathname !== '/auth') {
+      redirect('/auth')
+    }
+
+    if ((
+      view === 'empty-chamber' ||
+      view === 'session-concluded' ||
+      view === 'sessions' ||
+      view === 'api-keys' ||
+      view === 'personas' ||
+      view === 'new-advisor' ||
+      view === 'settings' ||
+      view === 'chat-room' ||
+      view === 'room-summary'
+    ) && window.location.pathname !== '/dashboard') {
+      redirect('/dashboard')
+    }
+
+    if ((
+      view === 'overview' ||
+      view === 'guide' ||
+      legalDocumentOf(view)
+    ) && window.location.pathname !== '/') {
+      redirect('/')
+    }
   };
   const changeLanguage = () => {
     setLanguage(language === 'en' ? 'vi' : 'en');
@@ -120,11 +142,11 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   return (
     <header ref={headerRef} className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-        <button type="button" onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
+        <button onClick={() => navigate('overview')} className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
           <span className="brand-mark">
             <CouncilOrb />
           </span>
-          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>
+          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">{labels.brand}</span>          
         </button>
 
         {!isWorkspace && (
@@ -155,11 +177,6 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
 
           {!isWorkspace && !authUser && (
             <button type="button" onClick={() => navigate('sign-in')} className="button-secondary header-cta">{labels.nav.signIn}</button>
-          )}
-          {!isWorkspace && (
-            <button type="button" onClick={() => (authUser ? navigate('empty-chamber') : navigate('sign-in'))} className="button-primary header-cta">
-              {labels.nav.getStarted}
-            </button>
           )}
           {authUser && (
             <button
