@@ -72,6 +72,23 @@ export interface Round {
   frameworkOutput: FrameworkOutput;
 }
 
+/**
+ * Optional real AI generate function passed in from AppContext.
+ * When provided, `runDeliberation` calls this for each advisor and the chair.
+ * When absent, falls back to the fixture (canned text).
+ *
+ * @param advisorId - ID of the advisor speaking
+ * @param stance    - Advisor's stance/perspective (used as system prompt hint)
+ * @param prompt    - The question/prompt for this round
+ * @param signal    - Optional AbortSignal to cancel in-flight requests
+ */
+export type GenerateFn = (
+  advisorId: string,
+  stance: string,
+  prompt: string,
+  signal?: AbortSignal
+) => Promise<string>;
+
 export interface DeliberationRequest {
   mode: CommunicationMode;
   framework: FrameworkId;
@@ -83,6 +100,12 @@ export interface DeliberationRequest {
   /** 1-based. A follow-up question becomes round 2, 3, … */
   roundIndex: number;
   signal?: AbortSignal;
+  /**
+   * Optional real AI generate function. When provided, the engine calls the
+   * real model for each advisor and the chair. When absent, falls back to
+   * fixture (canned) text so the UI works without any API key.
+   */
+  generate?: GenerateFn;
 }
 
 export class DeliberationCancelled extends Error {
@@ -155,7 +178,7 @@ const voiceFor = (
  * The fixture, without the wait. Split out so seeded sample sessions can be
  * built synchronously at module load — a real engine has no such need.
  */
-export const buildFixtureRound = (request: Omit<DeliberationRequest, 'signal'>): Round => {
+export const buildFixtureRound = (request: Omit<DeliberationRequest, 'signal' | 'generate'>): Round => {
   const { mode, framework, prompt, language, advisorIds, advisorStances, roundIndex } = request;
   const t = copy[language];
 
@@ -193,8 +216,66 @@ export const buildFixtureRound = (request: Omit<DeliberationRequest, 'signal'>):
 };
 
 /**
- * FIXME(fixture): returns canned text after a fake wait. Replace the body with a
- * call to the real engine, keeping the `Round` return shape.
+ * Run a real deliberation round using the provided `generate` function.
+ * Calls generate for each advisor (per planContributions order), then
+ * calls generate once more for the chair to summarize all contributions.
+ */
+const runRealRound = async (request: DeliberationRequest & { generate: GenerateFn }): Promise<Round> => {
+  const { mode, framework, prompt, language, advisorIds, advisorStances, roundIndex, signal, generate } = request;
+  const t = copy[language];
+
+  const shapes = planContributions(mode, advisorIds);
+
+  // Build contributions by calling generate for each advisor in order.
+  const contributions: Contribution[] = [];
+  for (const shape of shapes) {
+    if (signal?.aborted) throw new DeliberationCancelled();
+    const stance = advisorStances[shape.advisorId] ?? shape.advisorId;
+    const text = await generate(shape.advisorId, stance, prompt, signal);
+    contributions.push({
+      advisorId: shape.advisorId,
+      text,
+      rebuts: shape.rebuts,
+      buildsOn: shape.buildsOn,
+    });
+  }
+
+  // Chair summarizes all contributions.
+  if (signal?.aborted) throw new DeliberationCancelled();
+  const contributionsSummary = contributions
+    .map((c) => `${advisorStances[c.advisorId] ?? c.advisorId}: ${c.text}`)
+    .join('\n\n');
+  const chairPrompt = `The council has deliberated on: "${prompt}"\n\nContributions:\n${contributionsSummary}\n\nProvide a brief synthesis.`;
+  const chairSummary = await generate('chair', 'neutral synthesizer', chairPrompt, signal);
+
+  return {
+    index: roundIndex,
+    mode,
+    framework,
+    prompt,
+    language,
+    contributions,
+    chair: {
+      summary: chairSummary,
+      dissent: t.chairDissent,
+      recommendation: t.chairRecommendation,
+    },
+    frameworkOutput: {
+      kind: framework,
+      matrix: framework === 'matrix' ? fixtureMatrix(roundIndex) : null,
+    },
+  };
+};
+
+/**
+ * Run one deliberation round.
+ *
+ * - If `request.generate` is provided → calls the real AI for each advisor
+ *   and the chair, returning live responses.
+ * - If not → returns canned fixture text after a fake delay.
+ *
+ * The `Round` shape is identical in both paths so all UI components work
+ * unchanged regardless of which path ran.
  *
  * ponytail: no streaming. The real engine will want to emit each contribution
  * as it lands, which means adding an `onContribution` callback here. The UI
@@ -202,6 +283,10 @@ export const buildFixtureRound = (request: Omit<DeliberationRequest, 'signal'>):
  * change any component.
  */
 export const runDeliberation = async (request: DeliberationRequest): Promise<Round> => {
+  if (request.generate) {
+    return runRealRound(request as DeliberationRequest & { generate: GenerateFn });
+  }
+  // Fixture path: fake delay so the UI shows the loading state.
   await sleep(FIXTURE_DELAY_MS, request.signal);
   return buildFixtureRound(request);
 };

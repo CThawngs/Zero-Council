@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ArrowLeft, CheckCircle2, ReceiptText } from 'lucide-react';
+import { Modal } from './Modal';
 import { planById, planPrice } from '../data/plans';
 
 interface OrderHistoryItem {
@@ -34,6 +35,8 @@ export const BillingHistoryView: React.FC = () => {
   } = useApp();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [downgradeConfirmOpen, setDowngradeConfirmOpen] = useState(false);
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [grants, setGrants] = useState<GrantHistoryItem[]>([]);
   const plan = planById(currentPlanId);
@@ -58,8 +61,7 @@ export const BillingHistoryView: React.FC = () => {
     };
   }, [authUser, currentPlanId]);
 
-  const cancel = async () => {
-    if (busy || !window.confirm(t.planCancelConfirm)) return;
+  const doCancel = async () => {
     setBusy(true);
     setMessage('');
     const ok = await cancelPlanToFree();
@@ -67,8 +69,7 @@ export const BillingHistoryView: React.FC = () => {
     if (ok) setMessage(t.planCancelled);
   };
 
-  const downgrade = async () => {
-    if (busy || !window.confirm(t.planDowngradeConfirm)) return;
+  const doDowngrade = async () => {
     setBusy(true);
     const ok = await downgradeToPro();
     setBusy(false);
@@ -131,7 +132,7 @@ export const BillingHistoryView: React.FC = () => {
             <button
               type="button"
               id="billing-downgrade-pro-btn"
-              onClick={downgrade}
+              onClick={() => setDowngradeConfirmOpen(true)}
               disabled={busy}
               className="button-secondary min-h-11 disabled:opacity-50"
             >
@@ -142,7 +143,7 @@ export const BillingHistoryView: React.FC = () => {
             <button
               type="button"
               id="billing-cancel-free-btn"
-              onClick={cancel}
+              onClick={() => setCancelConfirmOpen(true)}
               disabled={busy}
               className="button-secondary min-h-11 disabled:opacity-50"
             >
@@ -226,6 +227,66 @@ export const BillingHistoryView: React.FC = () => {
           )}
         </div>
       )}
+
+      {/* Cancel-to-free confirmation */}
+      <Modal
+        isOpen={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+        title={t.planCancelToFree}
+        description={t.planCancelConfirm}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setCancelConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => { setCancelConfirmOpen(false); await doCancel(); }}
+              className="button-danger min-h-11 justify-center disabled:opacity-50"
+            >
+              {t.planCancelToFree}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-muted">{t.planCancelConfirm}</p>
+      </Modal>
+
+      {/* Downgrade-to-pro confirmation */}
+      <Modal
+        isOpen={downgradeConfirmOpen}
+        onClose={() => setDowngradeConfirmOpen(false)}
+        title={t.planDowngradeToPro}
+        description={t.planDowngradeConfirm}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDowngradeConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => { setDowngradeConfirmOpen(false); await doDowngrade(); }}
+              className="button-danger min-h-11 justify-center disabled:opacity-50"
+            >
+              {t.planDowngradeToPro}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-muted">{t.planDowngradeConfirm}</p>
+      </Modal>
     </div>
   );
 };

@@ -43,6 +43,9 @@ export const PersonasView: React.FC = () => {
   const [editModel, setEditModel] = useState('');
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  // The bot the user wants to delete — set when confirm dialog opens.
+  const [botToDelete, setBotToDelete] = useState<UserBot | null>(null);
 
   const connectedKeys = apiKeys.filter((k) => k.connected);
   const plan = planById(currentPlanId);
@@ -82,9 +85,9 @@ export const PersonasView: React.FC = () => {
     setEditingBot(null);
   };
 
-  const confirmDeleteBot = async (bot: UserBot) => {
-    if (!window.confirm(t.botDeleteConfirm.replace('{name}', bot.name))) return;
-    await deleteBot(bot.id);
+  const confirmDeleteBot = (bot: UserBot) => {
+    setBotToDelete(bot);
+    setDeleteConfirmOpen(true);
   };
 
   const selectedEditProviderKey = connectedKeys.find((k) => k.provider === editProvider);
@@ -402,6 +405,42 @@ export const PersonasView: React.FC = () => {
             </p>
           )}
         </div>
+      </Modal>
+
+      {/* Delete Bot confirmation */}
+      <Modal
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title={t.deleteSession}
+        description={botToDelete ? t.botDeleteConfirm.replace('{name}', botToDelete.name) : ''}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                if (!botToDelete) return;
+                setDeleteConfirmOpen(false);
+                await deleteBot(botToDelete.id);
+                setBotToDelete(null);
+              }}
+              className="button-danger min-h-11 justify-center"
+            >
+              {t.deleteSession}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-muted">
+          {botToDelete ? t.botDeleteConfirm.replace('{name}', botToDelete.name) : ''}
+        </p>
       </Modal>
     </div>
   );

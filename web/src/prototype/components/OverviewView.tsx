@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CouncilOrb } from './CouncilOrb';
 import { Reveal } from './Reveal';
@@ -20,9 +20,11 @@ import {
   Zap,
 } from 'lucide-react';
 import Link from 'next/link';
+import { Modal } from './Modal';
 
 export const OverviewView: React.FC = () => {
   const { t, language, authUser, authReady, requestCheckout, currentPlanId, cancelPlanToFree } = useApp();
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const flow = [
     { icon: MessageSquareText, title: t.flow1Title, body: t.flow1Body, badge: t.badgeStep1, tint: 'var(--tint-blue)' },
@@ -269,7 +271,7 @@ export const OverviewView: React.FC = () => {
                   type="button"
                   onClick={() => {
                     if (plan.priceVnd <= 0 && currentPlanId !== 'free') {
-                      if (window.confirm(t.planCancelConfirm)) void cancelPlanToFree();
+                      setCancelConfirmOpen(true);
                       return;
                     }
                     requestCheckout(plan);
@@ -292,6 +294,35 @@ export const OverviewView: React.FC = () => {
           ))}
         </div>
       </section>
+
+      {/* Cancel-to-free confirmation */}
+      <Modal
+        isOpen={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+        title={t.planCancelToFree}
+        description={t.planCancelConfirm}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setCancelConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCancelConfirmOpen(false); void cancelPlanToFree(); }}
+              className="button-danger min-h-11 justify-center"
+            >
+              {t.planCancelToFree}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-muted">{t.planCancelConfirm}</p>
+      </Modal>
     </div>
   );
 };
