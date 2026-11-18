@@ -5,8 +5,7 @@ import { legalDocumentOf, type ViewType } from '../types';
 import { Globe2, Menu, Moon, Sun, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
-import Link from 'next/link';
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   const { currentView, setCurrentView, language, setLanguage, theme, toggleTheme, authUser, signOut, t } = useApp();
@@ -15,6 +14,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
   const headerRef = useRef<HTMLElement>(null);
   const mobileNavigationRef = useRef<HTMLDivElement>(null);
   const labels = translations[language];
+  const router = useRouter();
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -70,13 +70,12 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
     // to the same value never re-renders.
     window.scrollTo(0, 0);
 
-    setCurrentView(view);
     if ((
       view === 'sign-in' ||
       view === 'sign-up' ||
       view === 'set-password'
     ) && window.location.pathname !== '/auth') {
-      redirect('/auth')
+      router.replace('/auth')
     }
 
     if ((
@@ -90,7 +89,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
       view === 'chat-room' ||
       view === 'room-summary'
     ) && window.location.pathname !== '/dashboard') {
-      redirect('/dashboard')
+      router.replace('/dashboard')
     }
 
     if ((
@@ -98,7 +97,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
       view === 'guide' ||
       legalDocumentOf(view)
     ) && window.location.pathname !== '/') {
-      redirect('/')
+      router.replace('/?from=dashboard')
     }
   };
   const changeLanguage = () => {
@@ -134,6 +133,9 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
       // navigation, no suppression comment needed.
       window.location.assign(`/${href}`);
       return;
+    }
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      router.replace(`/?from=dashboard`);
     }
     setCurrentView('overview');
     requestAnimationFrame(() => requestAnimationFrame(scroll));

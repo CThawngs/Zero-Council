@@ -289,7 +289,12 @@ const localizeSession = (session: DeliberationSession, language: Language): Deli
 // `useLayoutEffect` warns when it runs on the server; `useEffect` there is a no-op, which is what we want.
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
-export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage: Language; initialAuthUser?: { id: string; email: string } | null }> = ({ children, initialLanguage, initialAuthUser }) => {
+export const AppProvider: React.FC<{
+  children: React.ReactNode;
+  initialLanguage: Language;
+  initialAuthUser?: { id: string; email: string } | null;
+  initialAuthReady?: boolean;
+}> = ({ children, initialLanguage, initialAuthUser, initialAuthReady = false }) => {
   // The first client render MUST equal what the server rendered, and the server has no sessionStorage.
   // This used to read the stored room inside a `useState` initializer, so a tab that still held a room
   // hydrated with a different tree than the HTML it was given. React then threw the server HTML away
@@ -369,7 +374,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode, initialLanguage:
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   // Server-mounted (page.tsx) when session cookie survived browser close: deterministic, no hydration mismatch.
   const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(initialAuthUser ?? null);
-  const [authReady, setAuthReady] = useState(!!initialAuthUser);
+  const [authReady, setAuthReady] = useState(initialAuthReady || !!initialAuthUser);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isFounder, setIsFounder] = useState(false);
   /**
