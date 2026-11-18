@@ -73,19 +73,6 @@ export async function updateSession(request: NextRequest) {
     if (!hasPassword && path !== '/auth') {
       return NextResponse.redirect(new URL('/auth', request.url))
     }
-
-    // Cách 1: Người dùng đã đăng nhập mở tab mới vào trang chủ ('/') -> redirect 307 sang /dashboard ở tầng HTTP
-    if (pathname === '/') {
-      const referer = request.headers.get('referer') || ''
-      const fromParam = request.nextUrl.searchParams.get('from')
-      const isFromInsideDashboard = referer.includes('/dashboard') || fromParam === 'dashboard'
-
-      if (!isFromInsideDashboard) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
-      }
-    }
   }
   
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

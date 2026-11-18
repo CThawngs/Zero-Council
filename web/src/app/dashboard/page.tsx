@@ -29,6 +29,12 @@ export default function Dashboard() {
     const initialViewSettledRef = useRef(false);
 
     useEffect(() => {
+        try {
+            sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+        } catch {}
+    }, []);
+
+    useEffect(() => {
         if (!authReady || !botsReady || initialViewSettledRef.current) return;
         initialViewSettledRef.current = true;
         setCurrentView(bots.length > 0 ? 'empty-chamber' : 'bot-wizard');

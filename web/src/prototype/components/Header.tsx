@@ -97,7 +97,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
       view === 'guide' ||
       legalDocumentOf(view)
     ) && window.location.pathname !== '/') {
-      router.replace('/?from=dashboard')
+      router.replace('/')
     }
   };
   const changeLanguage = () => {
@@ -135,7 +135,7 @@ export const Header: React.FC<{ isWorkspace: boolean }> = ({ isWorkspace }) => {
       return;
     }
     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-      router.replace(`/?from=dashboard`);
+      router.replace('/');
     }
     setCurrentView('overview');
     requestAnimationFrame(() => requestAnimationFrame(scroll));
