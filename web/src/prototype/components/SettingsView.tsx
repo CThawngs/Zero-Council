@@ -21,14 +21,15 @@ export const SettingsView: React.FC = () => {
   const [isPurgeOpen, setIsPurgeOpen] = useState(false);
   const [isProviderOpen, setIsProviderOpen] = useState(false);
   const [planBusy, setPlanBusy] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  // pendingPlan: the plan the user chose; we confirm before proceeding.
+  const [pendingPlan, setPendingPlan] = useState<(typeof PLANS)[number] | null>(null);
 
   const handleSelectPlan = async (plan: (typeof PLANS)[number]) => {
     if (plan.id === currentPlanId || planBusy) return;
     if (plan.id === 'free') {
-      if (!window.confirm(t.planCancelConfirm)) return;
-      setPlanBusy(true);
-      await cancelPlanToFree();
-      setPlanBusy(false);
+      setPendingPlan(plan);
+      setCancelConfirmOpen(true);
       return;
     }
     requestCheckout(plan);
@@ -252,6 +253,43 @@ export const SettingsView: React.FC = () => {
         }
       >
         <p className="text-sm leading-relaxed text-ink-muted">{t.clearStatesConfirm}</p>
+      </Modal>
+
+      {/* Cancel-to-free confirmation */}
+      <Modal
+        isOpen={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+        title={t.planCancelToFree}
+        description={t.planCancelConfirm}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setCancelConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              disabled={planBusy}
+              onClick={async () => {
+                if (!pendingPlan) return;
+                setCancelConfirmOpen(false);
+                setPlanBusy(true);
+                await cancelPlanToFree();
+                setPlanBusy(false);
+                setPendingPlan(null);
+              }}
+              className="button-danger min-h-11 justify-center disabled:opacity-50"
+            >
+              {t.planCancelToFree}
+            </button>
+          </>
+        }
+      >
+        <p className="text-sm leading-relaxed text-ink-muted">{t.planCancelConfirm}</p>
       </Modal>
     </div>
   );

@@ -29,6 +29,7 @@ import {
   DeliberationCancelled,
   runDeliberation,
   type CommunicationMode,
+  type GenerateFn,
   type Round,
 } from '@/lib/deliberation/engine';
 import {
@@ -58,7 +59,7 @@ import {
   type TurnFailure,
   type WhyStop,
 } from '../chat/engine';
-import { byokGenerator } from '../chat/byok';
+import { byokGenerator, completeByokText } from '../chat/byok';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
 import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
@@ -297,12 +298,67 @@ const botToPersona = (bot: UserBot, index = 0): AdvisorPersona => {
   };
 };
 
+
+/**
+ * Build a `GenerateFn` for deliberation using the user's currently connected BYOK keys.
+ *
+ * Key selection order:
+ *   1. The key for the advisor's own provider (persona.provider), if connected.
+ *   2. Any other connected key as fallback, so advisors without a matching
+ *      provider still get a real AI response (not fixture) when at least one key exists.
+ *
+ * Returns `undefined` when no keys are connected — the engine then falls back
+ * to fixture (canned) text, which is the same behaviour as before BYOK.
+ *
+ * Security: keys live only in the in-memory `keys` map (populated from the server
+ * on sign-in) and are never stored to localStorage or the DOM.
+ */
+const buildGenerate = (
+  personas: AdvisorPersona[],
+  keys: Record<string, string>,
+  apiKeys: ApiKeyConfig[]
+): GenerateFn | undefined => {
+  // Pick the first connected key — used as fallback for any advisor whose
+  // own provider key isn't connected.
+  const fallbackEntry = apiKeys.find((item) => item.connected && Boolean(keys[item.provider]));
+  if (!fallbackEntry) return undefined; // No keys connected — use fixture.
+
+  return async (advisorId, stance, prompt, signal) => {
+    const persona = personas.find((p) => p.id === advisorId);
+
+    // Resolve which provider + key to use for this advisor.
+    let keyMeta = apiKeys.find((item) => item.provider === persona?.provider && item.connected && Boolean(keys[item.provider]));
+    if (!keyMeta) keyMeta = fallbackEntry; // Fallback to any connected key.
+
+    const resolvedKey = keys[keyMeta.provider];
+    const resolvedModel = keyMeta.modelName;
+
+    return completeByokText(
+      {
+        provider: keyMeta.provider,
+        model: resolvedModel,
+        apiKey: resolvedKey,
+        protocol: keyMeta.protocol,
+        baseUrl: keyMeta.baseUrl,
+      },
+      {
+        system: stance
+          ? `You are an advisor with the following perspective: ${stance}. Be concise and insightful.`
+          : 'You are a helpful advisor. Be concise and insightful.',
+        prompt,
+        signal,
+      }
+    );
+  };
+};
+
 const createSession = async (
   question: string,
   framework: DeliberationSession['framework'],
   mode: CommunicationMode,
   personas: AdvisorPersona[],
-  language: Language
+  language: Language,
+  generate?: GenerateFn
 ): Promise<DeliberationSession> => {
   const t = copy[language];
   const round = await runDeliberation({
@@ -313,6 +369,7 @@ const createSession = async (
     advisorIds: personas.map((persona) => persona.id),
     advisorStances: stancesOf(personas),
     roundIndex: 1,
+    generate,
   });
   return {
     id: nextSessionId(),
@@ -710,7 +767,8 @@ export const AppProvider: React.FC<{
           framework,
           currentMode,
           advisors,
-          language
+          language,
+          buildGenerate(advisors, keys, apiKeys)
         );
         setSessions((value) => [session, ...value]);
         setCurrentSessionId(session.id);
@@ -761,6 +819,7 @@ export const AppProvider: React.FC<{
         advisorStances: stancesOf(session.advisors),
         roundIndex: session.rounds.length + 1,
         signal: controller.signal,
+        generate: buildGenerate(session.advisors, keys, apiKeys),
       });
       setSessions((value) =>
         value.map((item) =>
