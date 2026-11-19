@@ -24,6 +24,7 @@ import { useApp } from '@/prototype/context/AppContext';
 import type { ViewType } from '@/prototype/types';
 import { useEffect, useRef } from 'react';
 import MainContentLoading from './mainContentLoading';
+import { MobileSidebar } from '@/prototype/components/MobileSidebar';
 
 const WORKSPACE_VIEWS = new Set<ViewType>([
   'empty-chamber',
@@ -63,6 +64,7 @@ export default function Dashboard() {
       <Header isWorkspace={true} />
       <div className="flex min-h-screen flex-1 pt-[76px]">
         <Sidebar />
+        <MobileSidebar />
         {!authReady || (authUser && !botsReady) ? (
           <MainContentLoading />
         ) : (

@@ -3,9 +3,16 @@ import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
 import { Check, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from 'lucide-react';
-import { WORKSPACE_NAV } from '../navigation';
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  mobile?: boolean;
+  onClose?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  mobile = false,
+  onClose,
+}) => {
   const {
     bots,
     botCap,
@@ -38,11 +45,13 @@ export const Sidebar: React.FC = () => {
   const groupChats = conversations.filter((c) => c.kind === 'group');
 
   const go = (view: ViewType) => {
+    onClose?.();
     setCurrentView(view);
     window.scrollTo(0, 0);
   };
 
   const openSession = (id: string) => {
+    onClose?.();
     setCurrentSessionId(id);
     go('session-concluded');
   };
@@ -59,11 +68,34 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <aside className="sticky top-[76px] hidden h-[calc(100dvh-76px)] w-72 shrink-0 border-r border-border bg-surface-2/50 p-4 lg:flex lg:flex-col">
+    <aside
+      className={
+        mobile
+          ? "flex h-dvh w-full flex-col overflow-hidden bg-surface p-4"
+          : "sticky top-[76px] hidden h-[calc(100dvh-76px)] w-72 shrink-0 border-r border-border bg-surface-2/50 p-4 lg:flex lg:flex-col"
+      }
+    >
+      {mobile && (
+        <div className="mb-4 flex items-center justify-between">
+          <span className="font-bold text-ink">
+            {t.workspaceNavigation}
+          </span>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="icon-button min-h-10 min-w-10"
+            aria-label={t.close}
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+      
       <button
         type="button"
         id="sidebar-new-group-btn"
-        onClick={openJoinRoom}
+        onClick={() => {openJoinRoom(); openJoinRoom()}}
         className="button-primary mb-5 w-full justify-center"
       >
         <Plus className="h-4 w-4" aria-hidden="true" /> {t.newGroupChat}
@@ -96,7 +128,7 @@ export const Sidebar: React.FC = () => {
                     <button
                       type="button"
                       data-sidebar-bot={bot.id}
-                      onClick={() => openBotChat(bot.id)}
+                      onClick={() => {onClose?.(); openBotChat(bot.id)}}
                       className={`flex min-h-9 w-full items-center justify-between gap-2 rounded-md px-2 text-left text-sm transition ${
                         isActive
                           ? 'bg-surface font-semibold text-ink'
@@ -158,7 +190,7 @@ export const Sidebar: React.FC = () => {
                   >
                     <button
                       type="button"
-                      onClick={() => openGroupChat(group.id)}
+                      onClick={() => {onClose?.(); openGroupChat(group.id)}}
                       className={`flex min-h-9 min-w-0 flex-1 items-center gap-2 truncate rounded-md px-2 text-left text-sm ${
                         isActive ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink'
                       }`}
@@ -196,7 +228,7 @@ export const Sidebar: React.FC = () => {
                       <>
                         <button
                           type="button"
-                          onClick={() => openEditGroup(group.id)}
+                          onClick={() => {onClose?.(); openEditGroup(group.id)}}
                           aria-label={t.groupEditTitle}
                           className="icon-button min-h-8 min-w-8 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
                         >
@@ -219,7 +251,7 @@ export const Sidebar: React.FC = () => {
           )}
           <button
             type="button"
-            onClick={openJoinRoom}
+            onClick={() => {onClose?.(); openJoinRoom()}}
             className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-brass hover:text-ink"
           >
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
