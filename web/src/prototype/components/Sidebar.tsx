@@ -73,26 +73,6 @@ export const Sidebar: React.FC = () => {
         className="grid min-w-0 grid-cols-1 gap-1 overflow-y-auto overflow-x-hidden pr-0.5"
         aria-label={t.workspaceNavigation}
       >
-        {WORKSPACE_NAV.map((group) => (
-          <div key={group.labelKey} className="min-w-0">
-            <p className="nav-group-label">{labels.navGroup[group.labelKey]}</p>
-            <div className="grid gap-1">
-              {group.items.map(({ view, labelKey, icon: Icon }) => (
-                <button
-                  key={view}
-                  type="button"
-                  onClick={() => go(view)}
-                  aria-current={currentView === view ? 'page' : undefined}
-                  className={`sidebar-link ${currentView === view ? 'sidebar-link-active' : ''}`}
-                >
-                  <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span className="truncate">{labels.nav[labelKey]}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-
         {/* Solo 1-on-1 AI Bots */}
         <div className="mt-3 min-w-0">
           <div className="flex items-center justify-between pr-2">
@@ -365,6 +345,12 @@ export const Sidebar: React.FC = () => {
       <div className="mt-auto rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink-muted">
         <p className="font-bold text-ink">{t.localBadge}</p>
         <p className="mt-1">{t.boundaryShort}</p>
+      </div>
+
+      <div className="mt-auto mb-5 rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink-muted">
+        <button type="button" onClick={() => setCurrentView('settings')} className='w-full text-[15px]! text-ink'>
+          {t.settingsTitle}
+        </button>
       </div>
     </aside>
   );
