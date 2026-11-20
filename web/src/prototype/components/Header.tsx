@@ -95,6 +95,9 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
       router.push(`/${href}`);
       return;
     }
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      router.replace('/');
+    }
     setCurrentView('overview');
     requestAnimationFrame(() => requestAnimationFrame(scroll));
   };
