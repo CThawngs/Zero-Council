@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
-import { Check, ChevronDown, ChevronRight, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Lock, Pencil, Plus, Settings, Settings2, Trash2, Users, X } from 'lucide-react';
 
 interface SidebarProps {
   mobile?: boolean;
@@ -19,10 +19,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isBotDisabled,
     conversations,
     currentRoom,
-    currentSessionId,
     currentView,
     deleteConversationById,
-    deleteSession,
     isAdmin,
     language,
     openBotChat,
@@ -32,7 +30,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     renameSession,
     setCurrentSessionId,
     setCurrentView,
-    sessions,
     t,
   } = useApp();
 
@@ -153,6 +150,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </ul>
           )}
 
+          {currentView === 'sessions' ?
           <button
             type="button"
             id="sidebar-new-bot-btn"
@@ -162,6 +160,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
             {t.newBot}
           </button>
+          : null
+          }
+          
           {isAdmin ? (
             <a
               href="/admin"
@@ -260,132 +261,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </ul>
           )}
         </div>
-
-        {/* Deliberation Council Sessions */}
-        <div className="mt-3 min-w-0">
-          <p className="nav-group-label">{t.councilsTitle}</p>
-          {sessions.length === 0 ? (
-            <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">
-              {t.emptySessionsBody}
-            </p>
-          ) : (
-            <ul className="grid grid-cols-1 gap-1">
-              {sessions.map((session) => {
-                const isActive =
-                  currentView === 'session-concluded' && currentSessionId === session.id;
-                const isEditing = editingId === session.id;
-                const isConfirming = confirmingId === session.id;
-                return (
-                  <li
-                    key={session.id}
-                    className={`group flex min-w-0 items-center gap-1 rounded-lg px-1 ${
-                      isActive ? 'bg-surface' : ''
-                    }`}
-                  >
-                    {isEditing ? (
-                      <>
-                        <input
-                          autoFocus
-                          value={draftTitle}
-                          onChange={(event) => setDraftTitle(event.target.value)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') commitRename(session.id);
-                            if (event.key === 'Escape') setEditingId(null);
-                          }}
-                          aria-label={t.renameSession}
-                          className="min-h-9 min-w-0 flex-1 rounded-md border border-brass bg-background px-2 text-sm text-ink focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => commitRename(session.id)}
-                          aria-label={t.save}
-                          className="icon-button min-h-9 min-w-9"
-                        >
-                          <Check className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingId(null)}
-                          aria-label={t.cancel}
-                          className="icon-button min-h-9 min-w-9"
-                        >
-                          <X className="h-4 w-4" aria-hidden="true" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => openSession(session.id)}
-                          aria-current={isActive ? 'page' : undefined}
-                          className={`min-h-9 min-w-0 flex-1 truncate rounded-md px-2 text-left text-sm ${
-                            isActive ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink'
-                          }`}
-                        >
-                          {session.title}
-                        </button>
-                        {isConfirming ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                deleteSession(session.id);
-                                setConfirmingId(null);
-                              }}
-                              aria-label={t.deleteSession}
-                              className="icon-button min-h-9 min-w-9 text-terracotta hover:bg-terracotta/10"
-                            >
-                              <Check className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingId(null)}
-                              aria-label={t.cancel}
-                              className="icon-button min-h-9 min-w-9"
-                            >
-                              <X className="h-4 w-4" aria-hidden="true" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => startRename(session.id, session.title)}
-                              aria-label={t.renameSession}
-                              className="icon-button min-h-9 min-w-9 opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100"
-                            >
-                              <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmingId(session.id)}
-                              aria-label={t.deleteSession}
-                              className="icon-button min-h-9 min-w-9 opacity-0 transition hover:bg-terracotta/10 hover:text-terracotta group-hover:opacity-100 focus-visible:opacity-100"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
       </nav>
-
+      
+      {/* BADGE & ACCOUNT */}
       <div className="mt-auto rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink-muted">
         <p className="font-bold text-ink">{t.localBadge}</p>
         <p className="mt-1">{t.boundaryShort}</p>
       </div>
 
-      <div className="mt-auto mb-5 rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink-muted">
-        <button type="button" onClick={() => setCurrentView('settings')} className='w-full text-[15px]! text-ink'>
+      <button 
+      type="button" 
+      onClick={() => setCurrentView('settings')}
+      className="w-full mt-auto mb-5 rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink flex justify-baseline items-center">
+          <Settings className='h-5 w-5 mr-3'/>
           {t.settingsTitle}
-        </button>
-      </div>
+      </button>
     </aside>
   );
 };
