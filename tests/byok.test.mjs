@@ -183,11 +183,62 @@ test('an OpenAI tool_call argument string is parsed into the same shape', async 
     true,
     200,
     async () => {
-      turn = await byokGenerator({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' })(request());
+      turn = await byokGenerator({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' })(
+        request({ bot: ROSTER[0] })
+      );
     }
   );
   assert.equal(turn.text, 'Purpose outranks speed here.');
   assert.deepEqual(turn.handoffs, ['dreamer']);
+});
+
+test('a bot (including the 2nd/closing bot) can never hand off to itself', async () => {
+  // Case 1: waiting/handoffTargets contains other bots, but the bot targets itself.
+  let selfTurn;
+  await withResponse(
+    {
+      choices: [
+        {
+          message: {
+            content: 'I will answer.',
+            tool_calls: [{ function: { name: 'message_agent', arguments: '{"target":"The Dreamer"}' } }],
+          },
+        },
+      ],
+    },
+    true,
+    200,
+    async () => {
+      selfTurn = await byokGenerator({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' })(
+        request({ bot: ROSTER[1], waiting: ROSTER })
+      );
+    }
+  );
+  assert.deepEqual(selfTurn.handoffs, [USER_HANDLE]);
+
+  // Case 2: 2nd bot on closing turn (handoffTargets is empty, isClosing is true) targets itself.
+  let closingTurn;
+  const seen = await withResponse(
+    {
+      choices: [
+        {
+          message: {
+            content: 'Closing remarks.',
+            tool_calls: [{ function: { name: 'message_agent', arguments: '{"target":"The Dreamer"}' } }],
+          },
+        },
+      ],
+    },
+    true,
+    200,
+    async () => {
+      closingTurn = await byokGenerator({ provider: 'openai', model: 'gpt-4o', apiKey: 'k' })(
+        request({ bot: ROSTER[1], waiting: [], handoffTargets: [], isClosing: true })
+      );
+    }
+  );
+  assert.deepEqual(closingTurn.handoffs, [USER_HANDLE]);
+  assert.match(seen.body.messages[0].content, /Never call message_agent with your own name/);
 });
 
 test('malformed tool arguments lose the handoff but keep the reply', async () => {
@@ -248,12 +299,13 @@ test('target resolution accepts the shapes models actually return', () => {
   assert.deepEqual(resolveTarget('whoever is listening', ROSTER), []);
 });
 
-test('a Google Gemini functionCall part becomes a structured handoff and merges consecutive model turns', async () => {
+test('a Google Gemini functionCall part becomes a structured handoff, merges consecutive self model turns, and ends with user', async () => {
   let turn;
   const multiHistory = [
     { id: '0', authorId: USER_HANDLE, body: 'Should we ship?', mentioned: [] },
-    { id: '1', authorId: 'pragmatist', body: 'Ship behind a flag.', mentioned: [] },
-    { id: '2', authorId: 'skeptic', body: 'Rollback plan is missing.', mentioned: [] },
+    { id: '1', authorId: 'dreamer', body: 'First thought.', mentioned: [] },
+    { id: '2', authorId: 'dreamer', body: 'Second thought.', mentioned: [] },
+    { id: '3', authorId: 'pragmatist', body: 'Ship behind a flag.', mentioned: [] },
   ];
   const seen = await withResponse(
     {
@@ -275,14 +327,63 @@ test('a Google Gemini functionCall part becomes a structured handoff and merges 
         provider: 'google',
         model: 'models/gemini-2.5-flash',
         apiKey: 'g-key',
-      })(request({ history: multiHistory }));
+      })(request({ roster: ROSTER, history: multiHistory }));
     }
   );
   assert.match(seen.url, /models\/gemini-2\.5-flash:generateContent$/);
   assert.equal(seen.headers['x-goog-api-key'], 'g-key');
-  assert.equal(seen.body.contents.length, 2);
+  assert.equal(seen.body.contents.length, 3, 'user -> merged self model -> peer bot as user');
+  assert.equal(seen.body.contents[0].role, 'user');
+  assert.equal(seen.body.contents[1].role, 'model');
+  assert.equal(seen.body.contents[1].parts[0].text, 'First thought.\n\nSecond thought.');
+  assert.equal(seen.body.contents[2].role, 'user');
+  assert.equal(seen.body.contents[2].parts[0].text, '[The Pragmatist]: Ship behind a flag.');
   assert.equal(turn.text, 'Stage the rollout in two cohorts.');
   assert.deepEqual(turn.handoffs, ['pragmatist']);
+});
+
+test('2nd bot turn always ends with user role across Google, Anthropic, and OpenAI', async () => {
+  const afterBot1History = [
+    { id: '0', authorId: USER_HANDLE, body: 'Should we ship?', mentioned: [] },
+    { id: '1', authorId: 'pragmatist', body: 'Ship behind a flag.', mentioned: [] },
+  ];
+
+  const googleSeen = await withResponse(
+    { candidates: [{ content: { parts: [{ text: 'Add rollback.' }] } }] },
+    true,
+    200,
+    async () => {
+      await byokGenerator({ provider: 'google', model: 'gemini-2.5-flash', apiKey: 'g-key' })(
+        request({ bot: ROSTER[1], roster: ROSTER, history: afterBot1History })
+      );
+    }
+  );
+  assert.equal(googleSeen.body.contents.at(-1).role, 'user');
+  assert.match(googleSeen.body.contents[0].parts[0].text, /\[The Pragmatist\]: Ship behind a flag\./);
+
+  const anthropicSeen = await withResponse(
+    anthropicTurn([{ type: 'text', text: 'Add rollback.' }]),
+    true,
+    200,
+    async () => {
+      await byokGenerator({ provider: 'anthropic', model: 'claude-sonnet-4-5', apiKey: 'a-key' })(
+        request({ bot: ROSTER[1], roster: ROSTER, history: afterBot1History })
+      );
+    }
+  );
+  assert.equal(anthropicSeen.body.messages.at(-1).role, 'user');
+
+  const openaiSeen = await withResponse(
+    { choices: [{ message: { content: 'Add rollback.' } }] },
+    true,
+    200,
+    async () => {
+      await byokGenerator({ provider: 'openai', model: 'gpt-4o', apiKey: 'o-key' })(
+        request({ bot: ROSTER[1], roster: ROSTER, history: afterBot1History })
+      );
+    }
+  );
+  assert.equal(openaiSeen.body.messages.at(-1).role, 'user');
 });
 
 test('completeByokText works across anthropic, openai, and google without tool declarations', async () => {
