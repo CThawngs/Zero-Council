@@ -54,7 +54,7 @@ export default function Dashboard() {
     if (!authReady || (authUser && !botsReady) || initialViewSettledRef.current) return;
     initialViewSettledRef.current = true;
     if (!WORKSPACE_VIEWS.has(currentView)) {
-      setCurrentView(bots.length > 0 ? 'empty-chamber' : 'bot-wizard');
+      setCurrentView(bots.length > 0 ? 'sessions' : 'bot-wizard');
     }
   }, [authReady, authUser, botsReady, bots.length, currentView, setCurrentView]);
 
