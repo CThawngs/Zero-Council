@@ -32,7 +32,7 @@ export const SettingsView: React.FC = () => {
         <p>{t.settingsBody}</p>
       </header>
       
-      {/* Workspace Navigation Tabs */}
+      {/* Navigation Tabs */}
       <nav
         className="flex mt-7 items-center gap-2 border-b border-border overflow-x-auto"
         aria-label={t.workspaceNavigation}
