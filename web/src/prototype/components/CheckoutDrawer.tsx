@@ -37,6 +37,7 @@ interface QrSession {
   plan: Plan;
   planName: string;
   expiredAt: number;
+  isDevSimulation?: boolean;
 }
 
 const BILL_TTL_MS = 5 * 60 * 1000;
@@ -236,14 +237,33 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
           expiredAt?: number;
           grantedUntil?: string;
           error?: string;
+          desc?: string;
           reason?: string;
+          isDevSimulation?: boolean;
         };
 
         if (!response.ok) {
-          const message =
-            result.error === 'COUPON_REJECTED'
-              ? couponReasonMessage(result.reason)
-              : t.checkoutError;
+          let message: string = t.checkoutError;
+          if (result.error === 'COUPON_REJECTED') {
+            message = couponReasonMessage(result.reason);
+          } else if (result.error === 'NEED_LOGIN') {
+            message =
+              language === 'vi'
+                ? 'Bạn cần đăng nhập để tiếp tục thanh toán.'
+                : 'Please sign in to proceed with payment.';
+          } else if (result.error === 'PAYLOS_NOT_CONFIGURED') {
+            message =
+              language === 'vi'
+                ? 'Chưa cấu hình Client ID, API Key, Checksum Key của PayOS trong file .env.local hoặc Vercel.'
+                : 'PayOS credentials (Client ID, API Key, Checksum Key) are not configured on the server.';
+          } else if (result.error === 'PAYLOS_REJECTED') {
+            message =
+              language === 'vi'
+                ? `PayOS từ chối: ${result.desc ?? 'Không tạo được link thanh toán.'}`
+                : `PayOS rejected: ${result.desc ?? 'Could not create payment request.'}`;
+          } else if (result.desc) {
+            message = result.desc;
+          }
           if (options.fromRetry) {
             setQrError(message);
           } else {
@@ -267,7 +287,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
           return;
         }
 
-        if (result.qrCode && typeof result.orderCode === 'number') {
+        const qrCodeToUse = result.qrCode || result.checkoutUrl;
+        if (qrCodeToUse && typeof result.orderCode === 'number') {
           const rawExp = result.expiredAt ?? Date.now() + BILL_TTL_MS;
           const expMs = rawExp < 10_000_000_000 ? rawExp * 1000 : rawExp;
           paidRef.current = false;
@@ -278,7 +299,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
           setNow(Date.now());
           setQr({
             orderCode: result.orderCode,
-            qrCode: result.qrCode,
+            qrCode: qrCodeToUse,
             amountVnd: typeof result.amountVnd === 'number' ? result.amountVnd : targetPlan.priceVnd,
             originalAmountVnd:
               typeof result.originalAmountVnd === 'number'
@@ -289,6 +310,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
             plan: targetPlan,
             planName: targetPlan.name,
             expiredAt: expMs,
+            isDevSimulation: Boolean((result as { isDevSimulation?: boolean }).isDevSimulation),
           });
           if (!options.fromRetry) {
             onClose();
@@ -320,7 +342,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         }
       }
     },
-    [couponReasonMessage, onClose, refreshPlan, showToast, t.checkoutError]
+    [couponReasonMessage, language, onClose, refreshPlan, showToast, t.checkoutError]
   );
 
   const startPayment = async () => {
@@ -739,6 +761,35 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                   <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brass" aria-hidden="true" />
                   {t.checkoutQrChecking}
                 </p>
+
+                {qr.isDevSimulation ? (
+                  <div className="w-full rounded-xl border border-dashed border-brass/50 bg-brass/10 p-3.5 text-center">
+                    <p className="text-xs font-semibold text-brass">
+                      {language === 'vi'
+                        ? '🧪 Chế độ mô phỏng dev (chưa gắn key PayOS thật)'
+                        : '🧪 Dev simulation mode (real PayOS keys not configured)'}
+                    </p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">
+                      {language === 'vi'
+                        ? 'Bạn có thể nhấn nút bên dưới để giả lập thanh toán thành công và kiểm tra tự động nâng cấp gói.'
+                        : 'Click the button below to simulate payment success and test automatic plan upgrade.'}
+                    </p>
+                    <button
+                      type="button"
+                      id="qr-dev-simulate-pay-btn"
+                      onClick={async () => {
+                        try {
+                          await fetch(`/api/payos/orders/${qr.orderCode}`, { method: 'PATCH' });
+                        } catch {}
+                      }}
+                      className="button-secondary mt-2.5 min-h-9 w-full justify-center text-xs border-brass/40 text-brass hover:bg-brass/20"
+                    >
+                      {language === 'vi'
+                        ? '⚡ Thử thanh toán thành công (Mô phỏng)'
+                        : '⚡ Simulate payment success'}
+                    </button>
+                  </div>
+                ) : null}
 
                 <p className="text-center text-xs leading-relaxed text-ink-muted">
                   {t.checkoutQrCancelHint}

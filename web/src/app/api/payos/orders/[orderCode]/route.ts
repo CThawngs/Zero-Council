@@ -135,3 +135,33 @@ export async function POST(_request: Request, ctx: { params: Promise<{ orderCode
   await deleteOrder(Number(orderCode));
   return Response.json({ cancelled: true, orderCode: order.orderCode });
 }
+
+export async function PATCH(_request: Request, ctx: { params: Promise<{ orderCode: string }> }) {
+  const { orderCode } = await ctx.params;
+  const stored = await getOrder(Number(orderCode));
+  if (!stored) return Response.json({ error: 'UNKNOWN_ORDER' }, { status: 404 });
+  const updated =
+    (await markOrder(Number(orderCode), 'PAID', { paidAt: new Date().toISOString() })) ?? stored;
+  if (stored.userEmail) {
+    const existingGrants = await listGrants(stored.userEmail).catch(() => []);
+    const alreadyGranted = existingGrants.some((g) => g.orderCode === stored.orderCode);
+    if (!alreadyGranted) {
+      if (stored.couponCode) {
+        await redeemCoupon(
+          stored.couponCode,
+          stored.userEmail,
+          stored.couponPercent ?? 0,
+          stored.orderCode
+        ).catch(() => null);
+      }
+      await addGrant({
+        userEmail: stored.userEmail,
+        planId: stored.planId,
+        source: 'PAYOS',
+        orderCode: stored.orderCode,
+        percent: stored.couponPercent ?? null,
+      });
+    }
+  }
+  return Response.json({ ok: true, order: updated });
+}
