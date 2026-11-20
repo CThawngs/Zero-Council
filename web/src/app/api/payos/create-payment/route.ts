@@ -3,21 +3,26 @@ import { currentAccount } from '@/lib/currentUser';
 import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
 import { addGrant, redeemCoupon } from '@/lib/store/account';
 import { serverEnv } from '@/lib/serverEnv';
-import { signPaymentRequest, verifySignature } from '@/lib/payos/signature';
 import { putOrder, sweepStaleOrders } from '@/lib/payos/orders';
-
-// payOS v2 create-payment. The v1 `/payment/create` path the older docs showed now answers 404.
-const PAYOS_API = 'https://api-merchant.payos.vn/v2/payment-requests';
-
-const env = (...keys: string[]): string => {
-  for (const key of keys) {
-    const value = serverEnv(key);
-    if (value) return value;
-  }
-  throw new Error(`MISSING_ENV:${keys[0]}`);
-};
+import { PayOS } from '@payos/node';
 
 const normaliseCouponCode = (code: string) => code.trim().toUpperCase();
+
+const getPayosKeys = () => {
+  const clientId =
+    serverEnv('PAYOS_CLIENT_ID') ??
+    serverEnv('PAYLOS_CLIENT_ID') ??
+    serverEnv('NEXT_PUBLIC_PAYOS_CLIENT_ID');
+  const apiKey =
+    serverEnv('PAYOS_API_KEY') ??
+    serverEnv('PAYLOS_API_KEY') ??
+    serverEnv('NEXT_PUBLIC_PAYOS_API_KEY');
+  const checksumKey =
+    serverEnv('PAYOS_CHECKSUM_KEY') ??
+    serverEnv('PAYLOS_CHECKSUM_KEY') ??
+    serverEnv('PAYOS_CHECKSUM');
+  return { clientId, apiKey, checksumKey };
+};
 
 /**
  * The browser only ever names a plan. The amount is read from plans.ts on the server, so a
@@ -62,7 +67,8 @@ export async function POST(request: Request) {
   }
 
   const amount = amountAfterCoupon(plan.priceVnd, percent);
-  const orderCode = Date.now();
+  // Generate a safe unique 12-digit integer order code within Number.MAX_SAFE_INTEGER
+  const orderCode = Number(`${Math.floor(Date.now() / 1000)}${Math.floor(Math.random() * 90 + 10)}`);
 
   // A 100% coupon settles inside the system. payOS charges a fee per transaction and has no way
   // to express "zero", so creating a payment request here would cost the merchant money to grant
@@ -96,6 +102,7 @@ export async function POST(request: Request) {
     return Response.json({
       orderCode,
       planId: plan.id,
+      planName: plan.name,
       couponPercent: percent,
       amountVnd: 0,
       amountUsd: '0.00',
@@ -104,19 +111,7 @@ export async function POST(request: Request) {
     });
   }
 
-  let clientId: string | undefined;
-  let apiKey: string | undefined;
-  let checksumKey: string | undefined;
-  try {
-    clientId = env('PAYLOS_CLIENT_ID', 'PAYOS_CLIENT_ID');
-    apiKey = env('PAYLOS_API_KEY', 'PAYOS_API_KEY');
-    checksumKey = env('PAYLOS_CHECKSUM_KEY', 'PAYOS_CHECKSUM_KEY');
-  } catch {
-    clientId = undefined;
-    apiKey = undefined;
-    checksumKey = undefined;
-  }
-
+  const { clientId, apiKey, checksumKey } = getPayosKeys();
   const origin = new URL(request.url).origin;
   // payOS v2 expects `expiredAt` as a Unix timestamp in SECONDS (5-minute QR lifetime).
   const expiredAtSec = Math.floor(Date.now() / 1000) + 5 * 60;
@@ -128,7 +123,7 @@ export async function POST(request: Request) {
   // so the QR popup, 5-minute countdown, cancel confirm, and plan upgrade can be exercised offline.
   if (!clientId || !apiKey || !checksumKey) {
     if (!isLocalDev) {
-      console.error('[payos] create-payment not configured: missing PAYLOS_* keys');
+      console.error('[payos] create-payment not configured: missing PAYOS_* keys');
       return Response.json(
         {
           error: 'PAYLOS_NOT_CONFIGURED',
@@ -167,46 +162,43 @@ export async function POST(request: Request) {
     });
   }
 
-  const payload = {
-    orderCode,
-    amount,
-    description: `ZC ${orderCode}`,
-    cancelUrl: `${origin}/checkout/return?orderCode=${orderCode}&status=cancelled`,
-    returnUrl: `${origin}/checkout/return?orderCode=${orderCode}`,
-    expiredAt: expiredAtSec,
+  // PayOS description rule: for unlinked bank accounts, maximum length is 9 characters.
+  // Using 'ZC' + last 7 digits of orderCode guarantees unique, exactly 9-character ASCII string.
+  const description = `ZC${String(orderCode).slice(-7)}`;
+
+  let paymentLink: {
+    orderCode: number;
+    amount: number;
+    description: string;
+    checkoutUrl: string;
+    qrCode?: string;
   };
 
-  const payosResponse = await fetch(PAYOS_API, {
-    method: 'POST',
-    headers: {
-      'x-client-id': clientId,
-      'x-api-key': apiKey,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ ...payload, signature: signPaymentRequest(payload, checksumKey) }),
-  });
-
-  // payOS answers 4xx with a plain-text body on credential errors, so read text, not json.
-  const raw = await payosResponse.text();
-  let result: { code?: string; desc?: string; data?: Record<string, unknown>; signature?: string } = {};
   try {
-    result = JSON.parse(raw) as typeof result;
-  } catch {
-    /* non-JSON gateway body, reported through `raw` below */
-  }
-
-  if (result.code !== '00' || !result.data?.checkoutUrl) {
-    console.error(
-      `[payos] create-payment rejected: HTTP ${payosResponse.status} code=${result.code ?? '-'} body=${raw.slice(0, 300)}`
+    const payos = new PayOS({ clientId, apiKey, checksumKey });
+    paymentLink = await payos.paymentRequests.create({
+      orderCode,
+      amount,
+      description,
+      cancelUrl: `${origin}/checkout/return?orderCode=${orderCode}&status=cancelled`,
+      returnUrl: `${origin}/checkout/return?orderCode=${orderCode}`,
+      expiredAt: expiredAtSec,
+    });
+  } catch (error) {
+    const errMsg = (error as Error).message || 'Không thể tạo link thanh toán PayOS';
+    console.error('[payos] paymentRequests.create error:', errMsg);
+    return Response.json(
+      {
+        error: 'PAYLOS_REJECTED',
+        desc: errMsg,
+      },
+      { status: 502 }
     );
-    return Response.json({ error: 'PAYLOS_REJECTED', desc: result.desc ?? raw.slice(0, 200) }, { status: 502 });
   }
 
-  // Same checksum key verifies the response envelope, exactly as the official payOS SDKs do.
-  // An unverified checkout link would let anyone mint a payment page under our merchant name.
-  if (!verifySignature(result.data, result.signature, checksumKey)) {
-    console.error('[payos] create-payment rejected: response signature did not verify');
-    return Response.json({ error: 'PAYLOS_RESPONSE_INVALID' }, { status: 502 });
+  if (!paymentLink?.checkoutUrl) {
+    console.error('[payos] create-payment failed: missing checkoutUrl');
+    return Response.json({ error: 'PAYLOS_REJECTED', desc: 'PayOS không trả về link thanh toán.' }, { status: 502 });
   }
 
   // The coupon is not consumed here. A redemption is recorded when the payment is confirmed, so
@@ -231,10 +223,10 @@ export async function POST(request: Request) {
     originalAmountVnd: plan.priceVnd,
     amountVnd: amount,
     amountUsd: plan.priceUsd,
-    checkoutUrl: result.data.checkoutUrl,
+    checkoutUrl: paymentLink.checkoutUrl,
     // In-app QR popup: payOS returns the VietQR code alongside the hosted page link.
     // If qrCode is null or absent, fallback to checkoutUrl so the popup can always render a QR code.
-    qrCode: (result.data.qrCode as string | undefined) || (result.data.checkoutUrl as string | undefined) || null,
+    qrCode: paymentLink.qrCode || paymentLink.checkoutUrl,
     expiredAt: expiredAtMs,
     isDevSimulation: false,
   });

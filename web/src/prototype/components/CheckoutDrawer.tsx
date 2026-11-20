@@ -95,16 +95,16 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
 
   const [prevPlanId, setPrevPlanId] = useState<PlanId | null>(plan?.id ?? null);
 
-  // Reset coupon & checkout state whenever the selected plan changes so a coupon
-  // activated on one plan (e.g. Pro) never bleeds into another plan (e.g. Ultra).
-  if ((plan?.id ?? null) !== prevPlanId) {
-    setPrevPlanId(plan?.id ?? null);
+  // When a new/different plan is selected, reset coupon state so it never bleeds into another plan.
+  if (plan && plan.id !== prevPlanId) {
+    setPrevPlanId(plan.id);
     setCode('');
     setAppliedCoupon(null);
     setCouponError(null);
-    setCouponLoading(false);
     setError(null);
-    setGranted(null);
+    setQr(null);
+    setQrExpired(false);
+    setConfirmCloseOpen(false);
   }
 
   // Only treat a coupon as active when it belongs strictly to the currently selected plan.
@@ -158,13 +158,14 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
       });
       const result = (await response.json()) as {
         ok?: boolean;
-        planId?: PlanId;
+        planId?: string;
         code?: string;
         percent?: number;
         originalVnd?: number;
         discountedVnd?: number;
         discountVnd?: number;
         reason?: string;
+        error?: string;
       };
 
       // Ignore stale responses if the user switched plans while validating.
@@ -258,9 +259,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                 : 'PayOS credentials (Client ID, API Key, Checksum Key) are not configured on the server.';
           } else if (result.error === 'PAYLOS_REJECTED') {
             message =
-              language === 'vi'
-                ? `PayOS từ chối: ${result.desc ?? 'Không tạo được link thanh toán.'}`
-                : `PayOS rejected: ${result.desc ?? 'Could not create payment request.'}`;
+              result.desc ||
+              (language === 'vi'
+                ? 'Cổng thanh toán PayOS từ chối yêu cầu. Vui lòng kiểm tra lại cấu hình PayOS.'
+                : 'PayOS rejected the payment request. Please check PayOS configuration.');
           } else if (result.desc) {
             message = result.desc;
           }
@@ -284,6 +286,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
           setConfirmCloseOpen(false);
           showToast('toastPaymentSuccess');
           await refreshPlan();
+          onClose();
           return;
         }
 
@@ -312,9 +315,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
             expiredAt: expMs,
             isDevSimulation: Boolean((result as { isDevSimulation?: boolean }).isDevSimulation),
           });
-          if (!options.fromRetry) {
-            onClose();
-          }
+          // DO NOT call onClose() here: keep the drawer open and display the QR payment modal!
           return;
         }
 
@@ -369,7 +370,8 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
     }
     paidRef.current = false;
     expiredHandledRef.current = false;
-  }, [cancelBill]);
+    onClose();
+  }, [cancelBill, onClose]);
 
   const handleQrBeforeClose = useCallback((): boolean => {
     if (qrRef.current && !qrExpiredRef.current && !paidRef.current) {
@@ -418,6 +420,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
           setQrError(null);
           showToast('toastPaymentSuccess');
           await refreshPlan();
+          onClose();
         } else if (body.status === 'EXPIRED' || body.status === 'FAILED') {
           expiredHandledRef.current = true;
           setConfirmCloseOpen(false);
@@ -428,19 +431,20 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
       }
     };
     void poll();
-    const timer = setInterval(() => void poll(), 3000);
+    const timer = setInterval(() => void poll(), 2000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [qr, qrExpired, showToast, refreshPlan]);
+  }, [qr, qrExpired, showToast, refreshPlan, onClose]);
 
   const remaining = qr ? qr.expiredAt - now : 0;
 
   return (
     <>
+      {/* Step 1: Plan Checkout & Coupon Details Modal */}
       <Modal
-        isOpen={plan !== null}
+        isOpen={plan !== null && qr === null}
         onClose={onClose}
         title={t.checkoutTitle}
         description={plan ? plan.name : undefined}
@@ -456,7 +460,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                 {activeCoupon ? (
                   <span
                     id="checkout-discount-badge"
-                    className="inline-flex items-center gap-1 rounded-full bg-sage/15 px-2.5 py-0.5 text-xs font-semibold text-sage"
+                    className="inline-flex items-center gap-1 rounded-full bg-sage/20 border border-sage/40 px-2.5 py-1 text-xs font-bold text-sage"
                   >
                     <Tag className="h-3 w-3" aria-hidden="true" />
                     {activeCoupon.code} −{activeCoupon.percent}%
@@ -465,19 +469,26 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
               </div>
 
               {activeCoupon ? (
-                <div className="mt-2 space-y-1">
-                  <p className="text-sm text-ink-muted line-through">
-                    {planAmountLine(plan)}
-                  </p>
-                  <p id="checkout-final-amount" className="font-serif text-3xl text-ink">
-                    {formatVnd(activeCoupon.discountedVnd)}
-                    <span className="ml-2 font-sans text-xs font-normal text-ink-muted">
-                      {t.planPerMonth}
+                <div className="mt-3 space-y-2 rounded-lg bg-surface-2/60 p-3.5 border border-sage/30">
+                  <div className="flex items-center justify-between text-xs text-ink-muted">
+                    <span>{language === 'vi' ? 'Giá gốc:' : 'Original price:'}</span>
+                    <span className="line-through">{planAmountLine(plan)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs font-medium text-sage">
+                    <span>{language === 'vi' ? 'Số tiền đã giảm:' : 'Discount applied:'}</span>
+                    <span className="font-semibold">−{formatVnd(activeCoupon.discountVnd)} (−{activeCoupon.percent}%)</span>
+                  </div>
+                  <div className="pt-2 border-t border-border/40 flex items-baseline justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-ink">
+                      {language === 'vi' ? 'Số tiền thanh toán:' : 'Total to pay:'}
                     </span>
-                  </p>
-                  <p className="text-xs font-medium text-sage">
-                    {t.discountSaved.replace('{amount}', formatVnd(activeCoupon.discountVnd))}
-                  </p>
+                    <p id="checkout-final-amount" className="font-serif text-3xl font-bold text-emerald-400">
+                      {formatVnd(activeCoupon.discountedVnd)}
+                      <span className="ml-1.5 font-sans text-xs font-normal text-ink-muted">
+                        {t.planPerMonth}
+                      </span>
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <p id="checkout-final-amount" className="mt-2 font-serif text-3xl text-ink">
@@ -499,7 +510,9 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                 {t.discountTitle}
               </h3>
               <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-                {t.discountBody.replace('{amount}', planAmountLine(plan))}
+                {language === 'vi'
+                  ? `Mã giảm giá áp dụng duy nhất cho gói ${plan.name}. Giá gốc: ${planAmountLine(plan)}`
+                  : `Discount codes apply strictly to the ${plan.name} plan. Base price: ${planAmountLine(plan)}`}
               </p>
 
               <div className="mt-3 flex gap-2">
@@ -529,24 +542,23 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                     className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm leading-relaxed text-ink placeholder:text-ink-muted/60 focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/20"
                   />
                 </label>
-
                 {activeCoupon ? (
                   <button
                     type="button"
-                    id="checkout-remove-coupon-btn"
+                    id="checkout-promo-remove-btn"
                     onClick={removeCoupon}
-                    className="button-secondary min-h-11 shrink-0 justify-center px-4 text-xs"
+                    className="button-secondary shrink-0 px-4"
                   >
-                    <X className="h-3.5 w-3.5" aria-hidden="true" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                     {t.discountRemove}
                   </button>
                 ) : (
                   <button
                     type="button"
-                    id="checkout-apply-coupon-btn"
+                    id="checkout-promo-apply-btn"
                     onClick={() => void applyCoupon()}
                     disabled={couponLoading || !code.trim()}
-                    className="button-secondary min-h-11 shrink-0 justify-center px-4 text-xs disabled:opacity-50"
+                    className="button-secondary shrink-0 px-4 disabled:opacity-50"
                   >
                     {couponLoading ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -557,17 +569,25 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
               </div>
 
               {activeCoupon ? (
-                <p
+                <div
                   role="status"
                   id="checkout-coupon-applied"
-                  className="mt-2.5 flex items-center gap-1.5 text-xs font-medium text-sage"
+                  className="mt-3 flex items-start gap-2 rounded-lg bg-sage/10 p-2.5 text-xs font-medium text-sage border border-sage/20"
                 >
-                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  {t.discountApplied
-                    .replace('{code}', activeCoupon.code)
-                    .replace('{percent}', String(activeCoupon.percent))
-                    .replace('{plan}', plan.name)}
-                </p>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold">
+                      {language === 'vi'
+                        ? `Đã áp dụng mã ${activeCoupon.code} giảm ${activeCoupon.percent}% chỉ cho gói ${plan.name}!`
+                        : `Applied ${activeCoupon.code} (−${activeCoupon.percent}%) for ${plan.name} only!`}
+                    </p>
+                    <p className="text-[11px] text-ink-muted mt-0.5">
+                      {language === 'vi'
+                        ? `Bạn tiết kiệm được ${formatVnd(activeCoupon.discountVnd)}.`
+                        : `You save ${formatVnd(activeCoupon.discountVnd)}.`}
+                    </p>
+                  </div>
+                </div>
               ) : null}
 
               {couponError ? (
@@ -591,7 +611,9 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                 ? t.planCurrent
                 : activeCoupon && activeCoupon.discountedVnd === 0
                   ? t.checkoutActivateFree
-                  : t.checkoutPay}
+                  : activeCoupon
+                    ? `${t.checkoutPay} (${formatVnd(activeCoupon.discountedVnd)})`
+                    : `${t.checkoutPay} (${formatVnd(plan.priceVnd)})`}
             </button>
 
             {granted ? (
@@ -613,7 +635,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         ) : null}
       </Modal>
 
-      {/* Locked PayOS QR Payment Popup */}
+      {/* Step 2: PayOS QRCode Payment & Auto Tracking Modal */}
       <Modal
         isOpen={qr !== null}
         onBeforeClose={handleQrBeforeClose}
@@ -675,7 +697,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                   id="qr-code-image"
                   src={qrSrc(qr.qrCode)}
                   alt={t.checkoutQrAlt.replace('{bill}', String(qr.orderCode))}
-                  className="h-60 w-60 rounded-xl border border-border bg-white object-contain p-2"
+                  className="h-60 w-60 rounded-xl border border-border bg-white object-contain p-2 shadow-md"
                 />
 
                 <div className="grid w-full gap-3 sm:grid-cols-2">
@@ -690,7 +712,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                       disabled
                       readOnly
                       value={qr.planName}
-                      className="cursor-not-allowed bg-surface-2 opacity-75"
+                      className="cursor-not-allowed bg-surface-2 opacity-75 font-semibold text-ink"
                     />
                   </div>
 
@@ -705,7 +727,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                       disabled
                       readOnly
                       value={`#${qr.orderCode}`}
-                      className="cursor-not-allowed font-mono bg-surface-2 opacity-75"
+                      className="cursor-not-allowed font-mono bg-surface-2 opacity-75 text-ink"
                     />
                   </div>
 
@@ -721,10 +743,10 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                       readOnly
                       value={
                         qr.couponPercent > 0
-                          ? `${qr.amountVnd.toLocaleString('vi-VN')} ₫ (−${qr.couponPercent}%)`
+                          ? `${qr.amountVnd.toLocaleString('vi-VN')} ₫ (−${qr.couponPercent}% từ ${qr.originalAmountVnd.toLocaleString('vi-VN')} ₫)`
                           : `${qr.amountVnd.toLocaleString('vi-VN')} ₫`
                       }
-                      className="cursor-not-allowed font-semibold bg-surface-2 opacity-75"
+                      className="cursor-not-allowed font-semibold bg-surface-2 opacity-75 text-emerald-400"
                     />
                   </div>
 
@@ -738,29 +760,33 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                       type="text"
                       disabled
                       readOnly
-                      value={`ZC ${qr.orderCode}`}
-                      className="cursor-not-allowed font-mono bg-surface-2 opacity-75"
+                      value={`ZC${String(qr.orderCode).slice(-7)}`}
+                      className="cursor-not-allowed font-mono bg-surface-2 opacity-75 text-ink"
                     />
                   </div>
                 </div>
 
-                <p className="flex items-center gap-1.5 text-center text-xs text-ink-muted">
-                  <Lock className="h-3.5 w-3.5 shrink-0 text-brass" aria-hidden="true" />
-                  {t.checkoutQrLocked}
-                </p>
+                <div className="w-full flex items-center justify-between rounded-lg bg-surface-2/80 px-4 py-2 border border-border/50">
+                  <span className="text-xs text-ink-muted">
+                    {language === 'vi' ? 'Thời gian còn lại của mã QR:' : 'QR code validity remaining:'}
+                  </span>
+                  <p
+                    role="timer"
+                    aria-live="polite"
+                    className="font-serif text-xl font-bold tabular-nums text-amber-400"
+                  >
+                    {formatCountdown(remaining)}
+                  </p>
+                </div>
 
-                <p
-                  role="timer"
-                  aria-live="polite"
-                  className="font-serif text-2xl tabular-nums text-ink"
-                >
-                  {t.checkoutQrExpires.replace('{time}', formatCountdown(remaining))}
-                </p>
-
-                <p className="flex items-center gap-1.5 text-center text-xs text-ink-muted">
-                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brass" aria-hidden="true" />
-                  {t.checkoutQrChecking}
-                </p>
+                <div className="flex items-center gap-2 text-center text-xs text-sage py-1">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sage" aria-hidden="true" />
+                  <span>
+                    {language === 'vi'
+                      ? 'Hệ thống đang tự động kiểm tra giao dịch chuyển khoản và sẽ nâng cấp gói ngay khi thanh toán thành công.'
+                      : 'System is automatically tracking payment and will upgrade your plan upon completion.'}
+                  </span>
+                </div>
 
                 {qr.isDevSimulation ? (
                   <div className="w-full rounded-xl border border-dashed border-brass/50 bg-brass/10 p-3.5 text-center">
@@ -800,7 +826,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         ) : null}
       </Modal>
 
-      {/* Confirm Close Active QR Popup */}
+      {/* Step 3: Confirm Close Active QR Popup */}
       <Modal
         isOpen={confirmCloseOpen}
         onClose={() => setConfirmCloseOpen(false)}

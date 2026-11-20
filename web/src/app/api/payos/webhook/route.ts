@@ -1,7 +1,8 @@
 import { serverEnv } from '@/lib/serverEnv';
-import { deleteOrder, getOrder, markOrder, sweepStaleOrders, type OrderStatus } from '@/lib/payos/orders';
+import { getOrder, markOrder, sweepStaleOrders, type OrderStatus } from '@/lib/payos/orders';
 import { verifySignature } from '@/lib/payos/signature';
 import { addGrant, listGrants, redeemCoupon } from '@/lib/store/account';
+import { PayOS } from '@payos/node';
 
 /** payOS webhook payload codes (https://payos.vn/docs/tich-hop-webhook/). */
 const STATUS_BY_CODE: Record<string, OrderStatus> = {
@@ -11,28 +12,55 @@ const STATUS_BY_CODE: Record<string, OrderStatus> = {
 };
 
 export async function POST(request: Request) {
-  const checksumKey = serverEnv('PAYLOS_CHECKSUM_KEY') ?? serverEnv('PAYOS_CHECKSUM_KEY');
+  const clientId =
+    serverEnv('PAYOS_CLIENT_ID') ??
+    serverEnv('PAYLOS_CLIENT_ID') ??
+    serverEnv('NEXT_PUBLIC_PAYOS_CLIENT_ID');
+  const apiKey =
+    serverEnv('PAYOS_API_KEY') ??
+    serverEnv('PAYLOS_API_KEY') ??
+    serverEnv('NEXT_PUBLIC_PAYOS_API_KEY');
+  const checksumKey =
+    serverEnv('PAYOS_CHECKSUM_KEY') ??
+    serverEnv('PAYLOS_CHECKSUM_KEY') ??
+    serverEnv('PAYOS_CHECKSUM');
+
   if (!checksumKey) {
     console.error('[payos] webhook rejected: PAYOS_CHECKSUM_KEY missing');
     return new Response('not configured', { status: 503 });
   }
 
-  let payload: { code?: unknown; data?: Record<string, unknown>; signature?: unknown };
+  let payload: Record<string, unknown>;
   try {
-    payload = await request.json();
+    payload = (await request.json()) as Record<string, unknown>;
   } catch {
     return new Response('bad request', { status: 400 });
   }
 
-  const data = payload.data;
-  if (!data || typeof data !== 'object') return new Response('missing data', { status: 400 });
+  const rawData = payload.data;
+  if (!rawData || typeof rawData !== 'object') return new Response('missing data', { status: 400 });
 
-  // Unverified webhook = anyone can grant themselves a plan. This check is the whole point.
-  if (!verifySignature(data, payload.signature, checksumKey)) {
+  let isVerified = false;
+  if (clientId && apiKey) {
+    try {
+      const payos = new PayOS({ clientId, apiKey, checksumKey });
+      await payos.webhooks.verify(payload as Parameters<typeof payos.webhooks.verify>[0]);
+      isVerified = true;
+    } catch {
+      isVerified = false;
+    }
+  }
+
+  if (!isVerified) {
+    isVerified = verifySignature(rawData as Record<string, unknown>, payload.signature, checksumKey);
+  }
+
+  if (!isVerified) {
     console.warn('[payos] webhook rejected: bad signature');
     return new Response('invalid signature', { status: 401 });
   }
 
+  const data = rawData as Record<string, unknown>;
   const orderCode = Number(data.orderCode);
   const amount = Number(data.amount);
   const order = await getOrder(orderCode);
@@ -98,18 +126,5 @@ export async function POST(request: Request) {
   }
 
   console.log('[payos] order', orderCode, '->', status, 'stored:', JSON.stringify(updated));
-
-  // Failed transactions are permanently deleted; only successful ones are kept.
-  if (status === 'FAILED') {
-    try {
-      await deleteOrder(orderCode);
-    } catch {
-      /* best-effort */
-    }
-  }
-
-  return new Response(JSON.stringify({ ok: true }), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  return Response.json({ success: true, order: updated });
 }
