@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {
+  analyzeChatRoomConclusion,
+  extractChatTranscriptAndContributions,
+  matchPersonaId,
+  pickConclusionAnalyst,
+} from '../web/src/prototype/chat/conclusion.ts';
 
 test('RoomSummaryView roster & message filtering only includes user-created bots', () => {
   // Simulate the personas pool (presets + user bots)
@@ -95,12 +101,6 @@ test('RoomSummaryView roster & message filtering only includes user-created bots
 });
 
 test('openRoomConclusion resolves seated advisors regardless of bot: prefix', () => {
-  const matchId = (p, id) => {
-    if (p.id === id) return true;
-    const strip = (s) => (s.startsWith('bot:') ? s.slice(4) : s);
-    return strip(p.id) === strip(id);
-  };
-
   const localizedPersonas = [
     { id: 'pragmatist', name: 'The Pragmatist' },
     { id: 'dreamer', name: 'The Dreamer' },
@@ -116,7 +116,7 @@ test('openRoomConclusion resolves seated advisors regardless of bot: prefix', ()
   };
 
   const seated1 = roomUnprefixed.roster
-    .map((id) => localizedPersonas.find((persona) => matchId(persona, id)))
+    .map((id) => localizedPersonas.find((persona) => matchPersonaId(persona, id)))
     .filter(Boolean);
 
   assert.equal(seated1.length, 2);
@@ -131,7 +131,7 @@ test('openRoomConclusion resolves seated advisors regardless of bot: prefix', ()
   };
 
   const seated2 = roomPrefixed.roster
-    .map((id) => localizedPersonas.find((persona) => matchId(persona, id)))
+    .map((id) => localizedPersonas.find((persona) => matchPersonaId(persona, id)))
     .filter(Boolean);
 
   assert.equal(seated2.length, 2);
@@ -142,4 +142,144 @@ test('openRoomConclusion resolves seated advisors regardless of bot: prefix', ()
   const isConclusionDisabled = (isDeliberating) => isDeliberating;
   assert.equal(isConclusionDisabled(true), true); // Deliberating -> disabled
   assert.equal(isConclusionDisabled(false), false); // Ready -> enabled
+});
+
+test('pickConclusionAnalyst selects one AI from the room whose provider key is connected', () => {
+  const seated = [
+    {
+      id: 'bot:alpha',
+      name: 'Alpha Bot',
+      archetype: 'Alpha',
+      model: 'claude-sonnet-4-5',
+      provider: 'anthropic',
+      colorToken: 'persona-sage',
+      colorHex: '#7C9885',
+      stance: 'Critical thinker',
+      instructions: 'Analyze risks',
+      sampleQuote: '',
+    },
+    {
+      id: 'bot:beta',
+      name: 'Beta Bot',
+      archetype: 'Beta',
+      model: 'gpt-4o',
+      provider: 'openai',
+      colorToken: 'persona-rose',
+      colorHex: '#B98389',
+      stance: 'Builder',
+      instructions: 'Focus on execution',
+      sampleQuote: '',
+    },
+  ];
+
+  const apiKeys = [
+    { provider: 'anthropic', modelName: 'claude-sonnet-4-5', connected: false },
+    { provider: 'openai', modelName: 'gpt-4o-mini', connected: true },
+  ];
+  const keys = { openai: 'sk-test-openai' };
+
+  const picked = pickConclusionAnalyst(seated, apiKeys, keys);
+  assert.equal(picked.analyst.id, 'bot:beta');
+  assert.equal(picked.apiKey, 'sk-test-openai');
+  assert.equal(picked.model, 'gpt-4o');
+});
+
+test('analyzeChatRoomConclusion uses one AI to analyze all chat messages into Good / Normal / Bad scenarios', async () => {
+  const seated = [
+    {
+      id: 'bot:alpha',
+      name: 'Alpha Bot',
+      archetype: 'Alpha',
+      model: 'gpt-4o',
+      provider: 'openai',
+      colorToken: 'persona-sage',
+      colorHex: '#7C9885',
+      stance: 'Chiến lược gia',
+      instructions: 'Phân tích chiến lược',
+      sampleQuote: '',
+    },
+    {
+      id: 'bot:beta',
+      name: 'Beta Bot',
+      archetype: 'Beta',
+      model: 'claude-sonnet-4-5',
+      provider: 'anthropic',
+      colorToken: 'persona-rose',
+      colorHex: '#B98389',
+      stance: 'Kỹ sư hệ thống',
+      instructions: 'Đánh giá kỹ thuật',
+      sampleQuote: '',
+    },
+  ];
+
+  const messages = [
+    { id: 'm1', authorId: 'user', body: 'Chúng ta có nên chuyển sang kiến trúc microservices không?' },
+    { id: 'm2', authorId: 'bot:alpha', body: 'Chỉ nên tách dần các module có tải cao để tránh đội chi phí vận hành.' },
+    { id: 'm3', authorId: 'bot:beta', body: 'Cần hoàn thiện CI/CD và observability trước khi tách dịch vụ.' },
+    { id: 'm4', authorId: 'user', body: 'Nếu team chỉ có 4 người thì sao?' },
+    { id: 'm5', authorId: 'bot:alpha', body: 'Với 4 người, modular monolith là lựa chọn an toàn nhất hiện tại.' },
+  ];
+
+  const extracted = extractChatTranscriptAndContributions(messages, seated, seated, 'vi');
+  assert.equal(extracted.contributions.length, 2);
+  assert.ok(extracted.contributions[0].text.includes('modular monolith'));
+  assert.ok(extracted.transcript.includes('[Alpha Bot]:'));
+  assert.ok(extracted.transcript.includes('[Beta Bot]:'));
+
+  let callCount = 0;
+  let capturedPrompt = '';
+
+  const fakeComplete = async (_conn, req) => {
+    callCount += 1;
+    capturedPrompt = req.prompt;
+    return JSON.stringify({
+      summary: 'Team 4 người nên giữ Modular Monolith và chuẩn bị trước CI/CD.',
+      dissent: 'Alpha ưu tiên giữ monolith vì quy mô nhân sự, Beta nhấn mạnh điều kiện hạ tầng.',
+      recommendation: 'Giữ Modular Monolith trong 6 tháng tới và tách biên module rõ ràng.',
+      scenarios: {
+        good: {
+          title: 'Hướng Tốt (Tích cực)',
+          description: 'Tốc độ phát triển nhanh, không tốn overhead vận hành hệ thống phân tán.',
+          actions: ['Định nghĩa ranh giới module rõ ràng', 'Thiết lập giám sát cơ bản'],
+        },
+        normal: {
+          title: 'Hướng Bình thường (Cơ sở)',
+          description: 'Hệ thống đáp ứng tốt tải hiện tại, đôi lúc cần tối ưu database chung.',
+          actions: ['Tối ưu truy vấn định kỳ', 'Giữ quy chuẩn code review'],
+        },
+        bad: {
+          title: 'Hướng Xấu (Rủi ro)',
+          description: 'Các module bị phụ thuộc chéo nếu không kiểm soát kiến trúc.',
+          actions: ['Áp dụng lint kiểm soát import giữa các module', 'Viết test tích hợp'],
+        },
+      },
+    });
+  };
+
+  const result = await analyzeChatRoomConclusion({
+    topic: 'Kiến trúc Microservices hay Monolith',
+    messages,
+    seated,
+    allPersonas: seated,
+    apiKeys: [{ provider: 'openai', modelName: 'gpt-4o', connected: true }],
+    keys: { openai: 'sk-test' },
+    language: 'vi',
+    completeFn: fakeComplete,
+  });
+
+  // Only ONE AI call is made for the entire chat conclusion
+  assert.equal(callCount, 1);
+  assert.ok(capturedPrompt.includes('modular monolith'));
+  assert.ok(capturedPrompt.includes('CI/CD'));
+
+  // Scenarios (Tốt, Bình thường, Xấu) and chair synthesis are populated from the AI analysis
+  assert.equal(
+    result.analysis.chair.summary,
+    'Team 4 người nên giữ Modular Monolith và chuẩn bị trước CI/CD.'
+  );
+  assert.equal(result.analysis.scenarios.good.title, 'Hướng Tốt (Tích cực)');
+  assert.equal(result.analysis.scenarios.good.subtitle, 'Phân tích bởi Alpha Bot');
+  assert.equal(result.analysis.scenarios.normal.title, 'Hướng Bình thường (Cơ sở)');
+  assert.equal(result.analysis.scenarios.bad.title, 'Hướng Xấu (Rủi ro)');
+  assert.equal(result.contributions.length, 2);
 });

@@ -1,10 +1,10 @@
 ﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
+import { matchPersonaId } from '../chat/conclusion';
 import {
   Copy,
   FilePenLine,
-  Layers3,
   ListChecks,
   Quote,
   ShieldAlert,
@@ -15,7 +15,6 @@ import FrameworkPanel from './FrameworkPanel';
 export const SessionConcludedView: React.FC = () => {
   const {
     currentSession,
-    openFrameworkModal,
     openCounterDraftModal,
     showToast,
     t,
@@ -27,21 +26,29 @@ export const SessionConcludedView: React.FC = () => {
   // round 1. The last round is what "concluded" means: later follow-ups supersede.
   const round = currentSession.rounds[currentSession.rounds.length - 1];
   const nameOf = (advisorId: string) =>
-    currentSession.advisors.find((advisor) => advisor.id === advisorId)?.name ?? advisorId;
-
-  const frameworkLabel = {
-    'Good / Normal / Bad Scenarios': t.scenarioTitle,
-    'Six Thinking Hats': t.hatsTitle,
-    'Decision Matrix': t.matrixTitle,
-  }[currentSession.framework];
+    currentSession.advisors.find((advisor) => matchPersonaId(advisor, advisorId))?.name ??
+    advisorId;
 
   const handleCopySummary = async () => {
+    const branches = [
+      currentSession.scenarios.good,
+      currentSession.scenarios.normal,
+      currentSession.scenarios.bad,
+    ];
     const text = [
       `${t.concludedTitle}: ${currentSession.title}`,
       `${t.roundOf.replace('{n}', String(round.index))} — ${t.concludedTitle}`,
       `${t.chairSummaryLabel}: ${round.chair.summary}`,
       `${t.chairDissentLabel}: ${round.chair.dissent}`,
       `${t.nextStep}: ${round.chair.recommendation}`,
+      '',
+      ...branches.map(
+        (b) =>
+          `[${b.title}] ${b.description}${
+            b.actions.length > 0 ? `\n${b.actions.map((a) => `  - ${a}`).join('\n')}` : ''
+          }`
+      ),
+      '',
       ...round.contributions.map(
         (item) => `- ${nameOf(item.advisorId)}: ${item.text}`
       ),
@@ -75,14 +82,6 @@ export const SessionConcludedView: React.FC = () => {
           <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:shrink-0">
             <button
               type="button"
-              onClick={openFrameworkModal}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-ink transition hover:border-brass/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
-            >
-              <Layers3 className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
-              <span className="min-w-0 truncate">{frameworkLabel}</span>
-            </button>
-            <button
-              type="button"
               onClick={openCounterDraftModal}
               className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-ink transition hover:border-brass/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
             >
@@ -112,7 +111,7 @@ export const SessionConcludedView: React.FC = () => {
               <h2 className="mt-2 font-serif text-2xl text-ink">{t.concludedTitle}</h2>
             </div>
             <span className="self-start rounded-md border border-brass/35 bg-background px-2.5 py-1 text-xs text-brass">
-              {t.fixtureNotConsensus}
+              {currentSession.scenarios.good.subtitle || t.fixtureNotConsensus}
             </span>
           </div>
 
@@ -128,7 +127,9 @@ export const SessionConcludedView: React.FC = () => {
           <div className="mt-6 space-y-6">
             <div>
               <h3 className="text-sm font-semibold text-ink">{t.chairSummaryLabel}</h3>
-              <p className="mt-2 font-serif text-xl leading-relaxed text-ink">{round.chair.summary}</p>
+              <p className="mt-2 whitespace-pre-wrap break-words font-serif text-xl leading-relaxed text-ink">
+                {round.chair.summary}
+              </p>
             </div>
 
             <div>
@@ -143,7 +144,7 @@ export const SessionConcludedView: React.FC = () => {
                     className="flex gap-2 rounded-lg border border-border bg-background/70 px-3 py-2.5 text-sm leading-relaxed text-ink-muted"
                   >
                     <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brass" aria-hidden="true" />
-                    {item}
+                    <span className="whitespace-pre-wrap break-words">{item}</span>
                   </li>
                 ))}
               </ul>
@@ -151,7 +152,9 @@ export const SessionConcludedView: React.FC = () => {
 
             <div className="rounded-xl border border-sage/35 bg-sage/10 p-4">
               <h3 className="text-sm font-semibold text-ink">{t.chairRecommendationLabel}</h3>
-              <p className="mt-1 text-sm leading-relaxed text-ink-muted">{round.chair.recommendation}</p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-muted">
+                {round.chair.recommendation}
+              </p>
             </div>
           </div>
 
@@ -174,7 +177,7 @@ export const SessionConcludedView: React.FC = () => {
       </section>
 
       <FrameworkPanel
-        key={`${round.index}-${round.framework}`}
+        key={`${round.index}-scenarios`}
         round={round}
         session={currentSession}
         t={t}
@@ -188,14 +191,14 @@ export const SessionConcludedView: React.FC = () => {
           </h2>
         </div>
         <div className="grid gap-4 lg:grid-cols-3">
-          {round.contributions.map((contribution) => {
-            const advisor = currentSession.advisors.find(
-              (item) => item.id === contribution.advisorId
+          {round.contributions.map((contribution, index) => {
+            const advisor = currentSession.advisors.find((item) =>
+              matchPersonaId(item, contribution.advisorId)
             );
             const crossReference = contribution.rebuts ?? contribution.buildsOn;
             return (
               <article
-                key={contribution.advisorId}
+                key={`${contribution.advisorId}-${index}`}
                 className="rounded-2xl border border-border bg-surface p-5"
               >
                 <div className="border-b border-border pb-3">
@@ -214,7 +217,9 @@ export const SessionConcludedView: React.FC = () => {
                     </p>
                   )}
                 </div>
-                <p className="mt-4 text-sm leading-relaxed text-ink">{contribution.text}</p>
+                <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
+                  {contribution.text}
+                </p>
                 <p className="mt-3 text-xs leading-relaxed text-ink-muted">
                   {advisor?.instructions ?? ''}
                 </p>
