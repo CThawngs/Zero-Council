@@ -615,3 +615,37 @@ test('an advisor who passes still spends a turn, so a silent room cannot loop fo
   assert.equal(speakers.length <= TWO.length * COUNCIL_ROUNDS, true);
   assert.equal(stoppedBy, 'silent');
 });
+
+test('2nd bot in panel mode gets empty handoffTargets and cannot hand off to itself', async () => {
+  const seen = [];
+  const { speakers, stoppedBy } = await runTurn({
+    roster: TWO,
+    mode: 'panel',
+    history: [],
+    userMessage: msg(USER_HANDLE, 'hello', []),
+    generate: (request) => {
+      seen.push({
+        id: request.bot.id,
+        isClosing: request.isClosing,
+        handoffTargets: request.handoffTargets?.map((b) => b.id) ?? [],
+        roster: request.roster?.map((b) => b.id) ?? [],
+      });
+      // Even if the 2nd bot emits its own id in handoffs, it must not re-run itself.
+      return turn('reply', [request.bot.id]);
+    },
+  });
+  assert.deepEqual(speakers, ['pragmatist', 'dreamer']);
+  assert.equal(stoppedBy, 'user');
+  assert.deepEqual(seen[0], {
+    id: 'pragmatist',
+    isClosing: false,
+    handoffTargets: ['dreamer'],
+    roster: ['pragmatist', 'dreamer'],
+  });
+  assert.deepEqual(seen[1], {
+    id: 'dreamer',
+    isClosing: true,
+    handoffTargets: [],
+    roster: ['pragmatist', 'dreamer'],
+  });
+});

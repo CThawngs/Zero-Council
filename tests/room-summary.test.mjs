@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   analyzeChatRoomConclusion,
+  buildFallbackConclusion,
   extractChatTranscriptAndContributions,
+  extractReadableSummary,
   matchPersonaId,
+  parseConclusionResponse,
   pickConclusionAnalyst,
 } from '../web/src/prototype/chat/conclusion.ts';
 
@@ -282,4 +285,84 @@ test('analyzeChatRoomConclusion uses one AI to analyze all chat messages into Go
   assert.equal(result.analysis.scenarios.normal.title, 'Hướng Bình thường (Cơ sở)');
   assert.equal(result.analysis.scenarios.bad.title, 'Hướng Xấu (Rủi ro)');
   assert.equal(result.contributions.length, 2);
+});
+
+test('parseConclusionResponse and extractReadableSummary never leak JSON into summary on truncated or fenced responses', () => {
+  const analyst = {
+    id: 'bot:alpha',
+    name: 'Alpha Bot',
+    archetype: 'Alpha',
+    model: 'gemini-2.5-flash',
+    provider: 'google',
+    colorToken: 'persona-sage',
+    colorHex: '#7C9885',
+    stance: 'Strategist',
+    instructions: 'Analyze carefully',
+    sampleQuote: '',
+  };
+  const messages = [
+    { id: 'm1', authorId: 'user', body: 'Should we launch this month?' },
+    { id: 'm2', authorId: 'bot:alpha', body: 'Launch a closed beta first to validate retention.' },
+  ];
+  const fallback = buildFallbackConclusion('Launch plan', messages, [analyst], analyst, 'vi');
+
+  // Case 1: Truncated markdown-fenced JSON cut off mid-scenarios
+  const truncatedJson = [
+    '```json',
+    '{',
+    '  "summary": "Nên mở closed beta trước để kiểm chứng giữ chân người dùng.",',
+    '  "dissent": "Cần cân bằng giữa tốc độ ra mắt và độ ổn định.",',
+    '  "recommendation": "Chạy closed beta 2 tuần với 50 người dùng đầu tiên.",',
+    '  "scenarios": {',
+    '    "good": {',
+    '      "title": "Hướng Tốt (Tích cực)",',
+    '      "description": "Tỷ lệ quay lại vượt 40%, đủ tín hiệu mở rộng.",',
+    '      "actions": ["Mở danh sách chờ", "Thu thập phản hồi"]',
+    '    },',
+    '    "normal": {',
+    '      "title": "Hướng Bình thường",',
+    '      "description": "Kết quả ổn định nhưng cần cải thiện onboarding',
+  ].join('\n');
+
+  const parsedTruncated = parseConclusionResponse(truncatedJson, fallback, analyst, 'vi');
+  assert.equal(
+    parsedTruncated.chair.summary,
+    'Nên mở closed beta trước để kiểm chứng giữ chân người dùng.'
+  );
+  assert.equal(
+    parsedTruncated.chair.dissent,
+    'Cần cân bằng giữa tốc độ ra mắt và độ ổn định.'
+  );
+  assert.equal(
+    parsedTruncated.chair.recommendation,
+    'Chạy closed beta 2 tuần với 50 người dùng đầu tiên.'
+  );
+  assert.equal(parsedTruncated.scenarios.good.title, 'Hướng Tốt (Tích cực)');
+  assert.deepEqual(parsedTruncated.scenarios.good.actions, ['Mở danh sách chờ', 'Thu thập phản hồi']);
+  assert.ok(!parsedTruncated.chair.summary.includes('{'));
+  assert.ok(!parsedTruncated.chair.summary.includes('```'));
+
+  // Case 2: JSON with literal newlines inside string and trailing comma
+  const messyJson = `{
+    "summary": "Dòng một.
+Dòng hai.",
+    "dissent": "Ý kiến khác biệt.",
+    "recommendation": "Thử nghiệm nhỏ.",
+  }`;
+  const parsedMessy = parseConclusionResponse(messyJson, fallback, analyst, 'vi');
+  assert.equal(parsedMessy.chair.summary, 'Dòng một.\nDòng hai.');
+  assert.equal(parsedMessy.chair.dissent, 'Ý kiến khác biệt.');
+
+  // Case 3: Double-encoded JSON inside summary
+  const doubleEncoded = JSON.stringify({
+    summary: JSON.stringify({ summary: 'Tóm tắt đã giải nén' }),
+  });
+  assert.equal(extractReadableSummary(doubleEncoded, 'fallback'), 'Tóm tắt đã giải nén');
+
+  // Case 4: Unparseable JSON without a summary field falls back cleanly without leaking JSON
+  const brokenNoSummary = '```json\n{\n  "scenarios": { "good": ';
+  const parsedBroken = parseConclusionResponse(brokenNoSummary, fallback, analyst, 'vi');
+  assert.equal(parsedBroken.chair.summary, fallback.chair.summary);
+  assert.ok(!parsedBroken.chair.summary.trim().startsWith('{'));
+  assert.ok(!parsedBroken.chair.summary.includes('```'));
 });
