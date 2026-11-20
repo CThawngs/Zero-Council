@@ -11,3 +11,4 @@ evidence/
 # Zero Council runtime artifacts - never commit
 .zc-*.json
 .zc-tmp/
+node_modules/

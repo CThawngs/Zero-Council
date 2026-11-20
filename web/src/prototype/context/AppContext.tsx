@@ -740,7 +740,8 @@ export const AppProvider: React.FC<{
     advisors: AdvisorPersona[] = localizedPersonas,
     landOn: ViewType = 'session-concluded'
   ) => {
-    const normalizedQuestion = question.trim().toLowerCase();
+    const rawQuestion = (question ?? '').trim() || copy[language].initialProjectTitle;
+    const normalizedQuestion = rawQuestion.toLowerCase();
     const seatingOf = (list: AdvisorPersona[]) =>
       list
         .map((persona) => persona.id)
@@ -762,18 +763,33 @@ export const AppProvider: React.FC<{
     void (async () => {
       setIsDeliberating(true);
       try {
-        const session = await createSession(
-          question.trim(),
-          framework,
-          currentMode,
-          advisors,
-          language,
-          buildGenerate(advisors, keys, apiKeys)
-        );
+        let session: DeliberationSession;
+        try {
+          session = await createSession(
+            rawQuestion,
+            framework,
+            currentMode,
+            advisors,
+            language,
+            buildGenerate(advisors, keys, apiKeys)
+          );
+        } catch (genError) {
+          console.warn('[deliberation] real generation failed, falling back to fixture:', genError);
+          session = await createSession(
+            rawQuestion,
+            framework,
+            currentMode,
+            advisors,
+            language,
+            undefined
+          );
+        }
         setSessions((value) => [session, ...value]);
         setCurrentSessionId(session.id);
         setSelectedRoundIndex(1);
         setCurrentView(landOn);
+      } catch (err) {
+        console.error('[deliberation] failed to start session:', err);
       } finally {
         setIsDeliberating(false);
       }
@@ -1012,6 +1028,11 @@ export const AppProvider: React.FC<{
     if (found) loadConversationIntoRoom(found);
   };
 
+  const closeRoomModal = () => {
+    setEditingGroupId(null);
+    setIsJoinRoomOpen(false);
+  };
+
   const updateGroupChat = async (
     id: string,
     patch: { title?: string; mode?: ChatMode; roster?: string[] }
@@ -1040,7 +1061,7 @@ export const AppProvider: React.FC<{
               }
             : room
         );
-        setEditingGroupId(null);
+        closeRoomModal();
         return true;
       } catch {
         return false;
@@ -1069,7 +1090,7 @@ export const AppProvider: React.FC<{
           }
         : room
     );
-    setEditingGroupId(null);
+    closeRoomModal();
     return true;
   };
 
@@ -1468,9 +1489,27 @@ export const AppProvider: React.FC<{
 
   const openRoomConclusion = () => {
     if (!currentRoom) return;
-    const seated = currentRoom.roster
-      .map((id) => localizedPersonas.find((persona) => persona.id === id))
+    const wasRunning = roomAbortRef.current !== null;
+    roomAbortRef.current?.abort();
+    if (wasRunning) {
+      setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
+    }
+    const matchId = (p: AdvisorPersona, id: string) => {
+      if (p.id === id) return true;
+      const strip = (s: string) => (s.startsWith('bot:') ? s.slice(4) : s);
+      return strip(p.id) === strip(id);
+    };
+    let seated = currentRoom.roster
+      .map((id) => localizedPersonas.find((persona) => matchId(persona, id)))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
+    if (seated.length === 0) {
+      seated = currentRoom.roster
+        .map((id) => personas.find((persona) => matchId(persona, id)))
+        .filter((persona): persona is AdvisorPersona => Boolean(persona));
+    }
+    if (seated.length === 0) {
+      seated = localizedPersonas.slice(0, personaCap);
+    }
     if (seated.length === 0) return;
     const question =
       currentRoom.messages.find((message) => message.authorId === USER_HANDLE)?.body ??
@@ -1898,7 +1937,7 @@ export const AppProvider: React.FC<{
           setEditingGroupId(id);
           setIsJoinRoomOpen(true);
         },
-        closeEditGroup: () => setEditingGroupId(null),
+        closeEditGroup: closeRoomModal,
         apiKeys,
         connectApiKey,
         updateProviderModels,
@@ -1933,10 +1972,7 @@ export const AppProvider: React.FC<{
           setEditingGroupId(null);
           setIsJoinRoomOpen(true);
         },
-        closeJoinRoom: () => {
-          setEditingGroupId(null);
-          setIsJoinRoomOpen(false);
-        },
+        closeJoinRoom: closeRoomModal,
         joinRoom,
         startCouncilChat,
         wrapUpRoom,

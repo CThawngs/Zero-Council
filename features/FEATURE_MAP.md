@@ -161,7 +161,7 @@ Cột `Bilingual`: ⭕ đã dịch đủ EN/VI.
 | Landing | nav | `components/OverviewView.tsx` | ⭕ |
 | Sign in | `/auth` | `components/SignInView.tsx` | ⭕ |
 | Sign up | `/auth` | `components/SignUpView.tsx` | ⭕ |
-| Sessions | nav Workspace | `components/SessionsListView.tsx` | ⭕ |
+| Sessions / Group chats | nav Workspace / sidebar | `components/SessionsListView.tsx` | ⭕ |
 | Council room | nav Workspace | `components/ChatRoomView.tsx` | ⭕ |
 | Advisors | nav Workspace | `components/PersonasView.tsx` | ⭕ |
 | New advisor | nav Workspace | `components/NewAdvisorView.tsx` | ⭕ |
@@ -171,6 +171,7 @@ Cột `Bilingual`: ⭕ đã dịch đủ EN/VI.
 | Billing | nav Manage | `components/BillingHistoryView.tsx` | ⭕ |
 | Settings | nav Manage | `components/SettingsView.tsx` | ⭕ |
 | Legal (7 doc) | footer | `components/LegalView.tsx` | ⭕ |
+| Room summary | wrapUpRoom | `components/RoomSummaryView.tsx` | ⭕ |
 
 Nguồn điều hướng duy nhất: `prototype/navigation.ts`. Header, Sidebar và mobile panel đều render từ đó — mục đích là không còn danh sách link trôi lệch giữa 3 nơi.
 
@@ -184,6 +185,10 @@ Nguồn điều hướng duy nhất: `prototype/navigation.ts`. Header, Sidebar 
 | Language toggle | chỉ đổi state | dịch trọn site, nhớ qua `localStorage` |
 | Footer | 2 link | nhóm Product + 7 tài liệu pháp lý + disclaimer |
 | Auth screens | hardcode English | song ngữ |
+| RoomSummaryView roster | hiện tất cả advisor trong phòng gồm cả cố vấn mẫu | chỉ lọc và hiện danh sách bot do người dùng tạo (`bot:*`) |
+| PersonasView advisors | hiện cả userBots và preset advisors | chỉ hiển thị userBots (CRUD, chat 1-1, hạn mức), ẩn danh sách cố vấn mẫu |
+| SessionsListView | hiện các phiên deliberation mẫu từ mockData | hiển thị danh sách group chats thực tế từ `conversations`, hỗ trợ tìm kiếm, mở phòng, sửa nhóm, xóa nhóm tương tự sidebar |
+| RoomSummaryView conclusion | nút Mở kết luận không chạy khi click (bị disabled oan, lỗi so khớp ID bot/cố vấn, BYOK throw không bắt) | giữ nguyên luồng: ChatRoomView ấn Tóm tắt chuyển sang RoomSummaryView, nút Mở kết luận trong RoomSummaryView chạy mượt mà với fallback an toàn |
 
 ### Đã xoá
 
