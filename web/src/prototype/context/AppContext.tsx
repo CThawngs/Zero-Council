@@ -1258,7 +1258,7 @@ export const AppProvider: React.FC<{
     }
 
     const roster = activeIds
-      .map((id) => localizedPersonas.find((persona) => persona.id === id))
+      .map((id) => localizedPersonas.find((persona) => matchPersonaId(persona, id)))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
     const rosterBots = toChatBots(roster);
 

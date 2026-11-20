@@ -1,7 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
-import { matchPersonaId } from '../chat/conclusion';
+import { extractReadableSummary, matchPersonaId } from '../chat/conclusion';
 import {
   Copy,
   ListChecks,
@@ -23,6 +23,8 @@ export const SessionConcludedView: React.FC = () => {
   // A concluded session always has at least one round — the first question is
   // round 1. The last round is what "concluded" means: later follow-ups supersede.
   const round = currentSession.rounds[currentSession.rounds.length - 1];
+  const fallbackSummary = extractReadableSummary(currentSession.summary) || t.chairSummary;
+  const summaryText = extractReadableSummary(round.chair.summary, fallbackSummary);
   const nameOf = (advisorId: string) =>
     currentSession.advisors.find((advisor) => matchPersonaId(advisor, advisorId))?.name ??
     advisorId;
@@ -36,7 +38,7 @@ export const SessionConcludedView: React.FC = () => {
     const text = [
       `${t.concludedTitle}: ${currentSession.title}`,
       `${t.roundOf.replace('{n}', String(round.index))} — ${t.concludedTitle}`,
-      `${t.chairSummaryLabel}: ${round.chair.summary}`,
+      `${t.chairSummaryLabel}: ${summaryText}`,
       `${t.chairDissentLabel}: ${round.chair.dissent}`,
       `${t.nextStep}: ${round.chair.recommendation}`,
       '',
@@ -116,7 +118,7 @@ export const SessionConcludedView: React.FC = () => {
             <div>
               <h3 className="text-sm font-semibold text-ink">{t.chairSummaryLabel}</h3>
               <p className="mt-2 whitespace-pre-wrap break-words font-serif text-xl leading-relaxed text-ink">
-                {round.chair.summary}
+                {summaryText}
               </p>
             </div>
 

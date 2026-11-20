@@ -142,6 +142,8 @@ export type TurnFailure =
 
 export interface ChatTurnRequest {
   bot: ChatBot;
+  /** Full active room roster so adapters can resolve speaker names in history. */
+  roster?: ChatBot[];
   /** Everything said before this turn, already trimmed to the context budget. */
   history: ChatMessage[];
   /** Advisors still queued this round. The generator may address any of them. */
@@ -465,14 +467,16 @@ export const runTurn = async ({
     // Everyone after this advisor in join order who still has a turn, so the floor goes round the table
     // rather than always back to the first seat.
     const fromHere = roster.findIndex((other) => other.id === bot.id);
-    const handoffTargets =
-      effectiveRounds > 1
+    const handoffTargets = isClosing
+      ? []
+      : effectiveRounds > 1
         ? [...roster.slice(fromHere + 1), ...roster.slice(0, fromHere)].filter(
             (other) => other.id !== bot.id && (turnsBy.get(other.id) ?? 0) < effectiveRounds
           )
-        : [...queue];
+        : [...queue].filter((other) => other.id !== bot.id);
     const request: ChatTurnRequest = {
       bot,
+      roster: [...roster],
       history: buildContext(messages),
       waiting: [...queue],
       handoffTargets,
