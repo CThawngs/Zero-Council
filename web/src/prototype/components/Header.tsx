@@ -6,6 +6,7 @@ import type { ViewType } from '../types';
 import { Globe2, Lock, Menu, Moon, Plus, Sun, Users, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
+import { MobileSidebar } from './MobileSidebar';
 
 interface HeaderProps {
   isWorkspace: boolean;
@@ -101,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
   return (
     <header
       ref={headerRef}
-      className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl"
+      className={`fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 ${menuOpen ? '' : 'backdrop-blur-xl'}`}
     >
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
         <button
@@ -138,6 +139,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
           </nav>
         )}
 
+        {/* MỤC PHẢI */}
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
@@ -196,6 +198,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
               {t.signOut}
             </button>
           )}
+          {/* MENU MOBILE */}
           <button
             ref={menuButtonRef}
             type="button"
@@ -206,193 +209,86 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             aria-controls="mobile-navigation"
             aria-label={menuOpen ? t.close : t.menu}
           >
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {!isWorkspace
+              ? menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />
+              : <Menu className="h-5 w-5" />
+            }
           </button>
         </div>
       </div>
 
-      {menuOpen && (
+      {/* Workspace Mobile Sidebar */}
+      {isWorkspace && (
+        <MobileSidebar
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
+
+      {/* Marketing Mobile Menu */}
+      {menuOpen && !isWorkspace && (
         <div
           id="mobile-navigation"
           ref={mobileNavigationRef}
           className="mobile-navigation-panel max-h-[calc(100dvh-76px)] overflow-y-auto border-t border-border bg-surface p-3 shadow-2xl"
         >
-          {isWorkspace ? (
-            <WorkspaceMenu onNavigate={navigate} onClose={() => setMenuOpen(false)} />
-          ) : (
-            <nav className="mx-auto grid max-w-[1600px] gap-1" aria-label={t.mobileNavigation}>
-              {links.map((link) => (
-                <a
-                  key={link.key}
-                  href={link.href}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    goToSection(link.href);
-                  }}
-                  className="nav-link justify-between"
-                >
-                  {link.label}
-                </a>
-              ))}
-              {!authUser && (
-                <button
-                  type="button"
-                  onClick={() => navigate('sign-in')}
-                  className="nav-link justify-between"
-                >
-                  {labels.nav.signIn}
-                </button>
-              )}
-              {authUser && (
-                <button
-                  type="button"
-                  onClick={() => navigate('empty-chamber')}
-                  className="nav-link justify-between"
-                >
-                  {labels.nav.newDeliberation}
-                </button>
-              )}
-              {authUser && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void signOut();
-                  }}
-                  className="nav-link justify-between"
-                >
-                  {t.signOut}
-                </button>
-              )}
-            </nav>
-          )}
+          <nav
+            className="mx-auto grid max-w-[1600px] gap-1"
+            aria-label={t.mobileNavigation}
+          >
+            {links.map((link) => (
+              <a
+                key={link.key}
+                href={link.href}
+                onClick={(event) => {
+                  event.preventDefault();
+                  goToSection(link.href);
+                }}
+                className="nav-link justify-between"
+              >
+                {link.label}
+              </a>
+            ))}
+
+            {!authUser && (
+              <button
+                type="button"
+                onClick={() => navigate('sign-in')}
+                className="nav-link justify-between"
+              >
+                {labels.nav.signIn}
+              </button>
+            )}
+
+            {authUser && (
+              <button
+                type="button"
+                onClick={() => navigate('empty-chamber')}
+                className="nav-link justify-between"
+              >
+                {labels.nav.newDeliberation}
+              </button>
+            )}
+
+            {authUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void signOut();
+                }}
+                className="nav-link justify-between"
+              >
+                {t.signOut}
+              </button>
+            )}
+          </nav>
+
           <p className="mx-auto mt-3 max-w-[1600px] border-t border-border/70 pt-3 text-[11px] leading-relaxed text-ink-muted">
             {t.boundaryShort}
           </p>
         </div>
       )}
     </header>
-  );
-};
-
-const WorkspaceMenu: React.FC<{
-  onNavigate: (view: ViewType) => void;
-  onClose: () => void;
-}> = ({ onNavigate, onClose }) => {
-  const {
-    currentView,
-    language,
-    openJoinRoom,
-    bots,
-    botCap,
-    isBotDisabled,
-    openBotChat,
-    conversations,
-    openGroupChat,
-    authUser,
-    signOut,
-    t,
-  } = useApp();
-  const labels = translations[language];
-  const groupChats = conversations.filter((c) => c.kind === 'group');
-
-  return (
-    <div className="mx-auto grid max-w-[1600px] gap-4">
-      <div className="grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            onClose();
-            openJoinRoom();
-          }}
-          className="button-primary justify-center text-xs"
-        >
-          <Users className="h-4 w-4" aria-hidden="true" />
-          {t.newGroupChat}
-        </button>
-        <button
-          type="button"
-          onClick={() => onNavigate('bot-wizard')}
-          className="button-secondary justify-center text-xs"
-        >
-          <Plus className="h-4 w-4" aria-hidden="true" />
-          {t.newBot}
-        </button>
-      </div>
-
-      <nav className="grid gap-2" aria-label={t.mobileNavigation}>
-        {WORKSPACE_NAV.map((group) => (
-          <div key={group.labelKey}>
-            <p className="nav-group-label">{labels.navGroup[group.labelKey]}</p>
-            {group.items.map(({ view, labelKey, icon: Icon }) => (
-              <button
-                key={view}
-                type="button"
-                onClick={() => onNavigate(view)}
-                aria-current={currentView === view ? 'page' : undefined}
-                className={`sidebar-link ${currentView === view ? 'sidebar-link-active' : ''}`}
-              >
-                <Icon className="h-4 w-4" aria-hidden="true" /> {labels.nav[labelKey]}
-              </button>
-            ))}
-          </div>
-        ))}
-
-        {bots.length > 0 && (
-          <div>
-            <p className="nav-group-label">
-              {t.botsTitle} ({bots.length}/{botCap})
-            </p>
-            {bots.map((bot) => (
-              <button
-                key={bot.id}
-                type="button"
-                onClick={() => {
-                  onClose();
-                  openBotChat(bot.id);
-                }}
-                className="sidebar-link justify-between"
-              >
-                <span className="truncate">{bot.name}</span>
-                {isBotDisabled(bot.id) && <Lock className="h-3.5 w-3.5 text-brass" />}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {groupChats.length > 0 && (
-          <div>
-            <p className="nav-group-label">{t.groupChatsTitle}</p>
-            {groupChats.map((group) => (
-              <button
-                key={group.id}
-                type="button"
-                onClick={() => {
-                  onClose();
-                  openGroupChat(group.id);
-                }}
-                className="sidebar-link justify-between"
-              >
-                <span className="truncate">{group.title}</span>
-                <span className="text-xs text-ink-muted">{group.roster.length}</span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {authUser && (
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              void signOut();
-            }}
-            className="sidebar-link text-terracotta"
-          >
-            {t.signOut}
-          </button>
-        )}
-      </nav>
-    </div>
   );
 };

@@ -11,6 +11,7 @@ export type ViewType =
   | 'new-advisor'
   | 'api-keys'
   | 'settings'
+  | 'account'
   | 'billing'
   | LegalView
   | 'sign-up'
