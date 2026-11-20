@@ -4,7 +4,6 @@ import { modelLabel, providerLabel } from '../data/mockData';
 import { matchPersonaId } from '../chat/conclusion';
 import {
   Copy,
-  FilePenLine,
   ListChecks,
   Quote,
   ShieldAlert,
@@ -15,7 +14,6 @@ import FrameworkPanel from './FrameworkPanel';
 export const SessionConcludedView: React.FC = () => {
   const {
     currentSession,
-    openCounterDraftModal,
     showToast,
     t,
     language,
@@ -78,16 +76,6 @@ export const SessionConcludedView: React.FC = () => {
               {currentSession.title}
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">{t.concludedBody}</p>
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:shrink-0">
-            <button
-              type="button"
-              onClick={openCounterDraftModal}
-              className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-medium text-ink transition hover:border-brass/50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass lg:flex-none"
-            >
-              <FilePenLine className="h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
-              {t.sampleDraft}
-            </button>
           </div>
         </div>
       </header>

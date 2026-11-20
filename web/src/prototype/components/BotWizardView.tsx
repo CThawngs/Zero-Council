@@ -16,6 +16,7 @@ export const BotWizardView: React.FC = () => {
     createBot,
     openBotChat,
     setCurrentView,
+    language,
     t,
   } = useApp();
   const [step, setStep] = useState(1);
@@ -35,6 +36,8 @@ export const BotWizardView: React.FC = () => {
     : [];
   const total = 3;
   const plan = planById(currentPlanId);
+  const nextBotNumber = Math.min(bots.length + 1, botCap);
+  const remainingBots = Math.max(0, botCap - bots.length);
 
   const nextFromIdentity = () => {
     if (!canCreateBot) {
@@ -76,12 +79,24 @@ export const BotWizardView: React.FC = () => {
   return (
     <div className="mx-auto w-full max-w-2xl space-y-7 py-4 sm:py-8">
       <header>
-        <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
-          <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
-          {t.botWizardEyebrow} ·{' '}
-          {t.botStepOf.replace('{step}', String(step)).replace('{total}', String(total))} ·{' '}
-          {`${bots.length}/${botCap}`}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
+            <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
+            {t.botWizardEyebrow} ·{' '}
+            {t.botStepOf.replace('{step}', String(step)).replace('{total}', String(total))}
+          </p>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-ink-muted">
+            <span className="font-semibold text-ink">
+              {language === 'vi' ? `Bot thứ ${nextBotNumber}` : `Bot #${nextBotNumber}`}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {language === 'vi'
+                ? `Còn lại ${remainingBots}/${botCap}`
+                : `${remainingBots}/${botCap} left`}
+            </span>
+          </span>
+        </div>
         <h1 className="mt-3 font-serif text-3xl text-ink sm:text-4xl">{t.botWizardTitle}</h1>
         <p className="mt-3 text-sm leading-relaxed text-ink-muted sm:text-base">{t.botWizardBody}</p>
       </header>
