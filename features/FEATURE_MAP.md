@@ -189,7 +189,7 @@ Nguồn điều hướng duy nhất: `prototype/navigation.ts`. Header, Sidebar 
 | PersonasView advisors | hiện cả userBots và preset advisors | chỉ hiển thị userBots (CRUD, chat 1-1, hạn mức), ẩn danh sách cố vấn mẫu |
 | SessionsListView | hiện các phiên deliberation mẫu từ mockData | hiển thị danh sách group chats thực tế từ `conversations`, hỗ trợ tìm kiếm, mở phòng, sửa nhóm, xóa nhóm tương tự sidebar |
 | RoomSummaryView conclusion | nút Mở kết luận không chạy khi click (bị disabled oan, lỗi so khớp ID bot/cố vấn, BYOK throw không bắt) | giữ nguyên luồng: ChatRoomView ấn Tóm tắt chuyển sang RoomSummaryView, nút Mở kết luận trong RoomSummaryView chạy mượt mà với fallback an toàn |
-| SessionConcludedView analysis | gọi lại toàn bộ cố vấn trả lời câu hỏi đầu tiên từ đầu, giữ kịch bản tĩnh và hiện nút đổi sang Six Thinking Hats / Decision Matrix | chọn 1 AI trong phòng chat để phân tích toàn bộ câu trả lời của đoạn chat theo 3 hướng Tốt / Bình thường / Xấu, ẩn hoàn toàn các khung framework khác |
+| SessionConcludedView analysis | gọi lại toàn bộ cố vấn trả lời câu hỏi đầu tiên từ đầu, giữ kịch bản tĩnh và hiện nút đổi sang Six Thinking Hats / Decision Matrix | chọn 1 AI trong phòng chat để phân tích toàn bộ câu trả lời của đoạn chat theo 3 hướng Tốt / Bình thường / Xấu, ẩn hoàn toàn các khung framework khác; khung summary chỉ hiện văn bản summary (tách sạch từ JSON/markdown fence/JSON cắt cụt, không hiện JSON thô) |
 
 ### Đã xoá
 
