@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
-import { Check, ChevronDown, ChevronRight, Lock, Pencil, Plus, Settings, Settings2, Trash2, Users, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Lock, Pencil, Plus, Settings, Settings2, Trash2, Users, UserStar, X } from 'lucide-react';
 
 interface SidebarProps {
   mobile?: boolean;
@@ -166,15 +166,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
             : null
             }
-            
-            {isAdmin ? (
-              <a
-                href="/admin"
-                className="mt-1 flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-ink-muted hover:text-ink"
-              >
-                {t.adminNav}
-              </a>
-            ) : null}
           </div>
 
           {/* Multi-Bot Group Chats (>= 2 bots) */}
@@ -270,6 +261,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       
       {/* BADGE & ACCOUNT */}
       <div className='flex flex-col gap-3'>
+        {isAdmin ? (
+          <a
+            href="/admin"
+            className="mt-1 flex min-h-9 items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-ink-muted hover:text-ink"
+          >
+            <UserStar />
+            {t.adminNav}
+          </a>
+        ) : null}
+
         <div className="rounded-2xl border border-border bg-surface p-3.5 text-[11px] leading-relaxed text-ink-muted">
           <p className="font-bold text-ink">{t.localBadge}</p>
           <p className="mt-1">{t.boundaryShort}</p>
