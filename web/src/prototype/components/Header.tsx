@@ -6,6 +6,7 @@ import type { ViewType } from '../types';
 import { Globe2, Lock, Menu, Moon, Plus, Sun, Users, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
 import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
+import { MobileSidebar } from './MobileSidebar';
 
 interface HeaderProps {
   isWorkspace: boolean;
@@ -101,7 +102,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
   return (
     <header
       ref={headerRef}
-      className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl"
+      className={`fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 ${menuOpen ? '' : 'backdrop-blur-xl'}`}
     >
       <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
         <button
@@ -138,6 +139,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
           </nav>
         )}
 
+        {/* MỤC PHẢI */}
         <div className="flex shrink-0 items-center gap-1.5">
           <button
             type="button"
@@ -196,6 +198,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
               {t.signOut}
             </button>
           )}
+          {/* MENU MOBILE */}
           <button
             ref={menuButtonRef}
             type="button"
@@ -206,66 +209,81 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             aria-controls="mobile-navigation"
             aria-label={menuOpen ? t.close : t.menu}
           >
-            {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {!isWorkspace
+              ? menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />
+              : <Menu className="h-5 w-5" />
+            }
           </button>
         </div>
       </div>
 
-      {menuOpen && (
+      {/* Workspace Mobile Sidebar */}
+      {isWorkspace && (
+        <MobileSidebar
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+        />
+      )}
+
+      {/* Marketing Mobile Menu */}
+      {menuOpen && !isWorkspace && (
         <div
           id="mobile-navigation"
           ref={mobileNavigationRef}
           className="mobile-navigation-panel max-h-[calc(100dvh-76px)] overflow-y-auto border-t border-border bg-surface p-3 shadow-2xl"
         >
-          {isWorkspace ? (
-            <WorkspaceMenu onNavigate={navigate} onClose={() => setMenuOpen(false)} />
-          ) : (
-            <nav className="mx-auto grid max-w-[1600px] gap-1" aria-label={t.mobileNavigation}>
-              {links.map((link) => (
-                <a
-                  key={link.key}
-                  href={link.href}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    goToSection(link.href);
-                  }}
-                  className="nav-link justify-between"
-                >
-                  {link.label}
-                </a>
-              ))}
-              {!authUser && (
-                <button
-                  type="button"
-                  onClick={() => navigate('sign-in')}
-                  className="nav-link justify-between"
-                >
-                  {labels.nav.signIn}
-                </button>
-              )}
-              {authUser && (
-                <button
-                  type="button"
-                  onClick={() => navigate('empty-chamber')}
-                  className="nav-link justify-between"
-                >
-                  {labels.nav.newDeliberation}
-                </button>
-              )}
-              {authUser && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void signOut();
-                  }}
-                  className="nav-link justify-between"
-                >
-                  {t.signOut}
-                </button>
-              )}
-            </nav>
-          )}
+          <nav
+            className="mx-auto grid max-w-[1600px] gap-1"
+            aria-label={t.mobileNavigation}
+          >
+            {links.map((link) => (
+              <a
+                key={link.key}
+                href={link.href}
+                onClick={(event) => {
+                  event.preventDefault();
+                  goToSection(link.href);
+                }}
+                className="nav-link justify-between"
+              >
+                {link.label}
+              </a>
+            ))}
+
+            {!authUser && (
+              <button
+                type="button"
+                onClick={() => navigate('sign-in')}
+                className="nav-link justify-between"
+              >
+                {labels.nav.signIn}
+              </button>
+            )}
+
+            {authUser && (
+              <button
+                type="button"
+                onClick={() => navigate('empty-chamber')}
+                className="nav-link justify-between"
+              >
+                {labels.nav.newDeliberation}
+              </button>
+            )}
+
+            {authUser && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  void signOut();
+                }}
+                className="nav-link justify-between"
+              >
+                {t.signOut}
+              </button>
+            )}
+          </nav>
+
           <p className="mx-auto mt-3 max-w-[1600px] border-t border-border/70 pt-3 text-[11px] leading-relaxed text-ink-muted">
             {t.boundaryShort}
           </p>
