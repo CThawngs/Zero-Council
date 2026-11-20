@@ -104,22 +104,69 @@ export async function POST(request: Request) {
     });
   }
 
-  let clientId: string;
-  let apiKey: string;
-  let checksumKey: string;
+  let clientId: string | undefined;
+  let apiKey: string | undefined;
+  let checksumKey: string | undefined;
   try {
     clientId = env('PAYLOS_CLIENT_ID', 'PAYOS_CLIENT_ID');
     apiKey = env('PAYLOS_API_KEY', 'PAYOS_API_KEY');
     checksumKey = env('PAYLOS_CHECKSUM_KEY', 'PAYOS_CHECKSUM_KEY');
-  } catch (error) {
-    console.error('[payos] create-payment not configured:', (error as Error).message);
-    return Response.json({ error: 'PAYLOS_NOT_CONFIGURED' }, { status: 503 });
+  } catch {
+    clientId = undefined;
+    apiKey = undefined;
+    checksumKey = undefined;
   }
 
   const origin = new URL(request.url).origin;
   // payOS v2 expects `expiredAt` as a Unix timestamp in SECONDS (5-minute QR lifetime).
   const expiredAtSec = Math.floor(Date.now() / 1000) + 5 * 60;
   const expiredAtMs = expiredAtSec * 1000;
+
+  const isLocalDev = process.env.NODE_ENV !== 'production' && serverEnv('VERCEL') !== '1';
+
+  // If credentials are not configured on local dev, fallback to a local simulated PayOS order
+  // so the QR popup, 5-minute countdown, cancel confirm, and plan upgrade can be exercised offline.
+  if (!clientId || !apiKey || !checksumKey) {
+    if (!isLocalDev) {
+      console.error('[payos] create-payment not configured: missing PAYLOS_* keys');
+      return Response.json(
+        {
+          error: 'PAYLOS_NOT_CONFIGURED',
+          desc: 'Chưa cấu hình Client ID, API Key, Checksum Key của PayOS trong environment variables.',
+        },
+        { status: 503 }
+      );
+    }
+
+    await putOrder({
+      orderCode,
+      planId: plan.id,
+      amountVnd: amount,
+      amountUsd: plan.priceUsd,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      userEmail: account.email,
+      ...(percent > 0 ? { couponCode: normaliseCouponCode(code as string), couponPercent: percent } : {}),
+    });
+
+    // Valid VietQR string formatted for offline development testing.
+    const mockVietQr = `00020101021238570010A0000007270127000697042201131133666688880208999988885303704540${amount}5802VN62150811ZC ${orderCode}6304`;
+    return Response.json({
+      orderCode,
+      planId: plan.id,
+      planName: plan.name,
+      couponCode: percent > 0 ? normaliseCouponCode(code as string) : null,
+      couponPercent: percent,
+      originalAmountVnd: plan.priceVnd,
+      amountVnd: amount,
+      amountUsd: plan.priceUsd,
+      checkoutUrl: `${origin}/checkout/return?orderCode=${orderCode}`,
+      qrCode: mockVietQr,
+      expiredAt: expiredAtMs,
+      isDevSimulation: true,
+    });
+  }
+
   const payload = {
     orderCode,
     amount,
@@ -186,7 +233,9 @@ export async function POST(request: Request) {
     amountUsd: plan.priceUsd,
     checkoutUrl: result.data.checkoutUrl,
     // In-app QR popup: payOS returns the VietQR code alongside the hosted page link.
-    qrCode: (result.data.qrCode as string | undefined) ?? null,
+    // If qrCode is null or absent, fallback to checkoutUrl so the popup can always render a QR code.
+    qrCode: (result.data.qrCode as string | undefined) || (result.data.checkoutUrl as string | undefined) || null,
     expiredAt: expiredAtMs,
+    isDevSimulation: false,
   });
 }
