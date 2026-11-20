@@ -1,7 +1,7 @@
 import { serverEnv } from '@/lib/serverEnv';
 import { deleteOrder, getOrder, markOrder, sweepStaleOrders, type OrderStatus } from '@/lib/payos/orders';
 import { verifySignature } from '@/lib/payos/signature';
-import { addGrant, redeemCoupon } from '@/lib/store/account';
+import { addGrant, listGrants, redeemCoupon } from '@/lib/store/account';
 
 /** payOS webhook payload codes (https://payos.vn/docs/tich-hop-webhook/). */
 const STATUS_BY_CODE: Record<string, OrderStatus> = {
@@ -11,7 +11,7 @@ const STATUS_BY_CODE: Record<string, OrderStatus> = {
 };
 
 export async function POST(request: Request) {
-  const checksumKey = serverEnv('PAYLOS_CHECKSUM_KEY');
+  const checksumKey = serverEnv('PAYLOS_CHECKSUM_KEY') ?? serverEnv('PAYOS_CHECKSUM_KEY');
   if (!checksumKey) {
     console.error('[payos] webhook rejected: PAYOS_CHECKSUM_KEY missing');
     return new Response('not configured', { status: 503 });
@@ -78,19 +78,23 @@ export async function POST(request: Request) {
   // Marking the order PAID and granting the plan are separate steps on purpose: a grant that
   // succeeded but whose order write then failed would be far worse than the other way round.
   if (status === 'PAID' && !wasAlreadyPaid && order.userEmail) {
-    if (order.couponCode) {
-      // Null here means the account already used this code, which the unique key enforces. Not an
-      // error: the plan is still owed, and refusing to grant it would punish the buyer for a race.
-      await redeemCoupon(order.couponCode, order.userEmail, order.couponPercent ?? 0, orderCode);
+    const existingGrants = await listGrants(order.userEmail).catch(() => []);
+    const alreadyGranted = existingGrants.some((g) => g.orderCode === orderCode);
+    if (!alreadyGranted) {
+      if (order.couponCode) {
+        // Null here means the account already used this code, which the unique key enforces. Not an
+        // error: the plan is still owed, and refusing to grant it would punish the buyer for a race.
+        await redeemCoupon(order.couponCode, order.userEmail, order.couponPercent ?? 0, orderCode);
+      }
+      const grant = await addGrant({
+        userEmail: order.userEmail,
+        planId: order.planId,
+        source: 'PAYOS',
+        orderCode,
+        percent: order.couponPercent ?? null,
+      });
+      console.log('[payos] granted', order.planId, 'to', order.userEmail, 'until', grant.expiresAt);
     }
-    const grant = await addGrant({
-      userEmail: order.userEmail,
-      planId: order.planId,
-      source: 'PAYOS',
-      orderCode,
-      percent: order.couponPercent ?? null,
-    });
-    console.log('[payos] granted', order.planId, 'to', order.userEmail, 'until', grant.expiresAt);
   }
 
   console.log('[payos] order', orderCode, '->', status, 'stored:', JSON.stringify(updated));

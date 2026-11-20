@@ -89,14 +89,20 @@ test('getOrder maps a row and returns null when the table is empty', async () =>
 test('markOrder never demotes a paid order, whatever arrives late', async () => {
   const { markOrder } = await loadStore();
 
-  // A real transition: PENDING -> PAID sets paid_at.
-  const paid = await withStore(() => ({ payload: [row({ status: 'PAID', paid_at: '2026-09-26T10:05:00.000Z' })] }), () => markOrder(100, 'PAID', { reference: 'FT123' }));
+  // A real transition: PENDING -> PAID sets paid_at and maps camelCase extra fields to snake_case.
+  const paid = await withStore(
+    () => ({ payload: [row({ status: 'PAID', paid_at: '2026-09-26T10:05:00.000Z', reference: 'FT123', bank_account: '9704' })] }),
+    () => markOrder(100, 'PAID', { paidAt: '2026-09-26T10:05:00.000Z', reference: 'FT123', bankAccount: '9704' })
+  );
   const [write] = paid.seen;
   assert.equal(write.method, 'PATCH');
-  assert.match(write.url, /status\.neq\.PAID$/, 'the terminal guard must be in the write, not only in the caller');
+  assert.match(write.url, /status=neq\.PAID$/, 'the terminal guard must use valid PostgREST syntax status=neq.PAID');
   const patch = JSON.parse(write.body);
   assert.equal(patch.status, 'PAID');
-  assert.ok(patch.paid_at, 'a paid write must stamp paid_at');
+  assert.equal(patch.paid_at, '2026-09-26T10:05:00.000Z', 'a paid write must stamp paid_at');
+  assert.equal(patch.bank_account, '9704', 'bankAccount must map to snake_case bank_account');
+  assert.equal('paidAt' in patch, false, 'camelCase paidAt must not be sent to PostgREST');
+  assert.equal('bankAccount' in patch, false, 'camelCase bankAccount must not be sent to PostgREST');
 
   // A late FAILED webhook: the PATCH matches nothing, the existing row comes back untouched.
   const late = await withStore(

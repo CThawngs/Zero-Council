@@ -186,12 +186,18 @@ export const markOrder = async (
   if (supabaseConfig()) {
     // A paid order is terminal: payOS re-sending a late "failed" or "pending" must not
     // revoke a real payment. The guard lives in the write itself, not only in the caller,
-    // because the webhook is the only writer and it can fire out of order. `status.neq.PAID`
+    // because the webhook is the only writer and it can fire out of order. `status=neq.PAID`
     // also means a duplicate PAID webhook cannot overwrite the original paidAt — the PATCH
     // matches nothing and the existing row is read back instead.
-    const patch: Record<string, unknown> = { status, ...extra };
+    const patch: Record<string, unknown> = { status };
     if (status === 'PAID') patch.paid_at = extra.paidAt ?? new Date().toISOString();
-    const rows = await request(`${TABLE}?order_code=eq.${orderCode}&status.neq.PAID`, {
+    else if (extra.paidAt !== undefined) patch.paid_at = extra.paidAt;
+    if (extra.reference !== undefined) patch.reference = extra.reference;
+    if (extra.bankAccount !== undefined) patch.bank_account = extra.bankAccount;
+    if (extra.userEmail !== undefined) patch.user_email = extra.userEmail;
+    if (extra.couponCode !== undefined) patch.coupon_code = extra.couponCode;
+    if (extra.couponPercent !== undefined) patch.coupon_percent = extra.couponPercent;
+    const rows = await request(`${TABLE}?order_code=eq.${orderCode}&status=neq.PAID`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });

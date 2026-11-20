@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { toSignaturePayload, signData, verifySignature } from '../web/src/lib/payos/signature.ts';
+import { toSignaturePayload, signData, signPaymentRequest, verifySignature } from '../web/src/lib/payos/signature.ts';
 import { amountAfterCoupon } from '../web/src/lib/coupons.ts';
 
 const KEY = 'checksum-key-for-tests';
@@ -51,4 +51,25 @@ test('a percentage coupon discounts to whole dong and never goes negative', () =
   assert.equal(amountAfterCoupon(139000, 100), 0);
   // Rounds, never truncates toward the customer in a way that loses a dong twice.
   assert.equal(amountAfterCoupon(139, 50), 70);
+});
+
+test('signPaymentRequest signs only the 5 core payOS v2 fields and excludes expiredAt', () => {
+  const base = {
+    orderCode: 1795180000000,
+    amount: 139000,
+    description: 'ZC 1795180000000',
+    cancelUrl: 'https://example.com/checkout/return?orderCode=1795180000000&status=cancelled',
+    returnUrl: 'https://example.com/checkout/return?orderCode=1795180000000',
+  };
+  const withExpiredAt = { ...base, expiredAt: Math.floor(Date.now() / 1000) + 300 };
+  assert.equal(
+    signPaymentRequest(withExpiredAt, KEY),
+    signData(base, KEY),
+    'expiredAt must not be included in the create-payment request signature'
+  );
+  assert.notEqual(
+    signPaymentRequest(withExpiredAt, KEY),
+    signData(withExpiredAt, KEY),
+    'including expiredAt in signData produces a different signature that payOS v2 rejects'
+  );
 });
