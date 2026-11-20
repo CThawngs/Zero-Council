@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
-import { Check, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Lock, Pencil, Plus, Settings2, Trash2, Users, X } from 'lucide-react';
 
 interface SidebarProps {
   mobile?: boolean;
@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       className={
         mobile
           ? "flex h-dvh w-full flex-col overflow-hidden bg-surface p-4"
-          : "sticky top-[76px] hidden h-[calc(100dvh-76px)] w-72 shrink-0 border-r border-border bg-surface-2/50 p-4 lg:flex lg:flex-col"
+          : "sticky gap-3 top-[76px] hidden h-[calc(100dvh-76px)] w-72 shrink-0 border-r border-border bg-surface-2/50 p-4 lg:flex lg:flex-col"
       }
     >
       {mobile && (
@@ -95,25 +95,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <button
         type="button"
         id="sidebar-new-group-btn"
-        onClick={() => {openJoinRoom(); openJoinRoom()}}
+        onClick={() => {onClose?.(); openJoinRoom()}}
         className="button-primary mb-5 w-full justify-center"
       >
         <Plus className="h-4 w-4" aria-hidden="true" /> {t.newGroupChat}
       </button>
 
       <nav
-        className="grid min-w-0 grid-cols-1 gap-1 overflow-y-auto overflow-x-hidden pr-0.5"
+        className="grid min-w-0 grid-cols-1 gap-7 overflow-y-auto overflow-x-hidden pr-0.5"
         aria-label={t.workspaceNavigation}
       >
         {/* Solo 1-on-1 AI Bots */}
         <div className="mt-3 min-w-0">
-          <div className="flex items-center justify-between pr-2">
-            <p className="nav-group-label">{t.botsTitle}</p>
-            <span className="text-[10px] font-semibold text-ink-muted">
+          <button type='button' onClick={() => setCurrentView('personas')} className="group nav-group-label flex items-center justify-between pr-2 w-full">
+            <p className="">{t.botsTitle}</p>
+            <span className="flex items-center text-[10px] font-semibold text-ink-muted">
               {bots.length}/{botCap}
+              {currentView === 'personas' 
+              ? <ChevronRight className='h-5 w-5 invisible group-hover:visible transition' /> 
+              : <ChevronDown className='h-5 w-5 invisible group-hover:visible transition' />}
             </span>
-          </div>
-          {bots.length === 0 ? (
+          </button>
+
+          {currentView === 'personas' ? null : bots.length === 0 ? (
             <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.botsEmpty}</p>
           ) : (
             <ul className="grid grid-cols-1 gap-1">
@@ -148,6 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               })}
             </ul>
           )}
+
           <button
             type="button"
             id="sidebar-new-bot-btn"
@@ -168,8 +173,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Multi-Bot Group Chats (>= 2 bots) */}
-        <div className="mt-3 min-w-0">
-          <p className="nav-group-label">{t.groupChatsTitle}</p>
+        <div className="mt-3 min-w-0 w-full">
+          <button type='button' onClick={() => setCurrentView('sessions')} className="group nav-group-label flex items-center justify-between w-full">
+            {t.groupChatsTitle}
+            {currentView === 'sessions' 
+            ? <ChevronRight className='h-5 w-5 invisible group-hover:visible transition' /> 
+            : <ChevronDown className='h-5 w-5 invisible group-hover:visible transition' />}
+          </button>
           {groupChats.length === 0 ? (
             <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">
               {t.groupChatsEmpty}
@@ -249,14 +259,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               })}
             </ul>
           )}
-          <button
-            type="button"
-            onClick={() => {onClose?.(); openJoinRoom()}}
-            className="mt-1 flex min-h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm font-semibold text-brass hover:text-ink"
-          >
-            <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
-            {t.newGroupChat}
-          </button>
         </div>
 
         {/* Deliberation Council Sessions */}
