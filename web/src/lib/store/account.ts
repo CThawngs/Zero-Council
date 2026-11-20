@@ -51,8 +51,8 @@ export interface Grant {
 // See web/supabase/migrations/0002_zc_coupons.sql for the schema and the first-admin seed.
 // ---------------------------------------------------------------------------------------
 const supabaseConfig = () => {
-  const url = serverEnv('SUPABASE_URL')?.replace(/\/+$/, '');
-  const key = serverEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const url = (serverEnv('SUPABASE_URL') ?? serverEnv('NEXT_PUBLIC_SUPABASE_URL'))?.replace(/\/+$/, '');
+  const key = serverEnv('SUPABASE_SERVICE_ROLE_KEY') ?? serverEnv('SUPABASE_SERVICE_KEY');
   return url && key ? { url, key } : null;
 };
 

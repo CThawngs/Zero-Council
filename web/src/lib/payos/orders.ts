@@ -83,8 +83,8 @@ const toRow = (order: Order): OrderRow => ({
  * Supabase SDK for three CRUD calls. See web/supabase/migrations/0001_zc_orders.sql.
  */
 const supabaseConfig = () => {
-  const url = serverEnv('SUPABASE_URL')?.replace(/\/+$/, '');
-  const key = serverEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const url = (serverEnv('SUPABASE_URL') ?? serverEnv('NEXT_PUBLIC_SUPABASE_URL'))?.replace(/\/+$/, '');
+  const key = serverEnv('SUPABASE_SERVICE_ROLE_KEY') ?? serverEnv('SUPABASE_SERVICE_KEY');
   return url && key ? { url, key } : null;
 };
 

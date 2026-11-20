@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@payos/node':
+        specifier: ^2.0.6
+        version: 2.0.6
       '@supabase/ssr':
         specifier: ^0.12.7
         version: 0.12.7(@supabase/supabase-js@2.117.2)
@@ -480,6 +483,9 @@ packages:
   '@nolyfill/is-core-module@1.0.39':
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
+
+  '@payos/node@2.0.6':
+    resolution: {integrity: sha512-NPJWzknZwd19xJlndkHoauH4nOPH0f2Uz+JYNG6k45e0aMq65Mj6aS6xPpFx5xDegSa4tmG1B1Gxc9RdEgu5cg==}
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
@@ -2526,6 +2532,8 @@ snapshots:
       fastq: 1.20.3
 
   '@nolyfill/is-core-module@1.0.39': {}
+
+  '@payos/node@2.0.6': {}
 
   '@rtsao/scc@1.1.0': {}
 
