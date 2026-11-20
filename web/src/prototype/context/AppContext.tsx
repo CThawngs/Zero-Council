@@ -189,9 +189,6 @@ interface AppContextType {
   isFrameworkModalOpen: boolean;
   openFrameworkModal: () => void;
   closeFrameworkModal: () => void;
-  isCounterDraftModalOpen: boolean;
-  openCounterDraftModal: () => void;
-  closeCounterDraftModal: () => void;
   currentPlanId: PlanId;
   planExpiresAt: string | null;
   authUser: { id: string; email: string } | null;
@@ -489,7 +486,6 @@ export const AppProvider: React.FC<{
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
-  const [isCounterDraftModalOpen, setIsCounterDraftModalOpen] = useState(false);
   const [isDeliberating, setIsDeliberating] = useState(false);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
@@ -2005,9 +2001,6 @@ export const AppProvider: React.FC<{
         isFrameworkModalOpen,
         openFrameworkModal: () => setIsFrameworkModalOpen(true),
         closeFrameworkModal: () => setIsFrameworkModalOpen(false),
-        isCounterDraftModalOpen,
-        openCounterDraftModal: () => setIsCounterDraftModalOpen(true),
-        closeCounterDraftModal: () => setIsCounterDraftModalOpen(false),
         currentPlanId,
         planExpiresAt,
         authUser,
