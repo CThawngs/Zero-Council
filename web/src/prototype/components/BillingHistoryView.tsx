@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, CheckCircle2, ReceiptText } from 'lucide-react';
+import { ReceiptText } from 'lucide-react';
 import { Modal } from './Modal';
-import { planById, planPrice } from '../data/plans';
+import { PlanGrid } from './PlanGrid';
+import type { Plan } from '../data/plans';
 
 interface OrderHistoryItem {
   orderCode: number;
@@ -23,15 +24,12 @@ interface GrantHistoryItem {
 
 export const BillingHistoryView: React.FC = () => {
   const {
-    setCurrentView,
-    goToPricing,
+    requestCheckout,
     currentPlanId,
-    planExpiresAt,
     cancelPlanToFree,
     downgradeToPro,
     authUser,
     t,
-    language,
   } = useApp();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -39,7 +37,6 @@ export const BillingHistoryView: React.FC = () => {
   const [downgradeConfirmOpen, setDowngradeConfirmOpen] = useState(false);
   const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
   const [grants, setGrants] = useState<GrantHistoryItem[]>([]);
-  const plan = planById(currentPlanId);
 
   useEffect(() => {
     if (!authUser) return;
@@ -76,6 +73,19 @@ export const BillingHistoryView: React.FC = () => {
     if (!ok) setMessage('');
   };
 
+  const handleSelectPlan = (plan: Plan) => {
+    if (plan.id === currentPlanId || busy) return;
+    if (plan.id === 'free') {
+      setCancelConfirmOpen(true);
+      return;
+    }
+    if (plan.id === 'pro' && currentPlanId === 'ultra') {
+      setDowngradeConfirmOpen(true);
+      return;
+    }
+    requestCheckout(plan);
+  };
+
   const paidOrders = orders.filter((o) => o.status === 'PAID');
 
   return (
@@ -85,64 +95,23 @@ export const BillingHistoryView: React.FC = () => {
         <p>{t.billingBody}</p>
       </header>
 
-      <section className="panel p-5 sm:p-7">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="panel-title">{plan.name}</h2>
-          <span className="badge-success">{t.planCurrent}</span>
-        </div>
-        <p className="mt-2 font-serif text-2xl text-ink">{planPrice(plan, language)}</p>
-        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))} ·{' '}
-          {`${plan.maxBots} bots`}
-        </p>
-
-        {currentPlanId !== 'free' && planExpiresAt && (
-          <p className="mt-2 text-xs font-medium text-brass">
-            {t.billingActiveExpires.replace(
-              '{date}',
-              new Date(planExpiresAt).toLocaleDateString()
-            )}
-          </p>
-        )}
-
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button type="button" onClick={goToPricing} className="button-secondary min-h-11">
-            {t.pricingTitle}
-          </button>
-          {currentPlanId === 'ultra' && (
-            <button
-              type="button"
-              id="billing-downgrade-pro-btn"
-              onClick={() => setDowngradeConfirmOpen(true)}
-              disabled={busy}
-              className="button-secondary min-h-11 disabled:opacity-50"
-            >
-              {t.planDowngradeToPro}
-            </button>
-          )}
-          {currentPlanId !== 'free' && (
-            <button
-              type="button"
-              id="billing-cancel-free-btn"
-              onClick={() => setCancelConfirmOpen(true)}
-              disabled={busy}
-              className="button-secondary min-h-11 disabled:opacity-50"
-            >
-              {t.planCancelToFree}
-            </button>
-          )}
-        </div>
-
-        {message && (
-          <div
-            className="mt-4 flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink"
-            aria-live="polite"
-          >
-            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-sage" aria-hidden="true" />
-            <span>{message}</span>
-          </div>
-        )}
-      </section>
+      <PlanGrid
+        busy={busy}
+        onSelectPlan={handleSelectPlan}
+        getButtonId={(plan, isCurrent) => {
+          if (isCurrent) return undefined;
+          if (plan.id === 'free') return 'billing-cancel-free-btn';
+          if (plan.id === 'pro' && currentPlanId === 'ultra') return 'billing-downgrade-pro-btn';
+          return undefined;
+        }}
+        getButtonLabel={(plan, isCurrent) => {
+          if (!isCurrent && plan.id === 'pro' && currentPlanId === 'ultra') {
+            return t.planDowngradeToPro;
+          }
+          return undefined;
+        }}
+        statusMessage={message || undefined}
+      />
 
       {paidOrders.length === 0 && grants.length === 0 ? (
         <section className="panel flex gap-4 p-5 sm:p-7">
