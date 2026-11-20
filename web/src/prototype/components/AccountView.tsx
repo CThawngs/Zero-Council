@@ -1,20 +1,19 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { planPrice, PLANS } from "../data/plans";
+import type { PLANS } from "../data/plans";
 import { Check, Globe2, RotateCcw } from "lucide-react";
 import { Modal } from "./Modal";
+import { PlanGrid } from "./PlanGrid";
 
 export default function AccountView() {
       const {
         language,
         setLanguage,
-        goToPricing,
         cancelPlanToFree,
         requestCheckout,
         purgeSessions,
         revokeAllKeys,
         currentPlanId,
-        planExpiresAt,
         t,
       } = useApp();
       const [isPurgeOpen, setIsPurgeOpen] = useState(false);
@@ -74,77 +73,11 @@ export default function AccountView() {
                 </section>
             </div>
 
-            <section className="panel p-5 sm:p-6" aria-labelledby="plan-title">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 id="plan-title" className="panel-title">
-                    {t.pricingTitle}
-                </h2>
-                </div>
-
-                {currentPlanId !== 'free' && planExpiresAt && (
-                <p className="mt-2 text-xs font-medium text-brass">
-                    {t.billingActiveExpires.replace(
-                    '{date}',
-                    new Date(planExpiresAt).toLocaleDateString()
-                    )}
-                </p>
-                )}
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                {PLANS.map((plan) => {
-                    const isCurrent = plan.id === currentPlanId;
-                    return (
-                    <div
-                        key={plan.id}
-                        data-settings-plan={plan.id}
-                        className={`flex flex-col justify-between rounded-xl border p-4 ${
-                        isCurrent ? 'border-brass bg-brass/5' : 'border-border'
-                        }`}
-                    >
-                        <div>
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="field-label">{plan.name}</span>
-                            {isCurrent && (
-                            <span className="badge-success text-[10px]">{t.planCurrent}</span>
-                            )}
-                        </div>
-                        <p className="mt-1 font-serif text-lg text-ink">
-                            {planPrice(plan, language)}
-                        </p>
-                        <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                            {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))} ·{' '}
-                            {`${plan.maxBots} bots`}
-                        </p>
-                        </div>
-
-                        <button
-                        type="button"
-                        data-settings-plan-btn={plan.id}
-                        disabled={isCurrent || planBusy}
-                        onClick={() => void handleSelectPlan(plan)}
-                        className={`mt-4 min-h-10 w-full justify-center text-xs ${
-                            isCurrent
-                            ? 'button-secondary opacity-60 cursor-default'
-                            : plan.id === 'free'
-                                ? 'button-secondary'
-                                : 'button-primary'
-                        }`}
-                        >
-                        {isCurrent
-                            ? t.planCurrent
-                            : plan.id === 'free'
-                            ? t.planCancelToFree
-                            : t.planChoose.replace('{plan}', plan.name)}
-                        </button>
-                    </div>
-                    );
-                })}
-                </div>
-
-                <button type="button" onClick={goToPricing} className="button-secondary mt-4 min-h-11">
-                {t.pricingTitle}
-                </button>
-            </section>
+            <PlanGrid
+                busy={planBusy}
+                onSelectPlan={(plan) => void handleSelectPlan(plan)}
+                includeSettingsDataAttrs
+            />
 
             <section className="panel p-5 sm:p-6" aria-labelledby="sample-data-title">
                 <h2 id="sample-data-title" className="panel-title">
