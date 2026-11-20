@@ -6,7 +6,6 @@ import { BotWizardView } from '@/prototype/components/BotWizardView';
 import { ChatRoomView } from '@/prototype/components/ChatRoomView';
 import { CheckoutDrawer } from '@/prototype/components/CheckoutDrawer';
 import { AnalyticsLoader, CookieNotice } from '@/prototype/components/CookieNotice';
-import { CounterDraftModal } from '@/prototype/components/CounterDraftModal';
 import { EmptyChamberView } from '@/prototype/components/EmptyChamberView';
 import { FrameworkModal } from '@/prototype/components/FrameworkModal';
 import { GuideView } from '@/prototype/components/GuideView';
@@ -55,7 +54,7 @@ export default function Dashboard() {
     if (!authReady || (authUser && !botsReady) || initialViewSettledRef.current) return;
     initialViewSettledRef.current = true;
     if (!WORKSPACE_VIEWS.has(currentView)) {
-      setCurrentView(bots.length > 0 ? 'empty-chamber' : 'bot-wizard');
+      setCurrentView(bots.length > 0 ? 'sessions' : 'bot-wizard');
     }
   }, [authReady, authUser, botsReady, bots.length, currentView, setCurrentView]);
 
@@ -91,7 +90,6 @@ export default function Dashboard() {
       <CheckoutDrawer plan={checkoutPlan} onClose={closeCheckout} />
       <JoinRoomModal />
       <FrameworkModal />
-      <CounterDraftModal />
       <Toast />
       <CookieNotice />
       <AnalyticsLoader />
