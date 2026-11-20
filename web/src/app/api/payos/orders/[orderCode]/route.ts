@@ -3,35 +3,51 @@ import { currentAccount } from '@/lib/currentUser';
 import { serverEnv } from '@/lib/serverEnv';
 import { addGrant, listGrants, redeemCoupon } from '@/lib/store/account';
 
+const getPayosAuth = () => {
+  const clientId = serverEnv('PAYLOS_CLIENT_ID') ?? serverEnv('PAYOS_CLIENT_ID');
+  const apiKey = serverEnv('PAYLOS_API_KEY') ?? serverEnv('PAYOS_API_KEY');
+  return clientId && apiKey ? { clientId, apiKey } : null;
+};
+
 const syncPendingOrderWithPayos = async (order: Order): Promise<Order> => {
   if (order.status !== 'PENDING') return order;
-  const clientId = serverEnv('PAYLOS_CLIENT_ID');
-  const apiKey = serverEnv('PAYLOS_API_KEY');
-  if (!clientId || !apiKey) return order;
+  const auth = getPayosAuth();
+  if (!auth) return order;
 
   try {
     const response = await fetch(
       `https://api-merchant.payos.vn/v2/payment-requests/${order.orderCode}`,
       {
         headers: {
-          'x-client-id': clientId,
-          'x-api-key': apiKey,
+          'x-client-id': auth.clientId,
+          'x-api-key': auth.apiKey,
         },
+        cache: 'no-store',
         signal: AbortSignal.timeout(4000),
       }
     );
     if (!response.ok) return order;
     const payload = (await response.json().catch(() => null)) as {
       code?: string;
-      data?: { status?: string; amountPaid?: number; amount?: number };
+      data?: {
+        status?: string;
+        amountPaid?: number;
+        amount?: number;
+        transactions?: { reference?: string; accountNumber?: string }[];
+      };
     } | null;
     if (payload?.code !== '00' || !payload.data) return order;
 
     const remoteStatus = String(payload.data.status ?? '').toUpperCase();
     const amountPaid = Number(payload.data.amountPaid ?? 0);
     if (remoteStatus === 'PAID' && amountPaid >= order.amountVnd) {
+      const tx = payload.data.transactions?.[0];
       const updated =
-        (await markOrder(order.orderCode, 'PAID', { paidAt: new Date().toISOString() })) ?? order;
+        (await markOrder(order.orderCode, 'PAID', {
+          paidAt: new Date().toISOString(),
+          ...(typeof tx?.reference === 'string' ? { reference: tx.reference } : {}),
+          ...(typeof tx?.accountNumber === 'string' ? { bankAccount: tx.accountNumber } : {}),
+        })) ?? order;
       if (order.userEmail) {
         const existingGrants = await listGrants(order.userEmail).catch(() => []);
         const alreadyGranted = existingGrants.some((g) => g.orderCode === order.orderCode);
@@ -55,8 +71,14 @@ const syncPendingOrderWithPayos = async (order: Order): Promise<Order> => {
       }
       return updated;
     }
-  } catch {
-    // Transient upstream failure: keep current stored status for next poll.
+    if (remoteStatus === 'EXPIRED') {
+      return { ...order, status: 'EXPIRED' };
+    }
+    if (remoteStatus === 'CANCELLED') {
+      return { ...order, status: 'FAILED' };
+    }
+  } catch (error) {
+    console.error('[payos] syncPendingOrderWithPayos failed:', (error as Error).message);
   }
   return order;
 };
@@ -68,14 +90,17 @@ export async function GET(_request: Request, ctx: { params: Promise<{ orderCode:
 
   const order = await syncPendingOrderWithPayos(stored);
 
-  return Response.json({
-    orderCode: order.orderCode,
-    planId: order.planId,
-    amountVnd: order.amountVnd,
-    amountUsd: order.amountUsd,
-    status: order.status,
-    paidAt: order.paidAt ?? null,
-  });
+  return Response.json(
+    {
+      orderCode: order.orderCode,
+      planId: order.planId,
+      amountVnd: order.amountVnd,
+      amountUsd: order.amountUsd,
+      status: order.status,
+      paidAt: order.paidAt ?? null,
+    },
+    { headers: { 'Cache-Control': 'no-store' } }
+  );
 }
 
 export async function POST(_request: Request, ctx: { params: Promise<{ orderCode: string }> }) {
@@ -90,6 +115,21 @@ export async function POST(_request: Request, ctx: { params: Promise<{ orderCode
   }
   if (order.status === 'PAID') {
     return Response.json({ error: 'ALREADY_PAID' }, { status: 409 });
+  }
+
+  // Best-effort cancel on PayOS so the QR code cannot be paid after closing/expiry.
+  const auth = getPayosAuth();
+  if (auth) {
+    await fetch(`https://api-merchant.payos.vn/v2/payment-requests/${order.orderCode}/cancel`, {
+      method: 'POST',
+      headers: {
+        'x-client-id': auth.clientId,
+        'x-api-key': auth.apiKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ cancellationReason: 'Cancelled or expired in checkout' }),
+      signal: AbortSignal.timeout(4000),
+    }).catch(() => null);
   }
 
   await deleteOrder(Number(orderCode));

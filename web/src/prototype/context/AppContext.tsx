@@ -650,7 +650,10 @@ export const AppProvider: React.FC<{
 
   const refreshPlan = useCallback(async () => {
     try {
-      const response = await fetch('/api/me', { credentials: 'same-origin' });
+      const response = await fetch('/api/me', {
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
       if (!response.ok) return;
       const body = (await response.json()) as {
         role?: string;

@@ -13,6 +13,8 @@ import {
 export interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Optional guard called before closing via X, Escape, or backdrop. Return false to keep open. */
+  onBeforeClose?: () => boolean;
   title: string;
   description?: string;
   children: ReactNode;
@@ -24,6 +26,7 @@ export interface ModalProps {
 export function Modal({
   isOpen,
   onClose,
+  onBeforeClose,
   title,
   description,
   children,
@@ -50,6 +53,7 @@ export function Modal({
   }, [isOpen]);
 
   const close = () => {
+    if (onBeforeClose && !onBeforeClose()) return;
     const dialog = dialogRef.current;
     if (dialog?.open) dialog.close();
   };

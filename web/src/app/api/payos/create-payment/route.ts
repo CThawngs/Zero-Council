@@ -3,16 +3,18 @@ import { currentAccount } from '@/lib/currentUser';
 import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
 import { addGrant, redeemCoupon } from '@/lib/store/account';
 import { serverEnv } from '@/lib/serverEnv';
-import { signData, verifySignature } from '@/lib/payos/signature';
+import { signPaymentRequest, verifySignature } from '@/lib/payos/signature';
 import { putOrder, sweepStaleOrders } from '@/lib/payos/orders';
 
 // payOS v2 create-payment. The v1 `/payment/create` path the older docs showed now answers 404.
 const PAYOS_API = 'https://api-merchant.payos.vn/v2/payment-requests';
 
-const env = (key: string): string => {
-  const value = serverEnv(key);
-  if (!value) throw new Error(`MISSING_ENV:${key}`);
-  return value;
+const env = (...keys: string[]): string => {
+  for (const key of keys) {
+    const value = serverEnv(key);
+    if (value) return value;
+  }
+  throw new Error(`MISSING_ENV:${keys[0]}`);
 };
 
 const normaliseCouponCode = (code: string) => code.trim().toUpperCase();
@@ -106,23 +108,25 @@ export async function POST(request: Request) {
   let apiKey: string;
   let checksumKey: string;
   try {
-    clientId = env('PAYLOS_CLIENT_ID');
-    apiKey = env('PAYLOS_API_KEY');
-    checksumKey = env('PAYLOS_CHECKSUM_KEY');
+    clientId = env('PAYLOS_CLIENT_ID', 'PAYOS_CLIENT_ID');
+    apiKey = env('PAYLOS_API_KEY', 'PAYOS_API_KEY');
+    checksumKey = env('PAYLOS_CHECKSUM_KEY', 'PAYOS_CHECKSUM_KEY');
   } catch (error) {
     console.error('[payos] create-payment not configured:', (error as Error).message);
     return Response.json({ error: 'PAYLOS_NOT_CONFIGURED' }, { status: 503 });
   }
 
   const origin = new URL(request.url).origin;
-  const expiredAt = Date.now() + 5 * 60 * 1000;
+  // payOS v2 expects `expiredAt` as a Unix timestamp in SECONDS (5-minute QR lifetime).
+  const expiredAtSec = Math.floor(Date.now() / 1000) + 5 * 60;
+  const expiredAtMs = expiredAtSec * 1000;
   const payload = {
     orderCode,
     amount,
     description: `ZC ${orderCode}`,
     cancelUrl: `${origin}/checkout/return?orderCode=${orderCode}&status=cancelled`,
     returnUrl: `${origin}/checkout/return?orderCode=${orderCode}`,
-    expiredAt,
+    expiredAt: expiredAtSec,
   };
 
   const payosResponse = await fetch(PAYOS_API, {
@@ -132,7 +136,7 @@ export async function POST(request: Request) {
       'x-api-key': apiKey,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ...payload, signature: signData(payload, checksumKey) }),
+    body: JSON.stringify({ ...payload, signature: signPaymentRequest(payload, checksumKey) }),
   });
 
   // payOS answers 4xx with a plain-text body on credential errors, so read text, not json.
@@ -174,12 +178,15 @@ export async function POST(request: Request) {
   return Response.json({
     orderCode,
     planId: plan.id,
+    planName: plan.name,
+    couponCode: percent > 0 ? normaliseCouponCode(code as string) : null,
     couponPercent: percent,
+    originalAmountVnd: plan.priceVnd,
     amountVnd: amount,
     amountUsd: plan.priceUsd,
     checkoutUrl: result.data.checkoutUrl,
     // In-app QR popup: payOS returns the VietQR code alongside the hosted page link.
     qrCode: (result.data.qrCode as string | undefined) ?? null,
-    expiredAt,
+    expiredAt: expiredAtMs,
   });
 }

@@ -29,6 +29,33 @@ export const toSignaturePayload = (data: SignableRecord): string =>
 export const signData = (data: SignableRecord, checksumKey: string): string =>
   createHmac('sha256', checksumKey).update(toSignaturePayload(data)).digest('hex');
 
+/**
+ * payOS v2 `POST /v2/payment-requests` signs ONLY the 5 core fields
+ * (`amount`, `cancelUrl`, `description`, `orderCode`, `returnUrl`) — optional
+ * fields such as `expiredAt` or `items` MUST NOT be included in the request
+ * signature, otherwise payOS rejects the request with an invalid signature error.
+ */
+export const signPaymentRequest = (
+  data: {
+    amount: number;
+    cancelUrl: string;
+    description: string;
+    orderCode: number;
+    returnUrl: string;
+  },
+  checksumKey: string
+): string =>
+  signData(
+    {
+      amount: data.amount,
+      cancelUrl: data.cancelUrl,
+      description: data.description,
+      orderCode: data.orderCode,
+      returnUrl: data.returnUrl,
+    },
+    checksumKey
+  );
+
 /** Constant-time compare: a webhook is a trust boundary, so a plain `===` would leak timing. */
 export const verifySignature = (
   data: SignableRecord,
