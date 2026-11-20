@@ -1,30 +1,45 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowRight, FileText, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowRight, Plus, Search, Settings2, Trash2, Users } from 'lucide-react';
 import { Modal } from './Modal';
+import type { SavedConversation } from '../types';
 
 export const SessionsListView: React.FC = () => {
-  const { sessions, setCurrentSessionId, setCurrentView, purgeSessions, t } = useApp();
+  const {
+    conversations,
+    personas,
+    openGroupChat,
+    openEditGroup,
+    deleteConversationById,
+    openJoinRoom,
+    t,
+  } = useApp();
+
   const [search, setSearch] = useState('');
-  const [isClearOpen, setIsClearOpen] = useState(false);
+  const [groupToDelete, setGroupToDelete] = useState<SavedConversation | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const groupChats = conversations.filter((c) => c.kind === 'group');
 
   const normalizedSearch = search.trim().toLowerCase();
-  const frameworkLabel = (framework: (typeof sessions)[number]['framework']) =>
-    ({
-      'Good / Normal / Bad Scenarios': t.scenarioTitle,
-      'Six Thinking Hats': t.hatsTitle,
-      'Decision Matrix': t.matrixTitle,
-    })[framework];
+  const filteredGroupChats = groupChats.filter((group) => {
+    if (!normalizedSearch) return true;
+    if (group.title.toLowerCase().includes(normalizedSearch)) return true;
+    const memberPersonas = group.roster.map(
+      (id) => personas.find((p) => p.id === id || p.id === `bot:${id}`)
+    );
+    return memberPersonas.some((p) => p?.name.toLowerCase().includes(normalizedSearch));
+  });
 
-  const filteredSessions = sessions.filter((session) =>
-    [session.title, session.summary, frameworkLabel(session.framework)].some((value) =>
-      value.toLowerCase().includes(normalizedSearch)
-    )
-  );
-
-  const handleOpenSession = (id: string) => {
-    setCurrentSessionId(id);
-    setCurrentView('session-concluded');
+  const handleDelete = async () => {
+    if (!groupToDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteConversationById(groupToDelete.id);
+      setGroupToDelete(null);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
@@ -34,16 +49,18 @@ export const SessionsListView: React.FC = () => {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brass">
             {t.sessionsEyebrow}
           </p>
-          <h1 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">{t.sessionsTitle}</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">{t.sessionsBody}</p>
+          <h1 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">{t.groupChatsTitle}</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
+            {t.groupChatsEmpty}
+          </p>
         </div>
         <button
           type="button"
-          onClick={() => setCurrentView('empty-chamber')}
+          onClick={openJoinRoom}
           className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:w-auto"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
-          {t.new}
+          {t.newGroupChat}
         </button>
       </header>
 
@@ -53,114 +70,160 @@ export const SessionsListView: React.FC = () => {
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
             aria-hidden="true"
           />
-          <label htmlFor="session-search" className="sr-only">
-            {t.sessionsTitle}
+          <label htmlFor="group-search" className="sr-only">
+            {t.groupChatsTitle}
           </label>
           <input
-            id="session-search"
-            name="session-search"
+            id="group-search"
+            name="group-search"
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
+            placeholder={t.groupChatsTitle}
             className="min-h-11 w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-3 text-sm text-ink placeholder:text-ink-muted focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/20"
           />
         </div>
-        {sessions.length > 0 && (
-          <button
-            type="button"
-            onClick={() => setIsClearOpen(true)}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-terracotta transition hover:bg-terracotta/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-terracotta"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-            {t.clear}
-          </button>
-        )}
+        <span className="text-xs text-ink-muted">
+          {groupChats.length} {t.groupChatsTitle.toLowerCase()}
+        </span>
       </div>
 
-      {filteredSessions.length === 0 ? (
+      {filteredGroupChats.length === 0 ? (
         <section
           className="rounded-2xl border border-border bg-surface px-5 py-12 text-center"
           aria-live="polite"
         >
-          <FileText className="mx-auto h-9 w-9 text-ink-muted" aria-hidden="true" />
-          <h2 className="mt-4 font-serif text-2xl text-ink">{t.emptySessionsTitle}</h2>
+          <Users className="mx-auto h-9 w-9 text-ink-muted" aria-hidden="true" />
+          <h2 className="mt-4 font-serif text-2xl text-ink">
+            {search.trim() ? t.emptySessionsTitle : t.groupChatsTitle}
+          </h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-muted">
-            {t.emptySessionsBody}
+            {t.groupChatsEmpty}
           </p>
           <button
             type="button"
-            onClick={() => setCurrentView('empty-chamber')}
+            onClick={openJoinRoom}
             className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
-            {t.create}
+            {t.newGroupChat}
           </button>
         </section>
       ) : (
-        <ul className="grid gap-4" aria-label={t.sessionsTitle}>
-          {filteredSessions.map((session) => {
-            const titleId = `sample-session-${session.id}`;
+        <ul className="grid gap-4" aria-label={t.groupChatsTitle}>
+          {filteredGroupChats.map((group) => {
+            const titleId = `group-chat-${group.id}`;
+            const memberPersonas = group.roster
+              .map((id) => personas.find((p) => p.id === id || p.id === `bot:${id}`))
+              .filter((p): p is (typeof personas)[number] => Boolean(p));
+
             return (
-              <li key={session.id}>
+              <li key={group.id}>
                 <article
                   className="flex flex-col gap-5 rounded-2xl border border-border bg-surface p-5 transition hover:border-brass/45 sm:flex-row sm:items-center sm:justify-between sm:p-6"
                   aria-labelledby={titleId}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[10px] font-medium text-brass">
-                        {t.notImplemented}
+                      <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[11px] font-medium text-brass">
+                        <Users className="h-3 w-3" aria-hidden="true" />
+                        {t.groupBadge.replace('{count}', String(group.roster.length))}
                       </span>
-                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[10px] text-ink-muted">
-                        {frameworkLabel(session.framework)}
+                      <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-ink-muted">
+                        {group.mode === 'panel' ? t.modePanel : t.modeRoundRobin}
                       </span>
                     </div>
+
                     <h2 id={titleId} className="mt-3 break-words font-serif text-xl text-ink">
-                      {session.title}
+                      {group.title}
                     </h2>
-                    <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-muted">
-                      {session.summary}
-                    </p>
-                    {session.advisors.length > 0 && (
-                      <div className="mt-4 flex -space-x-1.5" aria-hidden="true">
-                        {session.advisors.slice(0, 4).map((advisor) => (
-                          <span
-                            key={advisor.id}
-                            className="h-6 w-6 rounded-full border-2 border-surface"
-                            style={{ backgroundColor: advisor.colorHex }}
-                          />
-                        ))}
+
+                    {memberPersonas.length > 0 && (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <div className="flex -space-x-1.5" aria-hidden="true">
+                          {memberPersonas.slice(0, 5).map((advisor) => (
+                            <span
+                              key={advisor.id}
+                              title={advisor.name}
+                              className="h-6 w-6 rounded-full border-2 border-surface"
+                              style={{ backgroundColor: advisor.colorHex }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-ink-muted">
+                          {memberPersonas.map((m) => m.name).join(', ')}
+                        </span>
                       </div>
                     )}
+
+                    <p className="mt-2 text-xs text-ink-muted">
+                      {t.summaryStatTurns}: {group.messages.filter((m) => m.authorId !== 'user').length}
+                    </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleOpenSession(session.id)}
-                    className="inline-flex min-h-11 w-full shrink-0 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-brass/50 hover:bg-brass hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:w-auto"
-                  >
-                    {t.preview}
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </button>
+
+                  <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openGroupChat(group.id)}
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-brass/50 hover:bg-brass hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
+                    >
+                      {t.joinStart}
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openEditGroup(group.id)}
+                      aria-label={t.groupEditTitle}
+                      className="icon-button min-h-11 min-w-11"
+                    >
+                      <Settings2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setGroupToDelete(group)}
+                      aria-label={t.deleteSession}
+                      className="icon-button min-h-11 min-w-11 hover:bg-terracotta/10 hover:text-terracotta"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
                 </article>
               </li>
             );
           })}
         </ul>
       )}
+
+      {/* Delete Group Chat Confirmation Modal */}
       <Modal
-        isOpen={isClearOpen}
-        onClose={() => setIsClearOpen(false)}
-        title={t.clear}
-        description={t.clearConfirm}
+        isOpen={groupToDelete !== null}
+        onClose={() => !deleting && setGroupToDelete(null)}
+        title={t.deleteSession}
         closeLabel={t.close}
         footer={
           <>
-            <button type="button" onClick={() => setIsClearOpen(false)} className="button-secondary min-h-11 justify-center">{t.cancel}</button>
-            <button type="button" onClick={() => { setIsClearOpen(false); purgeSessions(); }} className="button-danger min-h-11 justify-center">{t.clear}</button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => setGroupToDelete(null)}
+              className="button-secondary min-h-11 justify-center disabled:opacity-50"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => void handleDelete()}
+              className="button-danger min-h-11 justify-center disabled:opacity-50"
+            >
+              {t.deleteSession}
+            </button>
           </>
         }
       >
-        <p className="text-sm leading-relaxed text-ink-muted">{t.clearConfirm}</p>
+        <p className="text-sm leading-relaxed text-ink-muted">
+          {groupToDelete ? t.botDeleteConfirm.replace('{name}', groupToDelete.title) : ''}
+        </p>
       </Modal>
     </div>
   );

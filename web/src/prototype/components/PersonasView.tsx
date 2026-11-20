@@ -18,7 +18,6 @@ import { Modal } from './Modal';
 
 export const PersonasView: React.FC = () => {
   const {
-    personas,
     bots,
     botCap,
     canCreateBot,
@@ -31,8 +30,6 @@ export const PersonasView: React.FC = () => {
     currentPlanId,
     goToPricing,
     setCurrentView,
-    canAddPersona,
-    personaCap,
     t,
   } = useApp();
 
@@ -49,7 +46,6 @@ export const PersonasView: React.FC = () => {
 
   const connectedKeys = apiKeys.filter((k) => k.connected);
   const plan = planById(currentPlanId);
-  const presetPersonas = personas.filter((p) => !p.id.startsWith('bot:'));
 
   const startEditBot = (bot: UserBot) => {
     setEditingBot(bot);
@@ -108,7 +104,7 @@ export const PersonasView: React.FC = () => {
           <h1>{t.personasTitle}</h1>
           <p>{t.personasBody}</p>
         </div>
-        <div className="flex w-full flex-wrap gap-2.5 sm:w-auto">
+        <div className="flex w-full flex-wrap gap-2.5 justify-end sm:w-auto">
           <button
             type="button"
             onClick={() => setCurrentView('bot-wizard')}
@@ -132,20 +128,6 @@ export const PersonasView: React.FC = () => {
           >
             <Users className="h-4 w-4" aria-hidden="true" />
             {t.newGroupChat}
-          </button>
-          <button
-            type="button"
-            onClick={() => setCurrentView('new-advisor')}
-            disabled={!canAddPersona}
-            title={
-              !canAddPersona
-                ? t.personaCapHint.replace('{cap}', String(personaCap))
-                : undefined
-            }
-            className="button-secondary min-h-11 justify-center disabled:cursor-not-allowed disabled:opacity-45"
-          >
-            <PlusCircle className="h-4 w-4" aria-hidden="true" />
-            {t.addPersona}
           </button>
         </div>
       </header>
@@ -246,61 +228,6 @@ export const PersonasView: React.FC = () => {
             })}
           </div>
         )}
-      </section>
-
-      {/* Preset Council Advisors Section */}
-      <section className="space-y-4" aria-labelledby="preset-advisors-heading">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="preset-advisors-heading" className="font-serif text-2xl text-ink">
-            {t.personasTitle}
-          </h2>
-          <p className="text-xs leading-relaxed text-ink-muted">
-            {t.personaCapCount
-              .replace('{used}', String(presetPersonas.length))
-              .replace('{cap}', String(personaCap))}
-          </p>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {presetPersonas.map((persona) => (
-            <article key={persona.id} className="panel persona-card p-5 sm:p-6">
-              <div className="flex min-w-0 flex-col items-start gap-3 sm:flex-row sm:justify-between">
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    className="persona-dot"
-                    style={{ backgroundColor: persona.colorHex }}
-                    aria-hidden="true"
-                  />
-                  <div className="min-w-0">
-                    <h3 className="break-words font-serif text-lg text-ink">{persona.name}</h3>
-                    <p className="break-words text-xs text-brass">{persona.stance}</p>
-                  </div>
-                </div>
-                <span className="badge-neutral min-w-0 max-w-full break-words">
-                  {persona.archetype}
-                </span>
-              </div>
-              <dl className="mt-5 space-y-4 text-sm">
-                <div>
-                  <dt className="field-label">{t.modelLabel}</dt>
-                  <dd className="mt-1 text-ink">
-                    {modelLabel(persona.model)} · {providerLabel(persona.provider)}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="field-label">{t.primaryLens}</dt>
-                  <dd className="mt-1 break-words text-ink">{persona.stance}</dd>
-                </div>
-                <div>
-                  <dt className="field-label">{t.fixtureInstructions}</dt>
-                  <dd className="mt-1 break-words rounded-lg border border-border bg-background/60 p-3 text-xs leading-relaxed text-ink-muted">
-                    {persona.instructions}
-                  </dd>
-                </div>
-              </dl>
-            </article>
-          ))}
-        </div>
       </section>
 
       {/* Edit Bot Modal */}

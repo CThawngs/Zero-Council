@@ -45,6 +45,9 @@ export async function POST(request: Request) {
   if (!isValidProviderId(provider)) {
     return Response.json({ error: 'UNKNOWN_PROVIDER' }, { status: 400 });
   }
+
+  // Thêm một check nữa cho các Model không được hỗ trợ.
+
   if (typeof model !== 'string' || !model.trim()) {
     return Response.json({ error: 'MODEL_REQUIRED' }, { status: 400 });
   }

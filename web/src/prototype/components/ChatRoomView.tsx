@@ -155,9 +155,15 @@ export const ChatRoomView: React.FC = () => {
   const isRunning = isRoomBusy;
   const plan = planById(currentPlanId);
 
+  const matchId = (p: { id: string }, id: string) => {
+    if (p.id === id) return true;
+    const strip = (s: string) => (s.startsWith('bot:') ? s.slice(4) : s);
+    return strip(p.id) === strip(id);
+  };
+
   const roster = currentRoom
     ? currentRoom.roster
-        .map((id) => personas.find((persona) => persona.id === id))
+        .map((id) => personas.find((persona) => matchId(persona, id)))
         .filter((p): p is NonNullable<typeof p> => Boolean(p))
     : [];
   const rosterNames = roster.map((persona) => persona.name);
@@ -303,7 +309,8 @@ export const ChatRoomView: React.FC = () => {
         }`}
       >
         {/* Room Header */}
-        <header className="flex flex-col gap-3 border-b border-border bg-surface/90 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <header className="flex flex-col gap-2.5 border-b border-border bg-surface/90 px-4 py-3 sm:px-5">
+          {/* Line 1: Room Info */}
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex shrink-0 -space-x-2" aria-hidden="true">
               {roster.map((persona) => (
@@ -327,6 +334,11 @@ export const ChatRoomView: React.FC = () => {
                     ? t.soloBadge
                     : t.groupBadge.replace('{count}', String(roster.length))}
                 </span>
+                {!isSolo && (
+                  <span className="badge-neutral shrink-0 text-[10px]">
+                    {currentRoom.mode === 'panel' ? t.modePanel : t.modeRoundRobin}
+                  </span>
+                )}
               </div>
               <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
                 <span className="flex items-center gap-1.5">
@@ -352,67 +364,68 @@ export const ChatRoomView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap shrink-0 items-center gap-1.5 sm:gap-2">
-            {!isSolo && (
-              <span className="badge-neutral self-center">
-                {currentRoom.mode === 'panel' ? t.modePanel : t.modeRoundRobin}
-              </span>
-            )}
-            {!isSolo && currentRoom.conversationId && (
-              <button
-                type="button"
-                id="chat-edit-group-btn"
-                onClick={() => openEditGroup(currentRoom.conversationId!)}
-                aria-label={t.groupEditTitle}
-                title={t.groupEditTitle}
-                className="button-secondary min-h-10 px-3 justify-center"
-              >
-                <Settings2 className="h-4 w-4" aria-hidden="true" />
-                <span className="sr-only sm:not-sr-only">{t.groupEditTitle}</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={stopRoom}
-              disabled={!isRunning}
-              className="button-secondary min-h-10 px-3 justify-center disabled:opacity-45"
-            >
-              <Square className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">{t.chatStop}</span>
-            </button>
-            {!isSolo && (
-              <button
-                type="button"
-                onClick={wrapUpRoom}
-                disabled={!currentRoom.messages.some((message) => message.authorId !== USER_HANDLE)}
-                title={t.chatWrapUpHint}
-                className="button-secondary min-h-10 px-3 justify-center disabled:opacity-45"
-              >
-                <ClipboardList className="h-4 w-4" aria-hidden="true" />
-                <span className="sr-only sm:not-sr-only">{t.chatWrapUp}</span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={clearRoom}
-              className="button-quiet min-h-10 px-2.5 justify-center"
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-              <span className="sr-only sm:not-sr-only">{t.chatClear}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setExpanded((value) => !value)}
-              aria-label={expanded ? t.chatCollapse : t.chatExpand}
-              title={expanded ? t.chatCollapse : t.chatExpand}
-              className="icon-button shrink-0"
-            >
-              {expanded ? (
-                <Minimize2 className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <Maximize2 className="h-4 w-4" aria-hidden="true" />
+          {/* Line 2: Actions & Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 pt-2.5">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              {!isSolo && currentRoom.conversationId && (
+                <button
+                  type="button"
+                  id="chat-edit-group-btn"
+                  onClick={() => openEditGroup(currentRoom.conversationId!)}
+                  aria-label={t.groupEditTitle}
+                  title={t.groupEditTitle}
+                  className="button-secondary min-h-9 px-3 justify-center"
+                >
+                  <Settings2 className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">{t.groupEditTitle}</span>
+                </button>
               )}
-            </button>
+              <button
+                type="button"
+                onClick={stopRoom}
+                disabled={!isRunning}
+                className="button-secondary min-h-9 px-3 justify-center disabled:opacity-45"
+              >
+                <Square className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">{t.chatStop}</span>
+              </button>
+              {!isSolo && (
+                <button
+                  type="button"
+                  onClick={wrapUpRoom}
+                  disabled={!currentRoom.messages.some((message) => message.authorId !== USER_HANDLE)}
+                  title={t.chatWrapUpHint}
+                  className="button-secondary min-h-9 px-3 justify-center disabled:opacity-45"
+                >
+                  <ClipboardList className="h-4 w-4" aria-hidden="true" />
+                  <span className="sr-only sm:not-sr-only">{t.chatWrapUp}</span>
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <button
+                type="button"
+                onClick={clearRoom}
+                className="button-quiet min-h-9 px-2.5 justify-center"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <span className="sr-only sm:not-sr-only">{t.chatClear}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpanded((value) => !value)}
+                aria-label={expanded ? t.chatCollapse : t.chatExpand}
+                title={expanded ? t.chatCollapse : t.chatExpand}
+                className="icon-button shrink-0"
+              >
+                {expanded ? (
+                  <Minimize2 className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+            </div>
           </div>
         </header>
 

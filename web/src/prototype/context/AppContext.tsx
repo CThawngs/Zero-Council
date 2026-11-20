@@ -60,6 +60,7 @@ import {
   type WhyStop,
 } from '../chat/engine';
 import { byokGenerator, completeByokText } from '../chat/byok';
+import { analyzeChatRoomConclusion, matchPersonaId } from '../chat/conclusion';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
 import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
@@ -396,14 +397,15 @@ const localizeSession = (
     'team-priority': t.initialTeamTitle,
     'process-change': t.initialProcessTitle,
   };
+  const isSample = ['project-proposal', 'team-priority', 'process-change'].includes(session.id);
   const localizedAdvisors = session.advisors.map((persona) => localizePersona(persona, language));
   return {
     ...session,
     title: session.titlePinned ? session.title : localizedTitles[session.id] ?? session.title,
-    summary: t.sampleSessionSummary,
-    relativeTime: t.sample,
+    summary: isSample ? t.sampleSessionSummary : session.summary,
+    relativeTime: isSample ? t.sample : session.relativeTime,
     advisors: localizedAdvisors,
-    scenarios: scenarioFixture(t),
+    scenarios: isSample ? scenarioFixture(t) : session.scenarios,
   };
 };
 
@@ -740,7 +742,8 @@ export const AppProvider: React.FC<{
     advisors: AdvisorPersona[] = localizedPersonas,
     landOn: ViewType = 'session-concluded'
   ) => {
-    const normalizedQuestion = question.trim().toLowerCase();
+    const rawQuestion = (question ?? '').trim() || copy[language].initialProjectTitle;
+    const normalizedQuestion = rawQuestion.toLowerCase();
     const seatingOf = (list: AdvisorPersona[]) =>
       list
         .map((persona) => persona.id)
@@ -762,18 +765,33 @@ export const AppProvider: React.FC<{
     void (async () => {
       setIsDeliberating(true);
       try {
-        const session = await createSession(
-          question.trim(),
-          framework,
-          currentMode,
-          advisors,
-          language,
-          buildGenerate(advisors, keys, apiKeys)
-        );
+        let session: DeliberationSession;
+        try {
+          session = await createSession(
+            rawQuestion,
+            framework,
+            currentMode,
+            advisors,
+            language,
+            buildGenerate(advisors, keys, apiKeys)
+          );
+        } catch (genError) {
+          console.warn('[deliberation] real generation failed, falling back to fixture:', genError);
+          session = await createSession(
+            rawQuestion,
+            framework,
+            currentMode,
+            advisors,
+            language,
+            undefined
+          );
+        }
         setSessions((value) => [session, ...value]);
         setCurrentSessionId(session.id);
         setSelectedRoundIndex(1);
         setCurrentView(landOn);
+      } catch (err) {
+        console.error('[deliberation] failed to start session:', err);
       } finally {
         setIsDeliberating(false);
       }
@@ -1012,6 +1030,11 @@ export const AppProvider: React.FC<{
     if (found) loadConversationIntoRoom(found);
   };
 
+  const closeRoomModal = () => {
+    setEditingGroupId(null);
+    setIsJoinRoomOpen(false);
+  };
+
   const updateGroupChat = async (
     id: string,
     patch: { title?: string; mode?: ChatMode; roster?: string[] }
@@ -1040,7 +1063,7 @@ export const AppProvider: React.FC<{
               }
             : room
         );
-        setEditingGroupId(null);
+        closeRoomModal();
         return true;
       } catch {
         return false;
@@ -1069,7 +1092,7 @@ export const AppProvider: React.FC<{
           }
         : room
     );
-    setEditingGroupId(null);
+    closeRoomModal();
     return true;
   };
 
@@ -1467,15 +1490,89 @@ export const AppProvider: React.FC<{
   };
 
   const openRoomConclusion = () => {
-    if (!currentRoom) return;
-    const seated = currentRoom.roster
-      .map((id) => localizedPersonas.find((persona) => persona.id === id))
+    if (!currentRoom || isDeliberating) return;
+    const wasRunning = roomAbortRef.current !== null;
+    roomAbortRef.current?.abort();
+    if (wasRunning) {
+      setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
+    }
+    let seated = currentRoom.roster
+      .map((id) => localizedPersonas.find((persona) => matchPersonaId(persona, id)))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
+    if (seated.length === 0) {
+      seated = currentRoom.roster
+        .map((id) => personas.find((persona) => matchPersonaId(persona, id)))
+        .filter((persona): persona is AdvisorPersona => Boolean(persona));
+    }
+    if (seated.length === 0) {
+      seated = localizedPersonas.slice(0, personaCap);
+    }
     if (seated.length === 0) return;
-    const question =
-      currentRoom.messages.find((message) => message.authorId === USER_HANDLE)?.body ??
-      currentRoom.title;
-    startNewSession(question, 'Good / Normal / Bad Scenarios', seated, 'session-concluded');
+
+    const firstUserMessage = currentRoom.messages.find(
+      (message) => message.authorId === USER_HANDLE && message.body.trim().length > 0
+    )?.body;
+    const topic = (currentRoom.title || firstUserMessage || copy[language].initialProjectTitle).trim();
+    const promptText = (firstUserMessage || topic).trim();
+    const roomMessages = [...currentRoom.messages];
+    const mode: CommunicationMode = currentRoom.mode === 'panel' ? 'independent' : 'debate';
+
+    void (async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setIsDeliberating(true);
+      try {
+        const { analysis, contributions } = await analyzeChatRoomConclusion({
+          topic,
+          messages: roomMessages,
+          seated,
+          allPersonas: [...localizedPersonas, ...personas],
+          apiKeys,
+          keys,
+          language,
+          signal: controller.signal,
+        });
+
+        const round: Round = {
+          index: 1,
+          mode,
+          framework: 'scenarios',
+          prompt: promptText,
+          language,
+          contributions,
+          chair: analysis.chair,
+          frameworkOutput: {
+            kind: 'scenarios',
+            matrix: null,
+          },
+        };
+
+        const session: DeliberationSession = {
+          id: nextSessionId(),
+          title: topic,
+          summary: analysis.chair.summary,
+          framework: 'Good / Normal / Bad Scenarios',
+          mode,
+          timestamp: new Date().toISOString(),
+          relativeTime: copy[language].sampleNow,
+          status: 'Concluded',
+          advisors: seated,
+          rounds: [round],
+          scenarios: analysis.scenarios,
+        };
+
+        setSessions((value) => [session, ...value]);
+        setCurrentSessionId(session.id);
+        setSelectedRoundIndex(1);
+        setCurrentView('session-concluded');
+      } catch (err) {
+        if (err instanceof DeliberationCancelled) return;
+        console.error('[conclusion] failed to open room conclusion:', err);
+      } finally {
+        if (abortRef.current === controller) abortRef.current = null;
+        setIsDeliberating(false);
+      }
+    })();
   };
 
   // Restore connected providers (all 8 built-ins + any custom OpenAI/Anthropic endpoints).
@@ -1898,7 +1995,7 @@ export const AppProvider: React.FC<{
           setEditingGroupId(id);
           setIsJoinRoomOpen(true);
         },
-        closeEditGroup: () => setEditingGroupId(null),
+        closeEditGroup: closeRoomModal,
         apiKeys,
         connectApiKey,
         updateProviderModels,
@@ -1933,10 +2030,7 @@ export const AppProvider: React.FC<{
           setEditingGroupId(null);
           setIsJoinRoomOpen(true);
         },
-        closeJoinRoom: () => {
-          setEditingGroupId(null);
-          setIsJoinRoomOpen(false);
-        },
+        closeJoinRoom: closeRoomModal,
         joinRoom,
         startCouncilChat,
         wrapUpRoom,

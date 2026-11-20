@@ -57,6 +57,14 @@ export default async function RootLayout({
             __html: THEME_BOOTSTRAP_SCRIPT,
           }}
         />
+        {initialAuthUser?.email && (
+          <script
+            id="zc-tab-guard"
+            dangerouslySetInnerHTML={{
+              __html: `try{var p=window.location.pathname;if(p==='/'||p===''){var k='zc:initial-dashboard-redirect';if(!sessionStorage.getItem(k)){sessionStorage.setItem(k,'true');document.documentElement.style.visibility='hidden';window.location.replace('/dashboard');window.addEventListener('pageshow',function(){document.documentElement.style.visibility=''});setTimeout(function(){document.documentElement.style.visibility=''},2000)}}}catch(e){}`,
+            }}
+          />
+        )}
       </head>
       <body suppressHydrationWarning>
         <AppProvider initialLanguage={language} initialAuthUser={initialAuthUser}>
