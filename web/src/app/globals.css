@@ -183,6 +183,10 @@
   --tint-violet: #a98cff;
 }
 
+html {
+  background-color: var(--color-background);
+}
+
 body {
   margin: 0;
   min-height: 100%;
@@ -661,12 +665,15 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
 }
 
 .nav-group-label {
-  padding: 1.25rem 0.95rem 0.4rem;
   color: var(--color-ink-muted);
-  font-size: 0.6875rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.nav-group-label:hover {
+  color: var(--color-black)
 }
 
 .setting-choice,

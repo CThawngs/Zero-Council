@@ -30,6 +30,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
     updateGroupChat,
     joinRoom,
     personas,
+    botsReady,
     isBotDisabled,
     currentPlanId,
     t,
@@ -38,26 +39,27 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
   const plan = planById(currentPlanId);
   const cap = plan.maxActiveAdvisors;
 
-  const orderedPersonas = useMemo(() => {
-    const userBots = personas.filter((p) => p.id.startsWith('bot:'));
-    const presets = personas.filter((p) => !p.id.startsWith('bot:'));
-    return [...userBots, ...presets];
-  }, [personas]);
+  // Chỉ lấy bot do người dùng tạo, không lấy cố vấn mặc định từ mockData.
+  const userBots = useMemo(
+    () => personas.filter((persona) => persona.id.startsWith('bot:')),
+    [personas]
+  );
 
   const activePersonas = useMemo(
     () =>
-      orderedPersonas.filter((p) => {
-        if (!p.id.startsWith('bot:')) return true;
-        return !isBotDisabled(p.id.slice(4));
-      }),
-    [orderedPersonas, isBotDisabled]
+      userBots.filter(
+        (persona) => !isBotDisabled(persona.id.slice(4))
+      ),
+    [userBots, isBotDisabled]
   );
 
   const initialSelection = editingGroup
-    ? editingGroup.roster
+    ? editingGroup.roster.filter((id) =>
+        userBots.some((persona) => persona.id === id)
+      )
     : activePersonas
-        .slice(0, Math.min(Math.max(2, Math.min(activePersonas.length, 3)), cap))
-        .map((p) => p.id);
+        .slice(0, Math.min(3, cap))
+        .map((persona) => persona.id);
 
   const [groupTitle, setGroupTitle] = useState(editingGroup?.title ?? '');
   const [selected, setSelected] = useState<string[]>(initialSelection);
@@ -92,7 +94,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
     return !isBotDisabled(id.slice(4));
   }).length;
   const meetsGroupMinimum =
-    selected.length >= 2 && (editingGroup ? selected.length >= 2 : activeSelectedCount >= 2);
+    botsReady && selected.length >= 2 && (editingGroup ? selected.length >= 2 : activeSelectedCount >= 2);
 
   const submit = async () => {
     if (!meetsGroupMinimum || saving) return;
@@ -107,7 +109,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
       return;
     }
     const roster = selected
-      .map((id) => orderedPersonas.find((persona) => persona.id === id))
+      .map((id) => userBots.find((persona) => persona.id === id))
       .filter((persona): persona is AdvisorPersona => Boolean(persona));
     if (roster.length < 2) return;
     joinRoom(roster, mode, groupTitle.trim() || undefined);
@@ -198,12 +200,29 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
             </p>
           )}
 
-          <ul className="grid gap-2 sm:grid-cols-2" aria-describedby="join-cap-hint">
-            {orderedPersonas.map((persona) => {
-              const isSelected = selected.includes(persona.id);
-              const isLockedBot =
-                persona.id.startsWith('bot:') && isBotDisabled(persona.id.slice(4));
-              const isBlocked = (atCap && !isSelected) || (isLockedBot && !isSelected);
+          {!botsReady ? (
+            <p className="py-4 text-center text-sm text-ink-muted">
+              {t.joinBotsLoading}
+            </p>
+          ) : userBots.length === 0 ? (
+            <div
+              role="status"
+              className="rounded-xl border border-dashed border-border bg-background/50 px-4 py-8 text-center"
+            >
+              <Bot className="mx-auto mb-3 h-8 w-8 text-ink-muted" />
+              <p className="text-sm font-medium text-ink">
+                {t.joinBotsEmpty}
+              </p>
+            </div>
+          ) : (
+            <ul
+              className="grid gap-2 sm:grid-cols-2"
+              aria-describedby="join-cap-hint"
+            >
+              {userBots.map((persona) => {
+                const isSelected = selected.includes(persona.id);
+                const isLockedBot = isBotDisabled(persona.id.slice(4));
+                const isBlocked = (atCap && !isSelected) || (isLockedBot && !isSelected);
               return (
                 <li key={persona.id}>
                   <button
@@ -253,6 +272,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
               );
             })}
           </ul>
+          )}
         </fieldset>
 
         <fieldset className="space-y-3">

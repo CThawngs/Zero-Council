@@ -319,30 +319,28 @@ export const ApiKeysView: React.FC = () => {
     (activeProvider ? getProviderSecret(activeProvider) : undefined) || draftKey.trim();
 
   return (
-    <div className="content-shell space-y-7">
-      <header className="page-header flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="eyebrow">
-            <span className="status-dot" />
-            {t.providersEyebrow}
-          </p>
-          <h1>{t.providersTitle}</h1>
-          <p>{t.providersBody}</p>
+    <div className="content-shell w-full min-w-0 max-w-full space-y-7">
+      <header className="page-header flex w-full min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="page-header w-full min-w-0 sm:flex-1">
+          <h2 className="break-words text-3xl">{t.providersTitle}</h2>
+          <p className="break-words">{t.providersBody}</p>
         </div>
-        <div className="flex w-full flex-wrap items-center gap-2.5 sm:w-auto">
+
+        <div className="flex w-full min-w-0 flex-col gap-2.5 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <button
             type="button"
             id="add-custom-provider-btn"
             onClick={openCustomModal}
-            className="button-primary min-h-11 flex-1 justify-center sm:flex-initial"
+            className="button-primary min-h-11 w-full min-w-0 justify-center sm:w-auto"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t.providerAddCustom}
           </button>
+
           <button
             type="button"
             onClick={() => setIsClearOpen(true)}
-            className="button-secondary min-h-11 justify-center"
+            className="button-secondary min-h-11 w-full min-w-0 justify-center sm:w-auto"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
             {t.clearStates}
@@ -350,15 +348,14 @@ export const ApiKeysView: React.FC = () => {
         </div>
       </header>
 
-      <div className="panel flex gap-3 p-4 sm:p-5">
-        <LockKeyhole className="mt-0.5 h-5 w-5 shrink-0 text-brass" aria-hidden="true" />
-        <div>
-          <h2 className="font-medium text-ink">{t.noCredentialTitle}</h2>
-          <p className="mt-1 text-sm leading-relaxed text-ink-muted">{t.noCredentialBody}</p>
-        </div>
+      <div className="min-w-0 flex-1">
+        <h2 className="font-medium text-ink">{t.noCredentialTitle}</h2>
+        <p className="mt-1 break-words text-sm leading-relaxed text-ink-muted">
+          {t.noCredentialBody}
+        </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid w-full min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
         {apiKeys.map((item) => {
           const itemBuiltin = builtinProviderById(item.provider);
           const displayLabel = item.label || providerLabel(item.provider);
@@ -368,13 +365,15 @@ export const ApiKeysView: React.FC = () => {
             <article
               key={item.provider}
               data-provider-card={item.provider}
-              className="panel flex flex-col justify-between gap-4 p-5"
+              className="panel flex w-full min-w-0 max-w-full flex-col justify-between gap-4 p-5"
             >
-              <div className="space-y-2.5">
+              <div className="min-w-0 space-y-2.5">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="font-serif text-lg text-ink">{displayLabel}</h2>
+                  <h2 className="min-w-0 break-words font-serif text-lg text-ink">
+                    {displayLabel}
+                  </h2>
                   {itemBuiltin ? (
-                    <span className="badge-neutral inline-flex items-center gap-1">
+                    <span className="badge-neutral inline-flex max-w-full items-center gap-1 whitespace-normal break-words">
                       <ShieldCheck className="h-3 w-3 text-brass" aria-hidden="true" />
                       {t.providerVerifiedBadge}
                     </span>
@@ -384,9 +383,6 @@ export const ApiKeysView: React.FC = () => {
                       {t.providerCustomBadge}
                     </span>
                   )}
-                  <span className={item.connected ? 'badge-success' : 'badge-muted'}>
-                    {item.connected ? t.stateOn : t.stateOff}
-                  </span>
                 </div>
 
                 {displayBaseUrl && (

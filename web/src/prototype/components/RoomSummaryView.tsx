@@ -28,12 +28,22 @@ export const RoomSummaryView: React.FC = () => {
     );
   }
 
+  const matchId = (p: { id: string }, id: string) => {
+    if (p.id === id) return true;
+    const strip = (s: string) => (s.startsWith('bot:') ? s.slice(4) : s);
+    return strip(p.id) === strip(id);
+  };
+
   const roster = currentRoom.roster
-    .map((id) => personas.find((persona) => persona.id === id))
+    .map((id) => personas.find((persona) => matchId(persona, id)))
     .filter((persona): persona is (typeof personas)[number] => Boolean(persona));
 
   const nameOf = (id: string) =>
-    id === USER_HANDLE ? t.chatYou : id === RESUME_ALL ? '@all' : (personas.find((persona) => persona.id === id)?.name ?? id);
+    id === USER_HANDLE
+      ? t.chatYou
+      : id === RESUME_ALL
+        ? '@all'
+        : (personas.find((persona) => matchId(persona, id))?.name ?? id);
 
   const userMessages = currentRoom.messages.filter((message) => message.authorId === USER_HANDLE);
   const advisorMessages = currentRoom.messages.filter((message) => message.authorId !== USER_HANDLE);
@@ -41,7 +51,7 @@ export const RoomSummaryView: React.FC = () => {
   const attachments = userMessages.flatMap((message) => message.attachments ?? []);
 
   const positions = roster.map((persona) => {
-    const spoken = advisorMessages.filter((message) => message.authorId === persona.id);
+    const spoken = advisorMessages.filter((message) => matchId(persona, message.authorId));
     return { persona, turns: spoken.length, last: spoken[spoken.length - 1] };
   });
 
@@ -244,10 +254,10 @@ export const RoomSummaryView: React.FC = () => {
           <button
             type="button"
             onClick={openRoomConclusion}
-            disabled={isDeliberating || advisorMessages.length === 0}
+            disabled={isDeliberating}
             className="button-primary mt-4 min-h-11 justify-center disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {t.summaryConclusionOpen}
+            {isDeliberating ? '...' : t.summaryConclusionOpen}
           </button>
         </div>
       </section>

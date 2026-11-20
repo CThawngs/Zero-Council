@@ -1,17 +1,10 @@
+import { HeaderLoading } from "@/prototype/components/HeaderLoading";
+
 export default function DashboardLoading() {
   return (
     <div className="min-h-screen bg-background text-ink animate-pulse" aria-busy="true" aria-label="Loading dashboard">
-      {/* Header Skeleton */}
-      <div className="fixed top-0 inset-x-0 h-[76px] border-b border-border bg-surface/80 backdrop-blur px-4 sm:px-6 flex items-center justify-between z-40">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-surface-2" />
-          <div className="h-6 w-32 rounded-md bg-surface-2" />
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-24 rounded-lg bg-surface-2 hidden sm:block" />
-          <div className="h-9 w-9 rounded-full bg-surface-2" />
-        </div>
-      </div>
+      {/* Header Skeleton using shared HeaderLoading (Workspace mode) */}
+      <HeaderLoading isWorkspace={true} />
 
       {/* Main Layout Skeleton */}
       <div className="flex min-h-screen flex-1 pt-[76px]">

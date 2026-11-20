@@ -10,12 +10,9 @@ import {
 import type { ViewType } from './types';
 
 export type NavLabelKey =
-  | 'sessions'
-  | 'chatRoom'
-  | 'personas'
   | 'apiKeys'
   | 'billing'
-  | 'settings';
+  | 'account';
 
 export type NavGroupLabelKey = 'workspace' | 'manage';
 
@@ -44,19 +41,11 @@ export interface NavGroup {
  */
 export const WORKSPACE_NAV: readonly NavGroup[] = [
   {
-    labelKey: 'workspace',
-    items: [
-      { view: 'sessions', labelKey: 'sessions', icon: MessageSquareText },
-      { view: 'chat-room', labelKey: 'chatRoom', icon: MessagesSquare },
-      { view: 'personas', labelKey: 'personas', icon: UsersRound },
-    ],
-  },
-  {
     labelKey: 'manage',
     items: [
+      { view: 'account', labelKey: 'account', icon: Settings },
       { view: 'api-keys', labelKey: 'apiKeys', icon: KeyRound },
       { view: 'billing', labelKey: 'billing', icon: CreditCard },
-      { view: 'settings', labelKey: 'settings', icon: Settings },
     ],
   },
 ] as const;

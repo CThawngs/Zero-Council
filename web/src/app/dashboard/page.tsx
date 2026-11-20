@@ -46,6 +46,12 @@ export default function Dashboard() {
   const initialViewSettledRef = useRef(false);
 
   useEffect(() => {
+    try {
+      sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     if (!authReady || (authUser && !botsReady) || initialViewSettledRef.current) return;
     initialViewSettledRef.current = true;
     if (!WORKSPACE_VIEWS.has(currentView)) {
