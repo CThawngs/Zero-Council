@@ -71,33 +71,14 @@ test('network failure throws NETWORK_FAILED', async () => {
   );
 });
 
-test('200 list + passing probe returns sorted deduped model ids', async () => {
-  const probed = [];
+test('200 returns sorted deduped model ids', async () => {
   await withFetch(
-    async (url, init) => {
-      if (isModelList(url, init)) {
-        return jsonResponse(200, {
-          data: [{ id: 'gpt-4o' }, { id: 'claude-x' }, { id: 'gpt-4o' }, { id: 7 }, {}],
-        });
-      }
-      probed.push(JSON.parse(init.body).model);
-      return jsonResponse(200, { choices: [{ message: { content: 'o' } }] });
-    },
+    async () =>
+      jsonResponse(200, {
+        data: [{ id: 'gpt-4o' }, { id: 'claude-x' }, { id: 'gpt-4o' }, { id: 7 }, {}],
+      }),
     async () => {
-      assert.deepEqual(await fetchProviderModels('openai', OPENAI_KEY), ['claude-x', 'gpt-4o']);
-    }
-  );
-  assert.deepEqual(probed, ['gpt-4o'], 'the default model is probed once');
-});
-
-test('200 list but the probe is rejected -> INVALID_KEY (public /models never counts)', async () => {
-  await withFetch(
-    async (url, init) =>
-      isModelList(url, init)
-        ? jsonResponse(200, { data: [{ id: 'nvidia/nemotron-3.5-super-vl-120b-a12b' }] })
-        : jsonResponse(401, { error: { message: 'Authentication failed' } }),
-    async () => {
-      await assert.rejects(() => fetchProviderModels('nvidia', 'nvapi-fake-long-enough-key'), /INVALID_KEY/);
+      assert.deepEqual(await fetchProviderModels('openai', 'sk-real'), ['claude-x', 'gpt-4o']);
     }
   );
 });

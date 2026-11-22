@@ -42,6 +42,8 @@ export const NON_TEXT_CHAT_PATTERNS: readonly RegExp[] = [
 export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string[]>> = {
   // Google Gemini: keep active Gemini 3.x+ and Gemma 3+ text models; exclude deprecated 1.5/2.0/2.5.
   google: ['gemini-3.', 'gemini-3-', 'gemma-3'],
+  // OpenAI: keep active GPT-4o+, GPT-5/6, o-series, and ChatGPT text models; exclude retired gpt-3.5 and audio/tts/image.
+  openai: ['gpt-4o', 'gpt-4.1', 'gpt-4.5', 'gpt-5', 'gpt-6', 'o1', 'o3', 'o4', 'chatgpt-4o'],
 };
 
 /**
