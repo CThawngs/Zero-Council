@@ -57,6 +57,47 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
     'claude-haiku-5',
     'claude-5-',
   ],
+  // Groq: active Llama, Qwen, DeepSeek, Gemma, Mistral/Mixtral, and GPT-OSS text models; excludes whisper/tts.
+  groq: [
+    'llama-3.1-',
+    'llama-3.3-',
+    'llama-4-',
+    'meta-llama/',
+    'qwen',
+    'deepseek-',
+    'gemma2-',
+    'mistral-',
+    'mixtral-',
+    'compound-',
+    'openai/gpt-oss-',
+  ],
+  // xAI (Grok): active Grok 2/3/4/code text models; non-text image/video models are excluded by NON_TEXT_CHAT_PATTERNS.
+  xai: ['grok-2', 'grok-3', 'grok-4', 'grok-code'],
+  // OpenRouter: major active text-chat vendor prefixes; non-text models are excluded by NON_TEXT_CHAT_PATTERNS.
+  openrouter: [
+    'openai/',
+    'anthropic/',
+    'google/',
+    'meta-llama/',
+    'deepseek/',
+    'mistralai/',
+    'qwen/',
+    'x-ai/',
+    'cohere/',
+  ],
+  // NVIDIA NIM: active Llama, DeepSeek, Qwen, Mistral, Gemma, and Nemotron text-chat models.
+  nvidia: [
+    'meta/llama-3',
+    'meta/llama-4',
+    'deepseek-ai/',
+    'qwen/',
+    'mistralai/',
+    'google/gemma',
+    'nvidia/llama',
+    'nvidia/nemotron',
+  ],
+  // DeepSeek: active text-chat and reasoning models.
+  deepseek: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
 };
 
 /**

@@ -148,3 +148,21 @@ test('anthropic 200 filters retired claude models and keeps active ones', async 
     }
   );
 });
+
+test('remaining builtin providers filter non-text-chat and unlisted models', async () => {
+  await withFetch(
+    async () =>
+      jsonResponse(200, {
+        data: [
+          { id: 'llama-3.3-70b-versatile' },
+          { id: 'whisper-large-v3' },
+          { id: 'playai-tts' },
+        ],
+      }),
+    async () => {
+      assert.deepEqual(await fetchProviderModels('groq', 'gsk_real'), [
+        'llama-3.3-70b-versatile',
+      ]);
+    }
+  );
+});
