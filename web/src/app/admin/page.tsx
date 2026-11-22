@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-
-type Language = 'en' | 'vi';
+import { Header } from '@/prototype/components/Header';
+import { useApp } from '@/prototype/context/AppContext';
 
 type Coupon = {
   code: string;
@@ -53,6 +53,8 @@ const copy = {
     confirmDelete: 'Delete this code? Its redemptions stay as the usage record.',
     failed: 'Could not reach the server.',
     signIn: 'Sign in',
+    role: 'Role',
+    filter: 'Filter',
   },
   vi: {
     label: 'QUẢN TRỊ',
@@ -87,6 +89,8 @@ const copy = {
     confirmDelete: 'Xoá mã này? Các lượt đã dùng vẫn được giữ làm lịch sử.',
     failed: 'Không kết nối được máy chủ.',
     signIn: 'Đăng nhập',
+    role: 'Vai trò',
+    filter: 'Lọc',
   },
 } as const;
 
@@ -109,6 +113,21 @@ const ERROR_TEXT: Record<string, { en: string; vi: string }> = {
   NEED_LOGIN: { en: 'No account is signed in on this device.', vi: 'Thiết bị này chưa đăng nhập tài khoản nào.' },
 };
 
+const ROLES = [
+  {
+    value: 'all',
+    label: {en: 'All', vi: 'Tất cả'},
+  },
+  {
+    value: 'admin',
+    label: {en: 'Administrator', vi: 'Quản trị'},
+  },
+  {
+    value: 'user',
+    label: {en: 'User', vi: 'Người dùng'},
+  }
+]
+
 const EMPTY_FORM = { code: '', percent: '20', expires: '', never: true, cap: '', active: true, note: '' };
 
 /** A date input gives a day; a coupon that expires on the 30th is usable through the 30th. */
@@ -121,9 +140,27 @@ const endOfDay = (date: string): string | null => {
 const toDateInput = (iso: string | null): string => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 
 export default function AdminPage() {
-  const [language, setLanguage] = useState<Language>('en');
+  const { language, setLanguage } = useApp();
+
+  
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchRole, setSearchRole] = useState('all');
+  const [appliedFilter, setAppliedFilter] = useState({ email: '', role: 'all' });
+
+  const filterAccounts = () => {
+    setAppliedFilter({
+      email: searchEmail.trim().toLowerCase(),
+      role: searchRole,
+    });
+  };
+
+  const filteredUsers = users.filter((user) => {
+    const matchEmail = !appliedFilter.email || user.email.toLowerCase().includes(appliedFilter.email);
+    const matchRole = appliedFilter.role === 'all' || user.role === appliedFilter.role;
+    return matchEmail && matchRole;
+  });
   const [status, setStatus] = useState<'loading' | 'ok' | 'denied' | 'signedOut'>('loading');
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<string | null>(null);
@@ -346,244 +383,272 @@ export default function AdminPage() {
 
   if (status === 'signedOut' || status === 'denied' || status === 'loading') {
     return (
-      <main className="mx-auto w-full max-w-3xl px-5 py-16 text-center sm:px-10">
-        <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
-        <h1 className="mt-3 font-serif text-3xl text-ink">{t.title}</h1>
+      <div>
+        <Header isWorkspace={true}/>
+        <main className="mx-auto pt-[76px] w-full max-w-5xl px-5 py-16 text-center sm:px-10">
+        <header className="flex flex-wrap  items-center gap-4 border-border pt-5 pb-6">
+          <span className='status-dot'/>
+          <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
+        </header>
         <p className="mt-4 text-ink-muted">{status === 'loading' ? '…' : status === 'denied' ? t.denied : t.signedOut}</p>
         {status !== 'loading' && (
-          <Link href="/" className={`${button} mt-6 inline-flex items-center`}>
+          <Link href="/auth" className={`${button} mt-6 inline-flex items-center`}>
             {t.signIn}
           </Link>
         )}
       </main>
+      </div>
+      
     );
   }
 
   return (
-    <main lang={language} className="mx-auto w-full max-w-5xl space-y-10 px-5 py-10 sm:px-10">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
-        <div>
-          <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
-          <h1 className="mt-2 font-serif text-3xl text-ink">{t.title}</h1>
-        </div>
-        <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label="Language">
-          {(['en', 'vi'] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-white' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
-              aria-pressed={language === item}
-              onClick={() => setLanguage(item)}
-            >
-              {item === 'en' ? 'English' : 'Tiếng Việt'}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <p className="max-w-3xl text-ink-muted">{t.intro}</p>
-      <p className="text-sm text-ink-muted">{t.sync}</p>
-      {error && <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
-      {notice && <p role="status" className="rounded-xl border border-brass/40 bg-brass/10 px-4 py-3 text-sm text-ink">{notice}</p>}
-
-      <section className="rounded-2xl border border-border bg-surface p-6" aria-labelledby="form-heading">
-        <h2 id="form-heading" className="font-serif text-xl text-ink">
-          {editing ? t.edit : t.new}
-        </h2>
-        <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+    <div>
+      <Header isWorkspace={true}/>
+      <main lang={language} className="mx-auto pt-[76px] w-full max-w-5xl space-y-10 px-5 py-10 sm:px-10">
+        <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pt-5 pb-4">
           <div>
-            <label className={label} htmlFor="code">{t.code}</label>
-            <input
-              id="code"
-              className={field}
-              value={form.code}
-              readOnly={editing !== null}
-              onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-              placeholder="LAUNCH20"
-            />
+            <div className='flex items-center gap-3'>
+              <span className='status-dot'/>
+              <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
+            </div>
+            <h1 className="mt-2 font-serif text-3xl text-ink">{t.title}</h1>
           </div>
-          <div>
-            <label className={label} htmlFor="percent">{t.percent}</label>
-            <input
-              id="percent"
-              className={field}
-              type="number"
-              min={1}
-              max={100}
-              value={form.percent}
-              onChange={(e) => setForm({ ...form, percent: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className={label} htmlFor="expires">
+        </header>
+
+        <p className="max-w-3xl text-ink-muted">{t.intro}</p>
+        <p className="text-sm text-ink-muted">{t.sync}</p>
+        {error && <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
+        {notice && <p role="status" className="rounded-xl border border-brass/40 bg-brass/10 px-4 py-3 text-sm text-ink">{notice}</p>}
+
+        <section className="rounded-2xl border border-border bg-surface p-6" aria-labelledby="form-heading">
+          <h2 id="form-heading" className="font-serif text-xl text-ink">
+            {editing ? t.edit : t.new}
+          </h2>
+          <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
+            <div>
+              <label className={label} htmlFor="code">{t.code}</label>
               <input
-                id="never"
-                type="checkbox"
-                className="mr-2"
-                checked={form.never}
-                onChange={(e) => setForm({ ...form, never: e.target.checked })}
+                id="code"
+                className={field}
+                value={form.code}
+                readOnly={editing !== null}
+                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                placeholder="LAUNCH20"
               />
-              {t.never}
-            </label>
-            <input
-              id="expires"
-              type="date"
-              className={field}
-              disabled={form.never}
-              value={form.expires}
-              onChange={(e) => setForm({ ...form, expires: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className={label} htmlFor="cap">{t.cap}</label>
-            <input
-              id="cap"
-              className={field}
-              type="number"
-              min={1}
-              placeholder={t.unlimited}
-              value={form.cap}
-              onChange={(e) => setForm({ ...form, cap: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className={label} htmlFor="note">{t.note}</label>
-            <input
-              id="note"
-              className={field}
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
+            </div>
+            <div>
+              <label className={label} htmlFor="percent">{t.percent}</label>
               <input
-                type="checkbox"
-                checked={form.active}
-                onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                id="percent"
+                className={field}
+                type="number"
+                min={1}
+                max={100}
+                value={form.percent}
+                onChange={(e) => setForm({ ...form, percent: e.target.value })}
               />
-              {t.active}
-            </label>
-          </div>
-          <div className="flex flex-wrap gap-2 sm:col-span-2">
-            <button type="submit" className={primary} disabled={saving}>
-              {editing ? t.save : t.create}
-            </button>
-            {editing && (
-              <button
-                type="button"
-                className={button}
-                onClick={() => {
-                  setEditing(null);
-                  setForm(EMPTY_FORM);
-                }}
-              >
-                {t.cancel}
-              </button>
-            )}
-          </div>
-        </form>
-      </section>
-
-      <section className="space-y-3" aria-labelledby="coupons-heading">
-        <h2 id="coupons-heading" className="font-serif text-xl text-ink">{t.code}</h2>
-        {coupons.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
-        {coupons.map((coupon) => (
-          <article key={coupon.code} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
-            <div className="min-w-0">
-              <p className="font-mono text-ink">
-                {coupon.code} <span className="text-brass">−{coupon.percent}%</span>
-                {!coupon.active && <span className="ml-2 text-sm text-ink-muted">(off)</span>}
-              </p>
-              <p className="mt-1 text-sm text-ink-muted">
-                {t.expires}: {coupon.expiresAt ? dateFormat.format(new Date(coupon.expiresAt)) : t.never} · {t.used}{' '}
-                {coupon.used}
-                {coupon.maxTotalRedemptions === null ? ` / ${t.unlimited}` : ` / ${coupon.maxTotalRedemptions}`}
-                {coupon.note ? ` · ${coupon.note}` : ''}
-              </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={button} onClick={() => toggleActive(coupon)}>
-                {coupon.active ? 'Off' : 'On'}
-              </button>
-              <button type="button" className={button} onClick={() => startEdit(coupon)}>
-                {t.edit}
-              </button>
-              <button type="button" className={button} onClick={() => remove(coupon)}>
-                {t.remove}
-              </button>
+            <div>
+              <label className={label} htmlFor="expires">
+                <input
+                  id="never"
+                  type="checkbox"
+                  className="mr-2"
+                  checked={form.never}
+                  onChange={(e) => setForm({ ...form, never: e.target.checked })}
+                />
+                {t.never}
+              </label>
+              <input
+                id="expires"
+                type="date"
+                className={field}
+                disabled={form.never}
+                value={form.expires}
+                onChange={(e) => setForm({ ...form, expires: e.target.value })}
+              />
             </div>
-          </article>
-        ))}
-      </section>
-
-      <section className="space-y-3" aria-labelledby="users-heading">
-        <h2 id="users-heading" className="font-serif text-xl text-ink">{t.accounts}</h2>
-        {users.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
-        {users.map((user) => {
-          const isFounderRow = Boolean(me?.isFounder && me.email.toLowerCase() === user.email.toLowerCase());
-          const canDemote = Boolean(me?.isFounder && !isFounderRow);
-          return (
-          <article key={user.email} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
-            <div className="min-w-0 grow">
-              <p className="truncate text-ink">{user.email}</p>
-              <p className="mt-1 text-sm text-ink-muted">{user.role}</p>
-              {me?.isFounder && resetFor === user.email ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <input
-                    type="password"
-                    className={field}
-                    style={{ maxWidth: '16rem' }}
-                    value={newPassword}
-                    autoComplete="new-password"
-                    placeholder={t.newPassword}
-                    aria-label={t.newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                  <button type="button" className={primary} onClick={() => void resetPassword(user)}>
-                    {t.resetPassword}
-                  </button>
-                </div>
-              ) : null}
+            <div>
+              <label className={label} htmlFor="cap">{t.cap}</label>
+              <input
+                id="cap"
+                className={field}
+                type="number"
+                min={1}
+                placeholder={t.unlimited}
+                value={form.cap}
+                onChange={(e) => setForm({ ...form, cap: e.target.value })}
+              />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {user.role === 'admin' ? (
-                canDemote ? (
-                  <button
-                    type="button"
-                    className={button}
-                    onClick={() => setRole(user, 'user')}
-                  >
-                    {t.demote}
-                  </button>
-                ) : null
-              ) : (
-                <button
-                  type="button"
-                  className={button}
-                  onClick={() => setRole(user, 'admin')}
-                >
-                  {t.promote}
-                </button>
-              )}
-              {me?.isFounder ? (
+            <div>
+              <label className={label} htmlFor="note">{t.note}</label>
+              <input
+                id="note"
+                className={field}
+                value={form.note}
+                onChange={(e) => setForm({ ...form, note: e.target.value })}
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <label className="flex min-h-11 items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={form.active}
+                  onChange={(e) => setForm({ ...form, active: e.target.checked })}
+                />
+                {t.active}
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2 sm:col-span-2">
+              <button type="submit" className={primary} disabled={saving}>
+                {editing ? t.save : t.create}
+              </button>
+              {editing && (
                 <button
                   type="button"
                   className={button}
                   onClick={() => {
-                    setResetFor(resetFor === user.email ? null : user.email);
-                    setNewPassword('');
-                    setError(null);
+                    setEditing(null);
+                    setForm(EMPTY_FORM);
                   }}
                 >
-                  {t.resetPassword}
+                  {t.cancel}
                 </button>
-              ) : null}
+              )}
             </div>
-          </article>
-          );
-        })}
-      </section>
-    </main>
+          </form>
+        </section>
+
+        <section className="space-y-3" aria-labelledby="coupons-heading">
+          <h2 id="coupons-heading" className="font-serif text-xl text-ink">{t.code}</h2>
+          {coupons.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
+          {coupons.map((coupon) => (
+            <article key={coupon.code} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
+              <div className="min-w-0">
+                <p className="font-mono text-ink">
+                  {coupon.code} <span className="text-brass">−{coupon.percent}%</span>
+                  {!coupon.active && <span className="ml-2 text-sm text-ink-muted">(off)</span>}
+                </p>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {t.expires}: {coupon.expiresAt ? dateFormat.format(new Date(coupon.expiresAt)) : t.never} · {t.used}{' '}
+                  {coupon.used}
+                  {coupon.maxTotalRedemptions === null ? ` / ${t.unlimited}` : ` / ${coupon.maxTotalRedemptions}`}
+                  {coupon.note ? ` · ${coupon.note}` : ''}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={button} onClick={() => toggleActive(coupon)}>
+                  {coupon.active ? 'Off' : 'On'}
+                </button>
+                <button type="button" className={button} onClick={() => startEdit(coupon)}>
+                  {t.edit}
+                </button>
+                <button type="button" className={button} onClick={() => remove(coupon)}>
+                  {t.remove}
+                </button>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <section className="space-y-3" aria-labelledby="users-heading">
+          <h2 id="users-heading" className="font-serif text-xl text-ink">{t.accounts}</h2>
+
+          {/* tools */}
+          <div className='flex items-center gap-3 w-full'>
+            <div className='flex items-center gap-3'>
+              {/* EMAIL */}
+              <span className='flex items-center gap-2 text-nowrap'>Email:</span>
+              <input type="email" name="search" id="search"
+              value={searchEmail}
+              onChange={(e) => setSearchEmail(e.target.value)}
+              className='w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brass'/>
+
+              {/* ROLE */}
+              <span className='flex items-center gap-2 text-nowrap'>{t.role}</span>
+              <select name="role" id="role"
+              value={searchRole}
+              onChange={(e) => setSearchRole(e.target.value)}
+              className='w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brass'>
+                {ROLES.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label[language]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button type="button" onClick={filterAccounts}
+            className='button-primary'>{t.filter}</button>
+          </div>
+
+          {filteredUsers.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
+          {filteredUsers.map((user) => {
+            const isFounderRow = Boolean(me?.isFounder && me.email.toLowerCase() === user.email.toLowerCase());
+            const canDemote = Boolean(me?.isFounder && !isFounderRow);
+            return (
+            <article key={user.email} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
+              <div className="min-w-0 grow">
+                <p className="truncate text-ink">{user.email}</p>
+                <p className={`mt-1 text-sm ${user.role === 'admin' ? 'text-brass' : 'text-ink-muted'}`}>{user.role}</p>
+                {me?.isFounder && resetFor === user.email ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="password"
+                      className={field}
+                      style={{ maxWidth: '16rem' }}
+                      value={newPassword}
+                      autoComplete="new-password"
+                      placeholder={t.newPassword}
+                      aria-label={t.newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                    <button type="button" className={primary} onClick={() => void resetPassword(user)}>
+                      {t.resetPassword}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {user.role === 'admin' ? (
+                  canDemote ? (
+                    <button
+                      type="button"
+                      className={button}
+                      onClick={() => setRole(user, 'user')}
+                    >
+                      {t.demote}
+                    </button>
+                  ) : null
+                ) : (
+                  <button
+                    type="button"
+                    className={button}
+                    onClick={() => setRole(user, 'admin')}
+                  >
+                    {t.promote}
+                  </button>
+                )}
+                {me?.isFounder ? (
+                  <button
+                    type="button"
+                    className={button}
+                    onClick={() => {
+                      setResetFor(resetFor === user.email ? null : user.email);
+                      setNewPassword('');
+                      setError(null);
+                    }}
+                  >
+                    {t.resetPassword}
+                  </button>
+                ) : null}
+              </div>
+            </article>
+            );
+          })}
+        </section>
+      </main>
+    </div>
   );
 }
