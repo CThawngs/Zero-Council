@@ -44,6 +44,19 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
   google: ['gemini-3.', 'gemini-3-', 'gemma-3'],
   // OpenAI: keep active GPT-4o+, GPT-5/6, o-series, and ChatGPT text models; exclude retired gpt-3.5 and audio/tts/image.
   openai: ['gpt-4o', 'gpt-4.1', 'gpt-4.5', 'gpt-5', 'gpt-6', 'o1', 'o3', 'o4', 'chatgpt-4o'],
+  // Anthropic (Claude): keep active Claude 3.5+ and Claude 4/5 text models; exclude retired claude-2/instant/3.0.
+  anthropic: [
+    'claude-3-5-',
+    'claude-3-7-',
+    'claude-sonnet-4',
+    'claude-opus-4',
+    'claude-haiku-4',
+    'claude-4-',
+    'claude-sonnet-5',
+    'claude-opus-5',
+    'claude-haiku-5',
+    'claude-5-',
+  ],
 };
 
 /**

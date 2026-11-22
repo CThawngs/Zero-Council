@@ -128,3 +128,23 @@ test('google 400 invalid API key maps to INVALID_KEY', async () => {
     }
   );
 });
+
+test('anthropic 200 filters retired claude models and keeps active ones', async () => {
+  await withFetch(
+    async () =>
+      jsonResponse(200, {
+        data: [
+          { id: 'claude-sonnet-4-5' },
+          { id: 'claude-2.1' },
+          { id: 'claude-instant-1.2' },
+          { id: 'claude-3-5-sonnet-20241022' },
+        ],
+      }),
+    async () => {
+      assert.deepEqual(await fetchProviderModels('anthropic', 'sk-ant-real'), [
+        'claude-3-5-sonnet-20241022',
+        'claude-sonnet-4-5',
+      ]);
+    }
+  );
+});
