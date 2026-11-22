@@ -190,35 +190,30 @@ export const saveProviderKey = async (
   const models = normalizeModels(model, meta.models);
   if (supabaseConfig()) {
     try {
+      // Only persist core columns supported by zc_provider_keys; attach client metadata in-memory.
       const rows = await request('zc_provider_keys?on_conflict=user_email,provider', {
         method: 'POST',
         body: JSON.stringify({
           user_email: key,
           provider,
           model,
+          encrypted_key: encrypted,
+          updated_at: updatedAt,
+        }),
+      });
+      const [row] = rows as Row[];
+      if (row) {
+        return {
+          ...toRecord(row),
           models,
-          label: meta.label ?? null,
-          protocol: meta.protocol ?? null,
-          base_url: meta.baseUrl ?? null,
-          encrypted_key: encrypted,
-          updated_at: updatedAt,
-        }),
-      });
-      const [row] = rows as Row[];
-      if (row) return toRecord(row);
-    } catch {
-      const rows = await request('zc_provider_keys?on_conflict=user_email,provider', {
-        method: 'POST',
-        body: JSON.stringify({
-          user_email: key,
-          provider,
-          model,
-          encrypted_key: encrypted,
-          updated_at: updatedAt,
-        }),
-      });
-      const [row] = rows as Row[];
-      if (row) return { ...toRecord(row), models, ...(meta.label ? { label: meta.label } : {}), ...(meta.protocol ? { protocol: meta.protocol } : {}), ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}) };
+          ...(meta.label ? { label: meta.label } : {}),
+          ...(meta.protocol ? { protocol: meta.protocol } : {}),
+          ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
+        };
+      }
+    } catch (error) {
+      console.error(`[providerKeys] saveProviderKey failed for provider "${provider}":`, (error as Error).message);
+      throw error;
     }
     const [existing] = (await request(
       `zc_provider_keys?user_email=eq.${encodeURIComponent(key)}&provider=eq.${encodeURIComponent(provider)}&select=provider,model,updated_at`
