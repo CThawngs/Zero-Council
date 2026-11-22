@@ -1,10 +1,107 @@
-import React from 'react';
-import { ArrowLeft, Copy, Plus } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, ChevronDown, ChevronUp, Copy, Plus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
 import { Avatar, AttachmentGlyph } from './ChatRoomView';
+
+type ClampLines = 2 | 3 | 4 | 5;
+
+const CLAMP_CLASS: Record<ClampLines, string> = {
+  2: 'line-clamp-2',
+  3: 'line-clamp-3',
+  4: 'line-clamp-4',
+  5: 'line-clamp-5',
+};
+
+interface ExpandableTextProps {
+  text: string;
+  maxLines?: ClampLines;
+  as?: 'p' | 'h1' | 'span';
+  className?: string;
+  showMoreLabel: string;
+  showLessLabel: string;
+}
+
+/**
+ * Wraps long or unbroken lines cleanly and clamps overflow beyond `maxLines` behind an
+ * expand/collapse toggle. Only shows the toggle when the rendered text actually overflows.
+ */
+const ExpandableText: React.FC<ExpandableTextProps> = ({
+  text,
+  maxLines = 4,
+  as = 'p',
+  className = '',
+  showMoreLabel,
+  showLessLabel,
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
+  const textRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el || expanded) return;
+
+    const measure = () => {
+      const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight) || 20;
+      setIsTruncated(el.scrollHeight - el.clientHeight > lineHeight * 0.4);
+    };
+
+    const frame = requestAnimationFrame(measure);
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [text, expanded, maxLines]);
+
+  const sharedClassName = `whitespace-pre-wrap [overflow-wrap:anywhere] ${!expanded ? CLAMP_CLASS[maxLines] : ''} ${className}`.trim();
+  const assignRef = (node: HTMLElement | null) => {
+    textRef.current = node;
+  };
+
+  return (
+    <div className="min-w-0">
+      {as === 'h1' ? (
+        <h1 ref={assignRef} className={sharedClassName}>
+          {text}
+        </h1>
+      ) : as === 'span' ? (
+        <span ref={assignRef} className={sharedClassName}>
+          {text}
+        </span>
+      ) : (
+        <p ref={assignRef} className={sharedClassName}>
+          {text}
+        </p>
+      )}
+      {(isTruncated || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          aria-expanded={expanded}
+          className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium text-brass hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass/60"
+        >
+          {expanded ? (
+            <>
+              {showLessLabel}
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
+            </>
+          ) : (
+            <>
+              {showMoreLabel}
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </>
+          )}
+        </button>
+      )}
+    </div>
+  );
+};
 
 /**
  * What the council said, in one page, after the user ends the meeting.
@@ -117,12 +214,20 @@ export const RoomSummaryView: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 py-4 sm:py-8">
-      <header className="max-w-3xl">
+      <header className="min-w-0 max-w-3xl">
         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
           <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
           {t.summaryEyebrow}
         </p>
-        <h1 className="mt-3 break-words font-serif text-3xl text-ink sm:text-4xl">{currentRoom.title}</h1>
+        <ExpandableText
+          key={currentRoom.title}
+          as="h1"
+          text={currentRoom.title}
+          maxLines={3}
+          className="mt-3 font-serif text-3xl leading-snug text-ink sm:text-4xl sm:leading-snug"
+          showMoreLabel={t.summaryShowMore}
+          showLessLabel={t.summaryShowLess}
+        />
         <p className="mt-3 text-sm leading-relaxed text-ink-muted sm:text-base">{t.summaryIntro}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <button type="button" onClick={() => setCurrentView('chat-room')} className="button-primary min-h-11 justify-center">
@@ -153,15 +258,30 @@ export const RoomSummaryView: React.FC = () => {
         <h2 id="summary-question" className="font-serif text-xl text-ink">
           {t.summaryQuestion}
         </h2>
-        <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink sm:text-base">{opening?.body}</p>
+        <div className="min-w-0 rounded-2xl border border-border bg-surface p-5 sm:p-6">
+          {opening?.body && (
+            <ExpandableText
+              key={opening.id}
+              text={opening.body}
+              maxLines={4}
+              className="text-sm leading-relaxed text-ink sm:text-base"
+              showMoreLabel={t.summaryShowMore}
+              showLessLabel={t.summaryShowLess}
+            />
+          )}
           {followUps.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{t.summaryFollowUps}</p>
               <ul className="mt-2 space-y-1.5">
                 {followUps.map((message) => (
-                  <li key={message.id} className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-muted">
-                    {message.body}
+                  <li key={message.id} className="min-w-0">
+                    <ExpandableText
+                      text={message.body}
+                      maxLines={3}
+                      className="text-sm leading-relaxed text-ink-muted"
+                      showMoreLabel={t.summaryShowMore}
+                      showLessLabel={t.summaryShowLess}
+                    />
                   </li>
                 ))}
               </ul>
@@ -181,7 +301,7 @@ export const RoomSummaryView: React.FC = () => {
             {positions.map(({ persona, turns, last }) => (
               <li
                 key={persona.id}
-                className="rounded-2xl border p-5"
+                className="min-w-0 rounded-2xl border p-5"
                 style={{
                   backgroundColor: `color-mix(in srgb, ${persona.colorHex} 8%, var(--color-surface))`,
                   borderColor: `color-mix(in srgb, ${persona.colorHex} 32%, var(--color-border))`,
@@ -199,7 +319,16 @@ export const RoomSummaryView: React.FC = () => {
                     {turns > 0 ? t.summaryTurns.replace('{count}', String(turns)) : t.summaryNoTurns}
                   </span>
                 </div>
-                {last && <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">{last.body}</p>}
+                {last && (
+                  <ExpandableText
+                    key={last.id}
+                    text={last.body}
+                    maxLines={5}
+                    className="mt-3 text-sm leading-relaxed text-ink"
+                    showMoreLabel={t.summaryShowMore}
+                    showLessLabel={t.summaryShowLess}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -213,9 +342,18 @@ export const RoomSummaryView: React.FC = () => {
           </h2>
           <ol className="space-y-2 rounded-2xl border border-border bg-surface p-5 sm:p-6">
             {handoffs.map((line, index) => (
-              <li key={`${line}-${index}`} className="flex gap-3 text-sm text-ink">
+              <li key={`${line}-${index}`} className="flex min-w-0 gap-3 text-sm text-ink">
                 <span className="w-5 shrink-0 text-right text-xs leading-6 text-ink-muted">{index + 1}</span>
-                <span className="break-words">{line}</span>
+                <div className="min-w-0 flex-1">
+                  <ExpandableText
+                    as="span"
+                    text={line}
+                    maxLines={2}
+                    className="block text-sm text-ink"
+                    showMoreLabel={t.summaryShowMore}
+                    showLessLabel={t.summaryShowLess}
+                  />
+                </div>
               </li>
             ))}
           </ol>
