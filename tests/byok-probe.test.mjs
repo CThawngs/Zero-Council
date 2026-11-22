@@ -119,21 +119,20 @@ test('google 200 strips models/ prefix and filters generateContent models', asyn
   await withFetch(
     async (url, init) => {
       sawHeader = init.headers['x-goog-api-key'];
-      if (isModelList(url, init)) {
-        return jsonResponse(200, {
-          models: [
-            { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
-            { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
-          ],
-        });
-      }
-      return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'o' }] } }] });
+      return jsonResponse(200, {
+        models: [
+          { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/gemini-3.5-flash-lite-preview-tts', supportedGenerationMethods: ['generateContent'] },
+          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+          { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
+        ],
+      });
     },
     async () => {
-      assert.deepEqual(await fetchProviderModels('google', GOOGLE_KEY), [
-        'gemini-2.5-flash',
-        'gemini-2.5-pro',
+      assert.deepEqual(await fetchProviderModels('google', 'AIza-real'), [
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
       ]);
     }
   );
