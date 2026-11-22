@@ -87,7 +87,7 @@ export const PROVIDERS: Provider[] = [
     protocol: 'google',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
     lockedBaseUrl: true,
-    models: [{ id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' }],
+    models: [{ id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' }],
     keyHint: 'AIza…',
   },
   {

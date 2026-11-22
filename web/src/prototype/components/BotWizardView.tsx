@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
+import { visibleModelsForProvider } from '../chat/modelAllowList';
 import { planById } from '../data/plans';
 import { Check, Loader2, Lock } from 'lucide-react';
 import type { ModelProvider } from '../types';
@@ -29,9 +30,7 @@ export const BotWizardView: React.FC = () => {
   const connected = apiKeys.filter((key) => key.connected);
   const selectedKey = provider ? connected.find((k) => k.provider === provider) : undefined;
   const availableModels = selectedKey
-    ? selectedKey.models && selectedKey.models.length > 0
-      ? selectedKey.models
-      : [selectedKey.modelName].filter(Boolean)
+    ? visibleModelsForProvider(selectedKey.provider, selectedKey.models, selectedKey.modelName)
     : [];
   const total = 3;
   const plan = planById(currentPlanId);

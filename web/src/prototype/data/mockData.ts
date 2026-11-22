@@ -167,7 +167,7 @@ const modelLabels: Record<SupportedModel, string> = {
   'claude-sonnet-4-5': 'Claude Sonnet 4.5',
   'gpt-4o': 'GPT-4o',
   'gpt-4o-mini': 'GPT-4o mini',
-  'gemini-2.5-flash': 'Gemini 2.5 Flash',
+  'gemini-3.5-flash-lite': 'Gemini 3.5 Flash-Lite',
   'llama-3.3-70b-versatile': 'Llama 3.3 70B',
   'grok-2-latest': 'Grok 2',
   'openai/gpt-4o-mini': 'OpenRouter GPT-4o mini',

@@ -78,7 +78,7 @@ export type SupportedModel =
   | 'claude-sonnet-4-5'
   | 'gpt-4o'
   | 'gpt-4o-mini'
-  | 'gemini-2.5-flash'
+  | 'gemini-3.5-flash-lite'
   | 'llama-3.3-70b-versatile'
   | 'grok-2-latest'
   | 'openai/gpt-4o-mini'

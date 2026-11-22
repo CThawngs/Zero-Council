@@ -10,6 +10,7 @@ import {
   type ProviderProtocol,
 } from '../chat/byok';
 import { slugifyCustomProvider } from '@/lib/store/botValidation';
+import { visibleModelsForProvider } from '../chat/modelAllowList';
 import {
   AlertCircle,
   Check,
@@ -406,7 +407,11 @@ export const ApiKeysView: React.FC = () => {
           const itemBuiltin = builtinProviderById(item.provider);
           const displayLabel = item.label || providerLabel(item.provider);
           const displayBaseUrl = itemBuiltin?.baseUrl ?? item.baseUrl ?? '';
-          const modelCount = item.models?.length ?? (item.connected && item.modelName ? 1 : 0);
+          const modelCount = visibleModelsForProvider(
+            item.provider,
+            item.models,
+            item.connected ? item.modelName : undefined
+          ).length;
           return (
             <article
               key={item.provider}
@@ -638,9 +643,10 @@ export const ApiKeysView: React.FC = () => {
                   onChange={(event) => void changeConnectedDefaultModel(event.target.value)}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
                 >
-                  {(activeItem.models && activeItem.models.length > 0
-                    ? activeItem.models
-                    : [activeItem.modelName]
+                  {visibleModelsForProvider(
+                    activeItem.provider,
+                    activeItem.models,
+                    activeItem.modelName
                   ).map((m) => (
                     <option key={m} value={m}>
                       {m}
