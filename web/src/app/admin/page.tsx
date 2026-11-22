@@ -22,6 +22,17 @@ type User = { email: string; role: 'user' | 'admin'; createdAt: string };
 
 const EMPTY_FORM = { code: '', percent: '20', expires: '', never: true, cap: '', active: true, note: '' };
 
+const ROLES = [
+  {
+    value: 'admin',
+    label: {en: 'Administrator', vi: 'Quản trị viên'},
+  },
+  {
+    value: 'user',
+    label: {en: 'User', vi: 'Thành viên'},
+  },
+]
+
 const adminErrorMessage = (code: string | undefined, t: Copy): string => {
   switch (code) {
     case 'INVALID_JSON':
@@ -80,6 +91,22 @@ export default function AdminPage() {
   const { language, setLanguage, theme, toggleTheme, t } = useApp();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [searchEmail, setSearchEmail] = useState('');
+  const [searchRole, setSearchRole] = useState('all');
+  const [appliedFilter, setAppliedFilter] = useState({ email: '', role: 'all' });
+
+  const filterAccounts = () => {
+    setAppliedFilter({
+      email: searchEmail.trim().toLowerCase(),
+      role: searchRole,
+    });
+  };
+
+  const filteredUsers = users.filter((user) => {
+    const matchEmail = !appliedFilter.email || user.email.toLowerCase().includes(appliedFilter.email);
+    const matchRole = appliedFilter.role === 'all' || user.role === appliedFilter.role;
+    return matchEmail && matchRole;
+  });
   const [status, setStatus] = useState<'loading' | 'ok' | 'denied' | 'signedOut'>('loading');
   const [form, setForm] = useState(EMPTY_FORM);
   const [editing, setEditing] = useState<string | null>(null);
@@ -447,56 +474,84 @@ export default function AdminPage() {
         </form>
       </section>
 
-      <section className="space-y-3" aria-labelledby="coupons-heading">
-        <h2 id="coupons-heading" className="font-serif text-xl text-ink">{t.adminCode}</h2>
-        {coupons.length === 0 && <p className="text-ink-muted">{t.adminEmptyCoupons}</p>}
-        {coupons.map((coupon) => (
-          <article key={coupon.code} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
-            <div className="min-w-0">
-              <p className="font-mono text-ink">
-                {coupon.code} <span className="text-brass">−{coupon.percent}%</span>
-                {!coupon.active && <span className="ml-2 text-sm text-ink-muted">{t.adminCouponOffBadge}</span>}
-              </p>
-              <p className="mt-1 text-sm text-ink-muted">
-                {t.adminExpires}: {coupon.expiresAt ? dateFormat.format(new Date(coupon.expiresAt)) : t.adminNever} · {t.adminUsed}{' '}
-                {coupon.used}
-                {coupon.maxTotalRedemptions === null ? ` / ${t.adminUnlimited}` : ` / ${coupon.maxTotalRedemptions}`}
-                {coupon.note ? ` · ${coupon.note}` : ''}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={button} onClick={() => toggleActive(coupon)}>
-                {coupon.active ? t.adminActionTurnOff : t.adminActionTurnOn}
-              </button>
-              <button type="button" className={button} onClick={() => startEdit(coupon)}>
-                {t.adminEdit}
-              </button>
-              <button type="button" className={button} onClick={() => remove(coupon)}>
-                {t.adminRemove}
-              </button>
-            </div>
-          </article>
-        ))}
-      </section>
+        <section className="space-y-3" aria-labelledby="coupons-heading">
+          <h2 id="coupons-heading" className="font-serif text-xl text-ink">{t.adminCode}</h2>
+          {coupons.length === 0 && <p className="text-ink-muted">{t.adminEmptyCoupons}</p>}
+          {coupons.map((coupon) => (
+            <article key={coupon.code} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
+              <div className="min-w-0">
+                <p className="font-mono text-ink">
+                  {coupon.code} <span className="text-brass">−{coupon.percent}%</span>
+                  {!coupon.active && <span className="ml-2 text-sm text-ink-muted">(off)</span>}
+                </p>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {t.adminExpires}: {coupon.expiresAt ? dateFormat.format(new Date(coupon.expiresAt)) : t.adminNever} · {t.adminUsed}{' '}
+                  {coupon.used}
+                  {coupon.maxTotalRedemptions === null ? ` / ${t.adminUnlimited}` : ` / ${coupon.maxTotalRedemptions}`}
+                  {coupon.note ? ` · ${coupon.note}` : ''}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={button} onClick={() => toggleActive(coupon)}>
+                  {coupon.active ? t.adminActionTurnOff : t.adminActionTurnOn}
+                </button>
+                <button type="button" className={button} onClick={() => startEdit(coupon)}>
+                  {t.adminEdit}
+                </button>
+                <button type="button" className={button} onClick={() => remove(coupon)}>
+                  {t.adminRemove}
+                </button>
+              </div>
+            </article>
+          ))}
+        </section>
 
-      <section className="space-y-3" aria-labelledby="users-heading">
-        <h2 id="users-heading" className="font-serif text-xl text-ink">{t.adminAccounts}</h2>
-        {users.length === 0 && <p className="text-ink-muted">{t.adminEmptyAccounts}</p>}
-        {users.map((user) => {
-          const isFounderRow = Boolean(me?.isFounder && me.email.toLowerCase() === user.email.toLowerCase());
-          const canDemote = Boolean(me?.isFounder && !isFounderRow);
-          return (
+        <section className="space-y-3" aria-labelledby="users-heading">
+          <h2 id="users-heading" className="font-serif text-xl text-ink">{t.adminAccounts}</h2>
+
+          {/* tools */}
+          <div className='flex items-center gap-3 w-full'>
+            <div className='flex items-center gap-3'>
+              {/* EMAIL */}
+              <span className='flex items-center gap-2 text-nowrap'>Email:</span>
+              <input type="email" name="search" id="search"
+              value={searchEmail}
+              onChange={(e) => setSearchEmail(e.target.value)}
+              className='w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brass'/>
+
+              {/* ROLE */}
+              <span className='flex items-center gap-2 text-nowrap'>{t.adminRole}</span>
+              <select name="role" id="role"
+              value={searchRole}
+              onChange={(e) => setSearchRole(e.target.value)}
+              className='w-full rounded-lg border border-border bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-brass'>
+                {ROLES.map((role) => (
+                  <option key={role.value} value={role.value}>
+                    {role.label[language]}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button type="button" onClick={filterAccounts}
+            className='button-primary'>{t.adminFilter}</button>
+          </div>
+
+          {filteredUsers.length === 0 && <p className="text-ink-muted">{t.adminEmptyAccounts}</p>}
+          {filteredUsers.map((user) => {
+            const isFounderRow = Boolean(me?.isFounder && me.email.toLowerCase() === user.email.toLowerCase());
+            const canDemote = Boolean(me?.isFounder && !isFounderRow);
+            return (
             <article key={user.email} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
               <div className="min-w-0 grow">
                 <p className="truncate text-ink">{user.email}</p>
-                <p className="mt-1 text-sm text-ink-muted">
-                  {user.role === 'admin' ? t.adminRoleAdmin : t.adminRoleUser}
-                </p>
+                <p className={`mt-1 text-sm ${user.role === 'admin' ? 'text-brass' : 'text-ink-muted'}`}>{user.role}</p>
                 {me?.isFounder && resetFor === user.email ? (
                   <div className="mt-3 flex flex-wrap items-center gap-2">
                     <input
                       type="password"
-                      className={`${field} sm:max-w-xs`}
+                      className={field}
+                      style={{ maxWidth: '16rem' }}
                       value={newPassword}
                       autoComplete="new-password"
                       placeholder={t.adminNewPassword}
@@ -544,9 +599,9 @@ export default function AdminPage() {
                 ) : null}
               </div>
             </article>
-          );
-        })}
-      </section>
-    </main>
+            );
+          })}
+        </section>
+      </main>
   );
 }
