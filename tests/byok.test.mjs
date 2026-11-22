@@ -71,7 +71,7 @@ test('provider registry includes all 8 verified built-in BYOK providers with loc
   }
   assert.equal(providerById('anthropic').models[0].id, 'claude-sonnet-4-5');
   assert.ok(providerById('openai').models.length >= 1);
-  assert.equal(providerById('google').models[0].id, 'gemini-2.5-flash');
+  assert.equal(providerById('google').models[0].id, 'gemini-3.5-flash-lite');
 });
 
 test('custom OpenAI-compatible and Anthropic-compatible endpoints resolve cleanly', () => {

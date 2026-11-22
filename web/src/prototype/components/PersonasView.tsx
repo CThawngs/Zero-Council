@@ -12,6 +12,7 @@ import {
   Users,
 } from 'lucide-react';
 import { modelLabel, providerLabel } from '../data/mockData';
+import { visibleModelsForProvider } from '../chat/modelAllowList';
 import { planById } from '../data/plans';
 import type { ModelProvider, UserBot } from '../types';
 import { Modal } from './Modal';
@@ -88,9 +89,11 @@ export const PersonasView: React.FC = () => {
 
   const selectedEditProviderKey = connectedKeys.find((k) => k.provider === editProvider);
   const editProviderModels = selectedEditProviderKey
-    ? selectedEditProviderKey.models && selectedEditProviderKey.models.length > 0
-      ? Array.from(new Set([editModel, ...selectedEditProviderKey.models].filter(Boolean)))
-      : [editModel || selectedEditProviderKey.modelName].filter(Boolean)
+    ? visibleModelsForProvider(
+        selectedEditProviderKey.provider,
+        selectedEditProviderKey.models,
+        editModel || selectedEditProviderKey.modelName
+      )
     : [editModel].filter(Boolean);
 
   return (

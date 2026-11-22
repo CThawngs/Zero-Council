@@ -124,3 +124,25 @@ export const filterBuiltinModels = (
   providerId: BuiltinProviderId,
   modelIds: string[]
 ): string[] => modelIds.filter((id) => isAllowedBuiltinModel(providerId, id));
+
+/**
+ * Returns the deduped list of models to display for a provider in UI dropdowns.
+ * Built-in providers are filtered through `filterBuiltinModels`; custom providers keep all models.
+ */
+export const visibleModelsForProvider = (
+  providerId: string,
+  models?: readonly string[],
+  fallbackModel?: string
+): string[] => {
+  const base =
+    models && models.length > 0
+      ? [...models]
+      : fallbackModel
+        ? [fallbackModel]
+        : [];
+  const deduped = Array.from(new Set(base.map((m) => m.trim()).filter(Boolean)));
+  if (Object.prototype.hasOwnProperty.call(MODEL_ALLOW_LIST, providerId)) {
+    return filterBuiltinModels(providerId as BuiltinProviderId, deduped);
+  }
+  return deduped;
+};
