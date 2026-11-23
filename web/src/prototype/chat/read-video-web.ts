@@ -10,6 +10,8 @@
  */
 
 import { UnreadableFileError } from './read-file-web.ts';
+import { localizeAttachmentProblem } from '../i18n.ts';
+import type { Language } from '../types.ts';
 import { fitWithin } from './read-image-web.ts';
 
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -36,7 +38,7 @@ const formatBytes = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export const readVideoInBrowser = async (file: Blob & { name: string }): Promise<VideoReading> => {
+const readVideoRaw = async (file: Blob & { name: string }): Promise<VideoReading> => {
   if (file.size === 0) throw new UnreadableFileError('The video file is empty.');
   if (file.size > MAX_VIDEO_BYTES) {
     throw new UnreadableFileError(`The video is larger than ${MAX_VIDEO_BYTES / (1024 * 1024)} MB.`);
@@ -136,5 +138,20 @@ export const readVideoInBrowser = async (file: Blob & { name: string }): Promise
       height: 0,
       summary: `${formatBytes(file.size)}`,
     };
+  }
+};
+
+export const readVideoInBrowser = async (
+  file: Blob & { name: string },
+  options: { language?: Language } = {}
+): Promise<VideoReading> => {
+  const language = options.language === 'vi' ? 'vi' : 'en';
+  try {
+    return await readVideoRaw(file);
+  } catch (error) {
+    if (error instanceof UnreadableFileError && language !== 'en') {
+      throw new UnreadableFileError(localizeAttachmentProblem(error.reason, language));
+    }
+    throw error;
   }
 };

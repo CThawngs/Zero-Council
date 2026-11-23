@@ -29,8 +29,18 @@ export const BillingHistoryView: React.FC = () => {
     cancelPlanToFree,
     downgradeToPro,
     authUser,
+    language,
     t,
   } = useApp();
+  const locale = language === 'vi' ? 'vi-VN' : 'en-US';
+  const formatGrantSource = (source: string) =>
+    source === 'PAYOS'
+      ? t.billingSourcePayos
+      : source === 'COUPON'
+        ? t.billingSourceCoupon
+        : source === 'ADMIN'
+          ? t.billingSourceAdmin
+          : source;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -137,12 +147,12 @@ export const BillingHistoryView: React.FC = () => {
                         #{order.orderCode} · {order.planId.toUpperCase()}
                       </p>
                       <p className="text-xs text-ink-muted">
-                        {new Date(order.paidAt ?? order.createdAt).toLocaleString()}
+                        {new Date(order.paidAt ?? order.createdAt).toLocaleString(locale)}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-ink">
-                        {order.amountVnd.toLocaleString('vi-VN')} ₫
+                        {order.amountVnd.toLocaleString(locale)} ₫
                       </span>
                       <span className="badge-success">{t.billingOrderPaid}</span>
                     </div>
@@ -163,11 +173,11 @@ export const BillingHistoryView: React.FC = () => {
                   >
                     <div>
                       <p className="font-medium text-ink">
-                        {g.planId.toUpperCase()} ({g.source})
+                        {g.planId.toUpperCase()} ({formatGrantSource(g.source)})
                       </p>
                       <p className="text-xs text-ink-muted">
-                        {new Date(g.startsAt).toLocaleDateString()} →{' '}
-                        {new Date(g.expiresAt).toLocaleDateString()}
+                        {new Date(g.startsAt).toLocaleDateString(locale)} →{' '}
+                        {new Date(g.expiresAt).toLocaleDateString(locale)}
                       </p>
                     </div>
                   </li>

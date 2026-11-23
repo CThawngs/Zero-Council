@@ -12,10 +12,17 @@
  * Usage: node tests/drive-sidebar-groups.mjs <baseUrl>
  */
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
+
+if (!process.env.ZC_PROVIDER_KEYS_STORE && existsSync(path.resolve('web'))) {
+  process.env.ZC_PROVIDER_KEYS_STORE = path.resolve('web', '.zc-provider-keys.json');
+}
+const { deleteProviderKey, saveProviderKey } = await import(
+  '../web/src/lib/store/providerKeys.ts'
+);
 
 const BASE = process.argv[2] ?? 'http://127.0.0.1:3236';
 const PORT = 9346;
@@ -115,6 +122,7 @@ async function screenshot(filename) {
 const createdBotIds = [];
 const createdGroupIds = [];
 let seededProvider = false;
+let meEmail = null;
 
 try {
   await send('Page.enable');
@@ -132,27 +140,33 @@ try {
     }
   `);
 
-  // Seed provider, 2 bots, and 2 group chats via real API
+  const meInfo = await evaluate(`
+    const meRes = await fetch('/api/me');
+    return meRes.ok ? await meRes.json() : null;
+  `);
+  meEmail = meInfo?.email ?? null;
+  if (meEmail) {
+    const hasOpenAi = await evaluate(`
+      const provRes = await fetch('/api/providers');
+      const provBody = provRes.ok ? await provRes.json() : { providers: [] };
+      return (provBody.providers ?? []).some((p) => p.provider === 'openai');
+    `);
+    if (!hasOpenAi) {
+      try {
+        await saveProviderKey(meEmail, 'openai', 'gpt-4o-mini', 'sk-test-sidebar-verify-000000000000000000', {
+          models: ['gpt-4o-mini'],
+        });
+        seededProvider = true;
+      } catch {
+        // Non-local store fallback: conversations API accepts synthetic bot roster IDs below.
+      }
+    }
+  }
+
+  // Seed 2 bots (if provider available) and 2 group chats via real API
   const seed = await evaluate(`
     const meRes = await fetch('/api/me');
     const me = meRes.ok ? await meRes.json() : null;
-
-    const provRes = await fetch('/api/providers');
-    const provBody = provRes.ok ? await provRes.json() : { providers: [] };
-    let seededProvider = false;
-    if (!(provBody.providers ?? []).some((p) => p.provider === 'openai')) {
-      const pPost = await fetch('/api/providers', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: 'openai',
-          key: 'sk-test-sidebar-verify-000000000000000000',
-          model: 'gpt-4o-mini',
-          models: ['gpt-4o-mini'],
-        }),
-      });
-      seededProvider = pPost.ok;
-    }
 
     const botsRes = await fetch('/api/bots');
     const botsBody = botsRes.ok ? await botsRes.json() : { bots: [] };
@@ -177,7 +191,10 @@ try {
     }
 
     const allBotIds = [...existingBots.map((b) => b.id), ...createdBots].slice(0, 2);
-    const roster = allBotIds.map((id) => 'bot:' + id);
+    const roster =
+      allBotIds.length >= 2
+        ? allBotIds.map((id) => 'bot:' + id)
+        : ['bot:seed-alpha', 'bot:seed-beta'];
     const createdGroups = [];
     for (const title of ['Nhóm chiến lược Alpha', 'Nhóm kỹ thuật Beta']) {
       const gRes = await fetch('/api/conversations', {
@@ -190,10 +207,8 @@ try {
         if (g.conversation?.id) createdGroups.push(g.conversation.id);
       }
     }
-    return { email: me?.email ?? null, seededProvider, createdBots, createdGroups };
+    return { email: me?.email ?? null, createdBots, createdGroups };
   `);
-
-  seededProvider = Boolean(seed.seededProvider);
   createdBotIds.push(...(seed.createdBots ?? []));
   createdGroupIds.push(...(seed.createdGroups ?? []));
   check(
@@ -326,13 +341,18 @@ try {
       await fetch('/api/bots?id=' + encodeURIComponent(id), { method: 'DELETE' });
     }
     if (${JSON.stringify(seededProvider)}) {
-      await fetch('/api/providers/openai', { method: 'DELETE' });
+      await fetch('/api/providers?provider=openai', { method: 'DELETE' });
     }
     for (const k of Object.keys(localStorage)) {
       if (k.startsWith('zc:sidebar-org:v1:')) localStorage.removeItem(k);
     }
   `);
 } finally {
+  if (seededProvider && meEmail) {
+    try {
+      await deleteProviderKey(meEmail, 'openai');
+    } catch {}
+  }
   writeFileSync(
     path.join('.agent', 'evidence', 'sidebar-groups-drive.json'),
     JSON.stringify({ ok: failures.length === 0, failures, trace }, null, 2)

@@ -1,3 +1,4 @@
+import { copy } from './i18n.ts';
 import type { ChatMode } from './chat/engine';
 
 export interface SidebarDepartment {
@@ -406,15 +407,16 @@ export const formatRelativeTime = (
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return '';
   const diffSec = Math.max(0, Math.floor((nowMs - ts) / 1000));
-  if (diffSec < 60) return language === 'vi' ? 'vừa xong' : 'just now';
+  const dict = copy[language];
+  if (diffSec < 60) return dict.relJustNow;
   const diffMin = Math.floor(diffSec / 60);
-  if (diffMin < 60) return language === 'vi' ? `${diffMin}p` : `${diffMin}m ago`;
+  if (diffMin < 60) return dict.relMinutesAgo.replace('{n}', String(diffMin));
   const diffHr = Math.floor(diffMin / 60);
-  if (diffHr < 24) return language === 'vi' ? `${diffHr}g` : `${diffHr}h ago`;
+  if (diffHr < 24) return dict.relHoursAgo.replace('{n}', String(diffHr));
   const diffDay = Math.floor(diffHr / 24);
-  if (diffDay < 30) return language === 'vi' ? `${diffDay}n` : `${diffDay}d ago`;
+  if (diffDay < 30) return dict.relDaysAgo.replace('{n}', String(diffDay));
   const diffMonth = Math.floor(diffDay / 30);
-  return language === 'vi' ? `${diffMonth}th` : `${diffMonth}mo ago`;
+  return dict.relMonthsAgo.replace('{n}', String(diffMonth));
 };
 
 export const exportGroupChatJson = (input: {

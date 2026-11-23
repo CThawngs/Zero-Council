@@ -57,7 +57,7 @@ export const SessionsListView: React.FC = () => {
         <button
           type="button"
           onClick={openJoinRoom}
-          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:w-auto"
+          className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass sm:w-auto"
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
           {t.newGroupChat}
@@ -103,7 +103,7 @@ export const SessionsListView: React.FC = () => {
           <button
             type="button"
             onClick={openJoinRoom}
-            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
+            className="mt-6 inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-accent-ink transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t.newGroupChat}
@@ -165,7 +165,7 @@ export const SessionsListView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => openGroupChat(group.id)}
-                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-brass/50 hover:bg-brass hover:text-background focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-ink transition hover:border-brass/50 hover:bg-brass hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass"
                     >
                       {t.joinStart}
                       <ArrowRight className="h-4 w-4" aria-hidden="true" />

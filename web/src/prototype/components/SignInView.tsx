@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
+import { localizeAuthError } from '../i18n';
 import { CheckCircle2, Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
@@ -26,7 +27,7 @@ export const SignInView: React.FC = () => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
-      setError(error.message);
+      setError(localizeAuthError(error.message, t));
       return;
     }
 
@@ -48,7 +49,7 @@ export const SignInView: React.FC = () => {
         }
       },
     });
-    if (error) setError(error.message);
+    if (error) setError(localizeAuthError(error.message, t));
     // On success Supabase redirects the browser to the provider and back to /auth/callback,
     // so there is nothing else to do here.
   };
@@ -78,7 +79,7 @@ export const SignInView: React.FC = () => {
     });
 
     if (error) {
-      setError(error.message);
+      setError(localizeAuthError(error.message, t));
       return;
     }
 
@@ -108,7 +109,7 @@ export const SignInView: React.FC = () => {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder={t.emailPlaceholder}
                   required
                   style={{ paddingLeft: '2.25rem' }}
                   autoComplete="email"

@@ -126,7 +126,7 @@ export const EmptyChamberView: React.FC = () => {
                   <span className="flex items-start justify-between gap-3">
                     <Icon className="h-5 w-5 shrink-0 text-brass" aria-hidden="true" />
                     {isSelected && (
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brass text-background">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brass text-accent-ink">
                         <Check className="h-3.5 w-3.5" aria-hidden="true" />
                       </span>
                     )}
@@ -159,7 +159,7 @@ export const EmptyChamberView: React.FC = () => {
                   <span className="flex items-start justify-between gap-3">
                     <span className="min-w-0 break-words text-sm font-semibold text-ink">{modeLabel(id, language)}</span>
                     {isSelected && (
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brass text-background">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brass text-accent-ink">
                         <Check className="h-3.5 w-3.5" aria-hidden="true" />
                       </span>
                     )}
@@ -218,7 +218,7 @@ export const EmptyChamberView: React.FC = () => {
                     </span>
                     <span
                       className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${
-                        isSelected ? 'border-brass bg-brass text-background' : 'border-border'
+                        isSelected ? 'border-brass bg-brass text-accent-ink' : 'border-border'
                       }`}
                       aria-hidden="true"
                     >
@@ -247,7 +247,7 @@ export const EmptyChamberView: React.FC = () => {
           <button
             type="submit"
             disabled={!question.trim() || selectedIds.length === 0}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brass px-5 py-3 text-sm font-semibold text-accent-ink transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto"
           >
             <Compass className="h-4 w-4" aria-hidden="true" />
             {t.preview}

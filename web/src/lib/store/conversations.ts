@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { serverEnv } from '../serverEnv.ts';
 import type { ChatMessage, ChatMode, TurnFailure, WhyStop } from '../../prototype/chat/engine.ts';
+import { copy } from '../../prototype/i18n.ts';
 
 export type ConversationKind = 'solo' | 'group';
 
@@ -29,6 +30,7 @@ export interface CreateConversationInput {
   mode?: unknown;
   roster?: unknown;
   messages?: unknown;
+  language?: unknown;
 }
 
 export interface PatchConversationInput {
@@ -92,12 +94,13 @@ export const validateCreateConversation = (
   | { error: string } => {
   const kind = input?.kind === 'solo' || input?.kind === 'group' ? input.kind : null;
   if (!kind) return { error: 'INVALID_CONVERSATION_KIND' };
+  const lang = input?.language === 'vi' ? 'vi' : 'en';
   const title =
     typeof input?.title === 'string' && input.title.trim()
       ? input.title.trim().slice(0, 140)
       : kind === 'group'
-        ? 'Group Chat'
-        : 'New Chat';
+        ? copy[lang].defaultGroupTitle
+        : copy[lang].defaultSoloTitle;
   const mode: ChatMode = input?.mode === 'panel' ? 'panel' : 'round-robin';
   const roster = Array.isArray(input?.roster)
     ? [...new Set(input.roster.filter((id): id is string => typeof id === 'string' && id.trim().length > 0).map((id) => id.trim()))]

@@ -16,6 +16,8 @@
  */
 
 import { htmlToText } from '../../lib/deliberation/html-text.ts';
+import { localizeAttachmentProblem } from '../i18n.ts';
+import type { Language } from '../types.ts';
 
 const MAX_TEXT = 20_000;
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -43,7 +45,7 @@ const parseHref = (raw: string): URL => {
   return url;
 };
 
-export const readLinkInBrowser = async (
+const readLinkRaw = async (
   raw: string,
   { timeoutMs = DEFAULT_TIMEOUT_MS }: { timeoutMs?: number } = {}
 ): Promise<{ title: string; text: string }> => {
@@ -71,5 +73,18 @@ export const readLinkInBrowser = async (
     throw new UnreadableLinkError('The browser would not share this page. Most sites block that.');
   } finally {
     clearTimeout(timer);
+  }
+};
+export const readLinkInBrowser = async (
+  raw: string,
+  { timeoutMs = DEFAULT_TIMEOUT_MS, language = 'en' }: { timeoutMs?: number; language?: Language } = {}
+): Promise<{ title: string; text: string }> => {
+  try {
+    return await readLinkRaw(raw, { timeoutMs });
+  } catch (error) {
+    if (error instanceof UnreadableLinkError && language !== 'en') {
+      throw new UnreadableLinkError(localizeAttachmentProblem(error.reason, language));
+    }
+    throw error;
   }
 };

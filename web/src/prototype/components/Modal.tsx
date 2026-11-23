@@ -1,6 +1,8 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useOptionalApp } from '../context/AppContext';
+import { copy } from '../i18n';
 import {
   type MouseEvent,
   type ReactNode,
@@ -31,9 +33,11 @@ export function Modal({
   description,
   children,
   footer,
-  closeLabel = 'Close',
+  closeLabel,
   className = '',
 }: ModalProps) {
+  const app = useOptionalApp();
+  const effectiveCloseLabel = closeLabel ?? app?.t.close ?? copy.en.close;
   const dialogRef = useRef<HTMLDialogElement>(null);
   const triggerRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
@@ -107,7 +111,7 @@ export function Modal({
             type="button"
             className="zc-modal__close"
             onClick={close}
-            aria-label={closeLabel}
+            aria-label={effectiveCloseLabel}
           >
             <X aria-hidden="true" size={18} strokeWidth={1.8} />
           </button>

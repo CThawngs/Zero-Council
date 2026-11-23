@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
 
 /* ---------------------------------------------------------------------------
    Self-hosted webfonts.
@@ -78,6 +79,7 @@
   --color-brass: var(--color-accent);
   --color-accent: var(--color-accent);
   --color-accent-ink: var(--color-accent-ink);
+  --color-accent-soft: var(--color-accent-soft);
 
   /* Kept because `types.ts` and the persona components still name them; these
      are now identity colours rather than a muted gold family. */
@@ -116,27 +118,27 @@
   --color-shadow: #1a1a2e;
 
   --color-ink: #101018;
-  --color-ink-muted: #6a6a7c;
+  --color-ink-muted: #5c5c6e;
 
   --color-accent: #5b4bf0;
   --color-accent-ink: #ffffff;
   --color-accent-soft: color-mix(in srgb, var(--color-accent) 10%, transparent);
 
-  --color-accent-sage: #16b981;
-  --color-accent-rust: #c93237;
+  --color-accent-sage: #047857;
+  --color-accent-rust: #b91c1c;
 
-  --color-persona-rose: #ff4d8d;
-  --color-persona-sage: #16b981;
-  --color-persona-slate: #2f6bff;
-  --color-persona-ochre: #f5a524;
+  --color-persona-rose: #be185d;
+  --color-persona-sage: #047857;
+  --color-persona-slate: #1d4ed8;
+  --color-persona-ochre: #925406;
 
-  /* Landing identity colours — the multi-colour answer, one per section. */
-  --tint-blue: #2f6bff;
-  --tint-orange: #ff7a45;
-  --tint-green: #16b981;
-  --tint-yellow: #f5b21a;
-  --tint-pink: #ff4d8d;
-  --tint-violet: #7c4dff;
+  /* Landing identity colours — WCAG 2.1 AA >= 4.5:1 on light surfaces & tinted pills, and with white ink on solid fills. */
+  --tint-blue: #1d4ed8;
+  --tint-orange: #b43b0a;
+  --tint-green: #047857;
+  --tint-yellow: #925406;
+  --tint-pink: #be185d;
+  --tint-violet: #6d28d9;
 
   /* One spring easing and one short duration, shared by every interactive
      element so the whole product decelerates the same way. */
@@ -162,26 +164,26 @@
   --color-shadow: #000000;
 
   --color-ink: #f4f4f7;
-  --color-ink-muted: #9b9bab;
+  --color-ink-muted: #a0a0b2;
 
-  --color-accent: #8b7dff;
+  --color-accent: #988cff;
   --color-accent-ink: #0c0c12;
   --color-accent-soft: color-mix(in srgb, var(--color-accent) 20%, transparent);
 
-  --color-accent-sage: #2fc793;
-  --color-accent-rust: #ff6b6f;
+  --color-accent-sage: #34d399;
+  --color-accent-rust: #ff7a7e;
 
-  --color-persona-rose: #ff77a8;
-  --color-persona-sage: #2fc793;
-  --color-persona-slate: #6b95ff;
-  --color-persona-ochre: #ffb84d;
+  --color-persona-rose: #ff80b0;
+  --color-persona-sage: #34d399;
+  --color-persona-slate: #7aa2ff;
+  --color-persona-ochre: #fbbf24;
 
-  --tint-blue: #6b95ff;
-  --tint-orange: #ff9a6b;
-  --tint-green: #2fc793;
-  --tint-yellow: #ffc94d;
-  --tint-pink: #ff77a8;
-  --tint-violet: #a98cff;
+  --tint-blue: #7aa2ff;
+  --tint-orange: #ff9e70;
+  --tint-green: #34d399;
+  --tint-yellow: #fbbf24;
+  --tint-pink: #ff80b0;
+  --tint-violet: #b399ff;
 }
 
 html {
@@ -472,7 +474,9 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   box-shadow: 0 3px 0 0 rgb(0 0 0 / 0.6);
 }
 
-.button-primary:hover {
+.button-primary:hover,
+[data-theme='dark'] .button-primary:hover {
+  color: var(--color-accent-ink);
   background: var(--color-accent);
   border-color: var(--color-accent);
   box-shadow: 0 5px 0 0 color-mix(in srgb, var(--color-accent) 42%, transparent);
@@ -674,7 +678,7 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
 }
 
 .nav-group-label:hover {
-  color: var(--color-black)
+  color: var(--color-ink);
 }
 
 .setting-choice,

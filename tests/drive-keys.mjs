@@ -19,7 +19,7 @@ const BASE    = process.argv[2] ?? 'http://127.0.0.1:3231';
 const OUT     = process.argv[3] ?? '.agent/evidence/drive-keys.png';
 const PORT    = 9334;
 const CHROME  = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const PROFILE = 'C:\\Users\\nguye\\AppData\\Local\\Temp\\zc-chrome-keys-v2';
+const PROFILE = 'C:\\Users\\nguye\\AppData\\Local\\Temp\\zc-chrome-keys-' + Date.now();
 
 // Built-in provider default URLs — source of truth from byok.ts PROVIDERS array.
 const BUILTIN_URLS = {
@@ -147,7 +147,9 @@ try {
 
   // Navigate to API Keys / Integrations. Signed-in users land on /dashboard, where Integrations is
   // a tab inside "Account settings"; older layouts exposed it directly in the sidebar.
-  let toKeys = await clickVisible('API Keys');
+  await evaluate("return fetch('/api/language',{method:'POST',headers:{'Content-Type':'application/json'},body:'{\"language\":\"en\"}'});");
+  let toKeys = await evaluate("const b = document.getElementById('sidebar-api-keys-btn'); if (b) { b.click(); return 'clicked'; } return 'MISSING';");
+  if (toKeys !== 'clicked') toKeys = await clickVisible('API Keys');
   if (toKeys !== 'clicked') toKeys = await clickVisible('Integrations');
   if (toKeys !== 'clicked') {
     note('nav-account-settings', await clickVisible('Account settings'));

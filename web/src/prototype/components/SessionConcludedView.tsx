@@ -157,7 +157,7 @@ export const SessionConcludedView: React.FC = () => {
               type="button"
               onClick={() => void handleCopySummary()}
               disabled={isCopying}
-              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-background transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-wait disabled:opacity-60"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-wait disabled:opacity-60"
             >
               <Copy className="h-4 w-4" aria-hidden="true" />
               {t.copySummary}

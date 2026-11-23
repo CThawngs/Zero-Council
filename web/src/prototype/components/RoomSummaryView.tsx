@@ -140,7 +140,7 @@ export const RoomSummaryView: React.FC = () => {
         </div>
       </header>
 
-      <dl className="grid grid-cols-3 gap-3">
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {stats.map((stat) => (
           <div key={stat.label} className="rounded-2xl border border-border bg-surface px-4 py-3.5">
             <dt className="text-xs text-ink-muted">{stat.label}</dt>

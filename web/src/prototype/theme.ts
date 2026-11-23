@@ -8,7 +8,8 @@ export type Theme = 'light' | 'dark';
 export const THEME_STORAGE_KEY = 'zc-theme';
 
 /** Inline script body. Kept in sync with `applyTheme` below by design, not by import. */
-export const THEME_BOOTSTRAP_SCRIPT = `try{var k='${THEME_STORAGE_KEY}';var s=localStorage.getItem(k);var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',d?'dark':'light')}catch(e){document.documentElement.setAttribute('data-theme','light')}`;
+export const THEME_BOOTSTRAP_SCRIPT = `try{var k='${THEME_STORAGE_KEY}';var s=localStorage.getItem(k);var d=s?s==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;var t=d?'dark':'light';document.documentElement.setAttribute('data-theme',t);document.documentElement.style.colorScheme=t}catch(e){document.documentElement.setAttribute('data-theme','light');document.documentElement.style.colorScheme='light'}`;
+
 
 export const readTheme = (): Theme | null => {
   try {
@@ -32,4 +33,5 @@ export const resolveInitialTheme = (): Theme => 'light';
 export const applyTheme = (theme: Theme) => {
   if (typeof document === 'undefined') return;
   document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme;
 };

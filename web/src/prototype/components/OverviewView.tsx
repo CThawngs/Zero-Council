@@ -43,7 +43,7 @@ export const OverviewView: React.FC = () => {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-20 py-8 sm:py-12">
+    <div className="mx-auto w-full max-w-6xl space-y-20 overflow-x-clip py-8 sm:py-12">
       {/* Hero: headline + CTA on the left, 3D council stage on the right. */}
       <section className="grid items-center gap-10 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:gap-14">
         <div className="w-full">

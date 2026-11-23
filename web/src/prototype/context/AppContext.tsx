@@ -22,6 +22,7 @@ import {
   SavedConversation,
   UserBot,
   ViewType,
+  cookieLanguage,
   frameworkIdOf,
   legalDocumentOf,
 } from '../types';
@@ -40,7 +41,7 @@ import {
 } from '../data/mockData';
 import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
-import { applyTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
+import { applyTheme, readTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
 import {
   COUNCIL_ROUNDS,
   DEFAULT_MAX_TURNS,
@@ -449,32 +450,69 @@ export const AppProvider: React.FC<{
 
   const setLanguage = async (next: Language) => {
     if (next === language) return;
-    const response = await fetch('/api/language', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ language: next }),
-    });
-    if (!response.ok) {
-      throw new Error('Could not save language preference');
-    }
     document.documentElement.lang = next;
     document.documentElement.dataset.language = next;
+    try {
+      document.cookie = `${cookieLanguage}=${next}; path=/; max-age=31536000; samesite=lax`;
+      localStorage.setItem('zc-lang-sync', next);
+    } catch {}
     setLanguageState(next);
+    try {
+      await fetch('/api/language', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: next }),
+      });
+    } catch {
+      // Client cookie fallback above keeps SSR and client synced even if offline.
+    }
   };
 
   const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
   useIsomorphicLayoutEffect(() => {
     setTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light');
   }, []);
-  const toggleTheme = () => {
-    setTheme((current) => {
-      const next: Theme = current === 'dark' ? 'light' : 'dark';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === THEME_STORAGE_KEY) {
+        const next: Theme =
+          event.newValue === 'dark' || event.newValue === 'light'
+            ? event.newValue
+            : window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light';
+        applyTheme(next);
+        setTheme(next);
+      } else if (event.key === 'zc-lang-sync' && (event.newValue === 'en' || event.newValue === 'vi')) {
+        document.documentElement.lang = event.newValue;
+        document.documentElement.dataset.language = event.newValue;
+        setLanguageState(event.newValue);
+      }
+    };
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const onMediaChange = (event: MediaQueryListEvent) => {
+      if (readTheme() !== null) return;
+      const next: Theme = event.matches ? 'dark' : 'light';
       applyTheme(next);
-      try {
-        localStorage.setItem(THEME_STORAGE_KEY, next);
-      } catch {}
-      return next;
-    });
+      setTheme(next);
+    };
+    window.addEventListener('storage', onStorage);
+    media.addEventListener('change', onMediaChange);
+    return () => {
+      window.removeEventListener('storage', onStorage);
+      media.removeEventListener('change', onMediaChange);
+    };
+  }, []);
+
+  const toggleTheme = () => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {}
+    setTheme(next);
   };
 
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
@@ -506,7 +544,7 @@ export const AppProvider: React.FC<{
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
 
   useIsomorphicLayoutEffect(() => {
-    const restored = readStoredRoom();
+    const restored = readStoredRoom(language);
     if (!restored) return;
     setCurrentRoom({
       conversationId: restored.conversationId,
@@ -559,6 +597,18 @@ export const AppProvider: React.FC<{
 
   useEffect(() => {
     document.documentElement.lang = language;
+    const pathname = window.location.pathname;
+    if (pathname === '/admin') {
+      document.title = copy[language].adminPageTitle;
+      return;
+    }
+    if (pathname === '/fixture') {
+      document.title = copy[language].fixturePageTitle;
+      document
+        .querySelector('meta[name="description"]')
+        ?.setAttribute('content', copy[language].fixtureDescription);
+      return;
+    }
     document.title = copy[language].documentTitle;
     document
       .querySelector('meta[name="description"]')
@@ -1153,7 +1203,7 @@ export const AppProvider: React.FC<{
       href,
     };
     try {
-      const reading = await readLinkInBrowser(href);
+      const reading = await readLinkInBrowser(href, { language });
       attachment.text = reading.text;
     } catch (error) {
       let resolvedViaServer = false;
@@ -1210,18 +1260,20 @@ export const AppProvider: React.FC<{
         };
         try {
           if (video) {
-            const videoReading = await readVideoInBrowser(file);
+            const videoReading = await readVideoInBrowser(file, { language });
             attachment.previewUrl = videoReading.previewUrl;
             attachment.frames = videoReading.frames;
             attachment.text = videoReading.summary;
           } else if (image) {
             if (images >= MAX_IMAGES_PER_MESSAGE * 2) {
-              throw new UnreadableFileError(`At most ${MAX_IMAGES_PER_MESSAGE * 2} images per message.`);
+              throw new UnreadableFileError(
+                copy[language].chatMaxImagesError.replace('{max}', String(MAX_IMAGES_PER_MESSAGE * 2))
+              );
             }
-            attachment.dataUrl = (await readImageInBrowser(file)).dataUrl;
+            attachment.dataUrl = (await readImageInBrowser(file, { language })).dataUrl;
             images += 1;
           } else {
-            const reading = await readFileInBrowser(file);
+            const reading = await readFileInBrowser(file, { language });
             attachment.text = reading.text;
             if (reading.truncated) attachment.truncated = true;
           }
@@ -1329,8 +1381,15 @@ export const AppProvider: React.FC<{
     const autoTitle =
       currentRoom.messages.length === 0 &&
       (currentRoom.title === 'New Chat' ||
+        currentRoom.title === 'Group Chat' ||
+        currentRoom.title === copy.en.defaultSoloTitle ||
+        currentRoom.title === copy.vi.defaultSoloTitle ||
+        currentRoom.title === copy.en.defaultGroupTitle ||
+        currentRoom.title === copy.vi.defaultGroupTitle ||
         currentRoom.title === copy.en.soloNewThread ||
-        currentRoom.title === copy.vi.soloNewThread)
+        currentRoom.title === copy.vi.soloNewThread ||
+        currentRoom.title === copy.en.chatRoomTitle ||
+        currentRoom.title === copy.vi.chatRoomTitle)
         ? body.slice(0, 60)
         : currentRoom.title;
 
@@ -2053,6 +2112,8 @@ export const AppProvider: React.FC<{
     </AppContext.Provider>
   );
 };
+
+export const useOptionalApp = () => useContext(AppContext);
 
 export const useApp = () => {
   const context = useContext(AppContext);

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, Globe2, Moon, RefreshCw, Sun } from 'lucide-react';
 import { useApp } from '@/prototype/context/AppContext';
+import { localizeAuthError } from '@/prototype/i18n';
 
 function cleanParam(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -55,9 +56,18 @@ function AuthCodeErrorContent() {
     searchParams.get('error_description') ||
     searchParams.get('message');
 
-  const error = cleanParam(rawErr) || t.authErrorDefaultMessage;
-  const errorCode = cleanParam(rawCode) || 'unexpected_failure';
-  const errorDescription = cleanParam(rawDesc) || t.authErrorDefaultDesc;
+  const cleanedErr = cleanParam(rawErr);
+  const cleanedCode = cleanParam(rawCode);
+  const cleanedDesc = cleanParam(rawDesc);
+  const error = cleanedErr ? localizeAuthError(cleanedErr, t) : t.authErrorDefaultMessage;
+  const errorCode = cleanedCode || 'unexpected_failure';
+  const errorDescription = cleanedDesc
+    ? localizeAuthError(cleanedDesc, t)
+    : cleanedCode
+      ? localizeAuthError(cleanedCode, t) !== cleanedCode
+        ? localizeAuthError(cleanedCode, t)
+        : t.authErrorDefaultDesc
+      : t.authErrorDefaultDesc;
 
   const toggleLanguage = () => {
     setLanguage(language === 'en' ? 'vi' : 'en');
@@ -65,8 +75,8 @@ function AuthCodeErrorContent() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12 text-ink sm:px-6 lg:px-8">
-      <div className="panel w-full max-w-lg space-y-6 p-6 sm:p-8">
-        <div className="flex items-start justify-between gap-4">
+      <div className="panel w-full max-w-lg space-y-6 p-5 sm:p-8">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-4">
             <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-terracotta/10 text-terracotta">
               <AlertCircle className="h-6 w-6" />
@@ -103,11 +113,11 @@ function AuthCodeErrorContent() {
         <div className="space-y-3 rounded-lg border border-border/80 bg-surface/60 p-4 text-sm">
           <div>
             <span className="font-semibold text-ink-muted">{t.authErrorLabel}</span>
-            <span className="font-mono text-ink">{error}</span>
+            <span className="font-mono text-ink break-words">{error}</span>
           </div>
           <div>
             <span className="font-semibold text-ink-muted">{t.authErrorCodeLabel}</span>
-            <span className="font-mono text-ink">{errorCode}</span>
+            <span className="font-mono text-ink break-words">{errorCode}</span>
           </div>
           <div>
             <span className="font-semibold text-ink-muted">{t.authErrorDetailsLabel}</span>
