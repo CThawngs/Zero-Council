@@ -42,6 +42,7 @@ import {
 import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
 import { copy, modeLabel, translations, type Copy } from '../i18n';
 import { applyTheme, readTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
+import type { ContentPanelPayload } from '../chat/content-render';
 import {
   COUNCIL_ROUNDS,
   DEFAULT_MAX_TURNS,
@@ -190,6 +191,9 @@ interface AppContextType {
   isFrameworkModalOpen: boolean;
   openFrameworkModal: () => void;
   closeFrameworkModal: () => void;
+  contentPanel: ContentPanelPayload | null;
+  openContentPanel: (payload: ContentPanelPayload) => void;
+  closeContentPanel: () => void;
   currentPlanId: PlanId;
   planExpiresAt: string | null;
   authUser: { id: string; email: string } | null;
@@ -516,6 +520,7 @@ export const AppProvider: React.FC<{
   };
 
   const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
+  const [contentPanel, setContentPanel] = useState<ContentPanelPayload | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
   const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
   const [bots, setBots] = useState<UserBot[]>([]);
@@ -2063,6 +2068,9 @@ export const AppProvider: React.FC<{
         isFrameworkModalOpen,
         openFrameworkModal: () => setIsFrameworkModalOpen(true),
         closeFrameworkModal: () => setIsFrameworkModalOpen(false),
+        contentPanel,
+        openContentPanel: (payload) => setContentPanel(payload),
+        closeContentPanel: () => setContentPanel(null),
         currentPlanId,
         planExpiresAt,
         authUser,

@@ -6,6 +6,7 @@ import { BotSettingsPanel } from '@/prototype/components/BotSettingsPanel';
 import { BotWizardView } from '@/prototype/components/BotWizardView';
 import { ChatRoomView } from '@/prototype/components/ChatRoomView';
 import { CheckoutDrawer } from '@/prototype/components/CheckoutDrawer';
+import { ContentPanelModal } from '@/prototype/components/ContentRenderPanel';
 import { AnalyticsLoader, CookieNotice } from '@/prototype/components/CookieNotice';
 import { EmptyChamberView } from '@/prototype/components/EmptyChamberView';
 import { FrameworkModal } from '@/prototype/components/FrameworkModal';
@@ -152,6 +153,7 @@ export default function Dashboard() {
       <CheckoutDrawer plan={checkoutPlan} onClose={closeCheckout} />
       <JoinRoomModal />
       <FrameworkModal />
+      <ContentPanelModal />
       <Toast />
       <CookieNotice />
       <AnalyticsLoader />

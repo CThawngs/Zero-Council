@@ -2,6 +2,8 @@ import React from 'react';
 import type { Copy } from '../i18n';
 import type { AdvisorPersona, Language } from '../types';
 import type { Round } from '@/lib/deliberation/engine';
+import { hasRichContent } from '../chat/content-render';
+import { ContentRenderPanel } from './ContentRenderPanel';
 
 interface Props {
   rounds: Round[];
@@ -101,7 +103,17 @@ const RoundThread: React.FC<Props> = ({ rounds, selectedIndex, onSelect, advisor
                         </span>
                       )}
                     </div>
-                    <p className="mt-2 text-sm leading-relaxed text-ink-muted">{contribution.text}</p>
+                    {hasRichContent(contribution.text) ? (
+                      <div className="mt-2">
+                        <ContentRenderPanel
+                          content={contribution.text}
+                          compact
+                          showHeader={false}
+                        />
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-sm leading-relaxed text-ink-muted">{contribution.text}</p>
+                    )}
                   </li>
                 );
               })}

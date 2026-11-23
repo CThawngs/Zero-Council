@@ -4,7 +4,9 @@ import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
+import { hasRichContent } from '../chat/content-render';
 import { Avatar, AttachmentGlyph } from './ChatRoomView';
+import { ContentRenderPanel } from './ContentRenderPanel';
 
 /**
  * What the council said, in one page, after the user ends the meeting.
@@ -199,7 +201,16 @@ export const RoomSummaryView: React.FC = () => {
                     {turns > 0 ? t.summaryTurns.replace('{count}', String(turns)) : t.summaryNoTurns}
                   </span>
                 </div>
-                {last && <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">{last.body}</p>}
+                {last &&
+                  (hasRichContent(last.body) ? (
+                    <div className="mt-3">
+                      <ContentRenderPanel content={last.body} compact showHeader={false} />
+                    </div>
+                  ) : (
+                    <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
+                      {last.body}
+                    </p>
+                  ))}
               </li>
             ))}
           </ul>
