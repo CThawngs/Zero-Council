@@ -1,4 +1,6 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
 import {
   createConversation,
   deleteAllConversations,
@@ -7,6 +9,8 @@ import {
   updateConversation,
   validateCreateConversation,
 } from '@/lib/store/conversations';
+
+const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
 export async function GET() {
   const { user, denied } = await currentUserOnly();
@@ -23,14 +27,23 @@ export async function GET() {
 export async function POST(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
+
+  const limited = enforceRateLimit(request, {
+    scope: 'conversations:write',
+    limit: 120,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
   const parsed = validateCreateConversation(
-    (body ?? {}) as Parameters<typeof validateCreateConversation>[0]
+    (body && typeof body === 'object' ? body : {}) as Parameters<
+      typeof validateCreateConversation
+    >[0]
   );
   if ('error' in parsed) {
     return Response.json({ error: parsed.error }, { status: 400 });
@@ -47,13 +60,22 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
-  const payload = (body ?? {}) as { id?: unknown } & Record<string, unknown>;
+
+  const limited = enforceRateLimit(request, {
+    scope: 'conversations:write',
+    limit: 120,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const payload = (body && typeof body === 'object' ? body : {}) as {
+    id?: unknown;
+  } & Record<string, unknown>;
   if (typeof payload.id !== 'string' || !payload.id.trim()) {
     return Response.json({ error: 'CONVERSATION_ID_REQUIRED' }, { status: 400 });
   }

@@ -1,6 +1,8 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { checkKeyShape, httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
 import { isValidProviderId } from '@/lib/store/botValidation';
 import {
   deleteAllProviderKeys,
@@ -11,6 +13,7 @@ import {
 
 const MAX_MODEL_ID_LENGTH = 200;
 const MAX_STORED_MODELS = 500;
+const MAX_BODY_BYTES = 32 * 1024;
 
 /** Keeps only non-empty, bounded model id strings from an untrusted array. */
 const cleanModelList = (value: unknown): string[] =>
@@ -41,13 +44,22 @@ export async function GET() {
 export async function POST(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
-  const { provider, model, models, key, label, baseUrl } = (body ?? {}) as {
+
+  const limited = enforceRateLimit(request, {
+    scope: 'providers:write',
+    limit: 30,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const { provider, model, models, key, label, baseUrl } = (
+    body && typeof body === 'object' ? body : {}
+  ) as {
     provider?: unknown;
     model?: unknown;
     models?: unknown;
@@ -110,13 +122,22 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
-  const { provider, model, models } = (body ?? {}) as {
+
+  const limited = enforceRateLimit(request, {
+    scope: 'providers:write',
+    limit: 30,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const { provider, model, models } = (
+    body && typeof body === 'object' ? body : {}
+  ) as {
     provider?: unknown;
     model?: unknown;
     models?: unknown;
@@ -139,7 +160,9 @@ export async function PATCH(request: Request) {
     if (!alreadyKnown) {
       const resolved = resolveVerifyTarget({ provider, baseUrl: current.baseUrl });
       if (!resolved.ok) return Response.json({ error: resolved.error }, { status: 400 });
-      const verification = await verifyProviderKey(resolved.target, current.key, { model: selectedModel });
+      const verification = await verifyProviderKey(resolved.target, current.key, {
+        model: selectedModel,
+      });
       if (!verification.ok) {
         console.warn(`[providers] model add refused for ${provider}: ${verification.error}`);
         return Response.json(

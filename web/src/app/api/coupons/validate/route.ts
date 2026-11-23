@@ -1,6 +1,10 @@
 import { PLANS } from '@/prototype/data/plans';
 import { currentAccount } from '@/lib/currentUser';
 import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
+
+const MAX_BODY_BYTES = 16 * 1024;
 
 /**
  * Validates a discount code for a specific plan and returns the server-computed discounted price.
@@ -8,12 +12,22 @@ import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
  * (or immediately for a 100% coupon during create-payment).
  */
 export async function POST(request: Request) {
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ ok: false, error: 'INVALID_JSON' }, { status: 400 });
-  }
+  const parsedBody = await readBoundedJson<{ planId?: unknown; code?: unknown }>(
+    request,
+    MAX_BODY_BYTES
+  );
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const account = await currentAccount();
+  const limited = enforceRateLimit(request, {
+    scope: 'coupons:validate',
+    limit: 20,
+    windowMs: 60_000,
+    subject: account?.email ?? 'anonymous',
+    includeIp: true,
+  });
+  if (limited) return limited;
 
   const planId = (body as { planId?: unknown } | null)?.planId;
   const plan = PLANS.find((item) => item.id === planId);
@@ -22,7 +36,6 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: 'FREE_PLAN_NOT_BILLABLE' }, { status: 400 });
   }
 
-  const account = await currentAccount();
   if (!account) {
     return Response.json({ ok: false, error: 'NEED_LOGIN' }, { status: 401 });
   }
