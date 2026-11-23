@@ -1,18 +1,10 @@
 #!/usr/bin/env node
 /**
- * CI smoke — does the built app actually serve, and did the chat feature make it
- * into the shipped bundle?
+ * CI smoke — does the built app actually serve, expose health readiness + security
+ * headers, and ship real client chunks?
  *
  * Plain Node, no dependencies, on purpose. A smoke check that cannot run without
  * installing 300 MB of browsers is a smoke check that silently stops running.
- *
- * WHAT THIS PROVES: the real Next.js server boots from the real build, the entry
- * route serves, and the create-chat screen's own strings are present in the client
- * bundle a browser would download.
- *
- * WHAT IT DOES NOT PROVE: that the app mounts, or that clicking works. Both need
- * a real browser and stay with `.agent/skills/verify-app/SKILL.md`. That is the
- * honest floor — say so rather than pad it with checks that cannot fail.
  *
  * Usage: node ci/smoke.mjs <base-url> <out-dir> <build-dir>
  */
@@ -40,9 +32,10 @@ async function fetchAs(url) {
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
     const response = await fetch(url, { signal: controller.signal });
-    return { status: response.status, body: await response.text(), error: null };
+    const headers = Object.fromEntries(response.headers.entries());
+    return { status: response.status, headers, body: await response.text(), error: null };
   } catch (error) {
-    return { status: 0, body: null, error: String(error?.message ?? error) };
+    return { status: 0, headers: {}, body: null, error: String(error?.message ?? error) };
   } finally {
     clearTimeout(timer);
   }
@@ -53,10 +46,6 @@ async function fetchAs(url) {
 const home = await fetchAs(`${BASE}/`);
 check('app entry serves', home.status === 200, home.error ?? `HTTP ${home.status}`);
 
-// Structural, not copy. An earlier version asserted the literal entry button
-// text. That goes red the moment somebody reworded the marketing or flipped the
-// default language, while the app stayed perfectly healthy — and a false red
-// trains people to ignore CI. Copy is not a stable contract. A rendered page is.
 const body = typeof home.body === 'string' ? home.body : '';
 check(
   'entry renders a whole document',
@@ -69,25 +58,30 @@ check(
   'a crash must not be served as a healthy 200'
 );
 
+const xcto = home.headers['x-content-type-options'] ?? '';
+const xfo = home.headers['x-frame-options'] ?? '';
+check(
+  'entry includes security headers',
+  xcto === 'nosniff' && xfo === 'DENY',
+  `x-content-type-options=${xcto || 'missing'}, x-frame-options=${xfo || 'missing'}`
+);
+
+// --- Health readiness endpoint ---
+
+const health = await fetchAs(`${BASE}/api/health`);
+let healthPayload = null;
+try {
+  healthPayload = health.body ? JSON.parse(health.body) : null;
+} catch {
+  healthPayload = null;
+}
+check(
+  'health endpoint reports ok',
+  health.status === 200 && healthPayload?.status === 'ok',
+  health.error ?? `HTTP ${health.status}, status=${healthPayload?.status ?? 'invalid-json'}`
+);
+
 // --- The build produced real client output ---
-//
-// This is the honest floor: it catches a missing or half-finished build, and
-// nothing more.
-//
-// WHAT I CLAIMED BEFORE WAS FALSE. This file used to grep the client chunks for
-// the create-chat screen's strings, reasoning that deleting the feature would
-// delete the strings. It would not. AppContext reads `copy[language]` with a
-// computed key, so the bundler keeps the whole dictionary in one chunk no
-// matter which component consumes it — delete EmptyChamberView and the bundle
-// loses zero bytes and those checks stay green.
-//
-// I "proved" they worked by deleting the feature and watching it drop to 3/7.
-// That was me misreading my own evidence: it went red because the BUILD broke
-// (module not found), not because the check noticed anything.
-//
-// There is no non-browser signal that separates "feature present" from "feature
-// deleted", so this file does not claim one. Verifying the chat UI needs a real
-// browser: `.agent/skills/verify-app/SKILL.md`.
 
 async function collectChunks(dir, out = []) {
   let entries;
@@ -149,7 +143,4 @@ for (const c of checks) {
 }
 process.stdout.write(`\n${checks.length - failed.length}/${checks.length} checks passed. Evidence: ${OUT}/ci-smoke.md\n`);
 
-// `process.exitCode`, never `process.exit()`. Exiting explicitly kills the
-// process while stdout is still draining, and on Windows that dies with a libuv
-// assertion — every check passes, the job still goes red.
 process.exitCode = failed.length === 0 ? 0 : 1;

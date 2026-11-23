@@ -1,9 +1,13 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
 import { effectivePlan } from '@/lib/store/account';
 import { createBot, deleteBot, listBots, updateBot } from '@/lib/store/bots';
 import { listProviderKeys } from '@/lib/store/providerKeys';
 import { validateBotInput } from '@/lib/store/botValidation';
 import { planById } from '@/prototype/data/plans';
+
+const MAX_BODY_BYTES = 64 * 1024;
 
 /** The caller's own bots. The account email comes from the session, never the body. */
 export async function GET() {
@@ -31,13 +35,22 @@ const assertBrainConnected = async (email: string, provider: string, model: stri
 export async function POST(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
-  const parsed = validateBotInput((body ?? {}) as Parameters<typeof validateBotInput>[0]);
+
+  const limited = enforceRateLimit(request, {
+    scope: 'bots:write',
+    limit: 60,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const parsed = validateBotInput(
+    (body && typeof body === 'object' ? body : {}) as Parameters<typeof validateBotInput>[0]
+  );
   if ('error' in parsed) return Response.json({ error: parsed.error }, { status: 400 });
   try {
     const planRecord = await effectivePlan(user.email).catch(() => null);
@@ -60,17 +73,25 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
-  const { id } = (body ?? {}) as { id?: unknown };
+
+  const limited = enforceRateLimit(request, {
+    scope: 'bots:write',
+    limit: 60,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const payload = (body && typeof body === 'object' ? body : {}) as { id?: unknown };
+  const { id } = payload;
   if (typeof id !== 'string' || !id.trim()) {
     return Response.json({ error: 'BOT_ID_REQUIRED' }, { status: 400 });
   }
-  const parsed = validateBotInput((body ?? {}) as Parameters<typeof validateBotInput>[0]);
+  const parsed = validateBotInput(payload as Parameters<typeof validateBotInput>[0]);
   if ('error' in parsed) return Response.json({ error: parsed.error }, { status: 400 });
   try {
     if (!(await assertBrainConnected(user.email, parsed.bot.provider, parsed.bot.model))) {

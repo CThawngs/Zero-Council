@@ -1,9 +1,18 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { formatWebSearchAttachmentText, searchWebLive } from '@/lib/deliberation/web-search';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
 
 export async function GET(request: Request) {
-  const { denied } = await currentUserOnly();
+  const { user, denied } = await currentUserOnly();
   if (denied) return denied;
+
+  const limited = enforceRateLimit(request, {
+    scope: 'deliberation:web-search',
+    limit: 30,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
 
   const q = (new URL(request.url).searchParams.get('q') ?? '').trim().slice(0, 300);
   if (!q) {

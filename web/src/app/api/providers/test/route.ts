@@ -13,20 +13,31 @@ import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { getKey } from '@/lib/byok/key-store';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
 import { listProviderKeys } from '@/lib/store/providerKeys';
+
+const MAX_BODY_BYTES = 32 * 1024;
 
 export async function POST(request: Request) {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ ok: false, error: 'INVALID_JSON' }, { status: 400 });
-  }
+  const limited = enforceRateLimit(request, {
+    scope: 'providers:test',
+    limit: 30,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
 
-  const { providerId } = (body ?? {}) as { providerId?: unknown };
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const { providerId } = (body && typeof body === 'object' ? body : {}) as {
+    providerId?: unknown;
+  };
   if (typeof providerId !== 'string' || !providerId.trim()) {
     return Response.json({ ok: false, error: 'PROVIDER_ID_REQUIRED' }, { status: 400 });
   }

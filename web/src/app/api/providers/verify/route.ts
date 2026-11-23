@@ -4,7 +4,7 @@
  * Server-side strict key verification (no browser CORS, no public `/models` false positives).
  * Body: { provider, key, model?, protocol?, baseUrl? }
  *   - 200 { ok: true, models, verifiedModel }
- *   - 4xx/5xx { ok: false, error: 'INVALID_KEY' | 'INVALID_BASE_URL' | 'MODEL_NOT_FOUND' | 'EMPTY_KEY' | … }
+ *   - 4xx/5xx { ok: false, error: 'INVALID_KEY' | 'INVALID_BASE_URL' | 'MODEL_NOT_FOUND' | 'EMPTY_KEY' | ... }
  *
  * Requires a signed-in user: an anonymous verify endpoint would be an open proxy to any host.
  * The key is used for the outbound probe only — never stored, logged, or echoed back.
@@ -13,21 +13,31 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { checkKeyShape, httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
 
 const MAX_MODEL_ID_LENGTH = 200;
+const MAX_BODY_BYTES = 32 * 1024;
 
 export async function POST(request: Request) {
-  const { denied } = await currentUserOnly();
+  const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ ok: false, error: 'INVALID_JSON' }, { status: 400 });
-  }
+  const limited = enforceRateLimit(request, {
+    scope: 'providers:verify',
+    limit: 30,
+    windowMs: 60_000,
+    subject: user.email,
+  });
+  if (limited) return limited;
 
-  const { provider, key, model, protocol, baseUrl } = (body ?? {}) as {
+  const parsedBody = await readBoundedJson(request, MAX_BODY_BYTES);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
+
+  const { provider, key, model, protocol, baseUrl } = (
+    body && typeof body === 'object' ? body : {}
+  ) as {
     provider?: unknown;
     key?: unknown;
     model?: unknown;
@@ -42,7 +52,10 @@ export async function POST(request: Request) {
 
   const shapeError = checkKeyShape(key);
   if (shapeError) {
-    return Response.json({ ok: false, error: shapeError }, { status: httpStatusForVerifyError(shapeError) });
+    return Response.json(
+      { ok: false, error: shapeError },
+      { status: httpStatusForVerifyError(shapeError) }
+    );
   }
 
   if (model !== undefined && (typeof model !== 'string' || model.length > MAX_MODEL_ID_LENGTH)) {

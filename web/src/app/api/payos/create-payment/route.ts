@@ -4,7 +4,11 @@ import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
 import { addGrant, redeemCoupon } from '@/lib/store/account';
 import { serverEnv } from '@/lib/serverEnv';
 import { putOrder, sweepStaleOrders } from '@/lib/payos/orders';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson } from '@/lib/security/request-guard';
 import { PayOS } from '@payos/node';
+
+const MAX_BODY_BYTES = 16 * 1024;
 
 const normaliseCouponCode = (code: string) => code.trim().toUpperCase();
 
@@ -29,19 +33,12 @@ const getPayosKeys = () => {
  * tampered client cannot choose what it pays.
  */
 export async function POST(request: Request) {
-  // Purge failed and expired orders before doing any work.
-  try {
-    await sweepStaleOrders();
-  } catch (error) {
-    console.error('[payos] sweep failed:', (error as Error).message);
-  }
-
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
-  }
+  const parsedBody = await readBoundedJson<{ planId?: unknown; code?: unknown }>(
+    request,
+    MAX_BODY_BYTES
+  );
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   const planId = (body as { planId?: unknown } | null)?.planId;
   const plan = PLANS.find((item) => item.id === planId);
@@ -54,6 +51,21 @@ export async function POST(request: Request) {
   const account = await currentAccount();
   if (!account) {
     return Response.json({ error: 'NEED_LOGIN' }, { status: 401 });
+  }
+
+  const limited = enforceRateLimit(request, {
+    scope: 'payos:create-payment',
+    limit: 15,
+    windowMs: 60_000,
+    subject: account.email,
+  });
+  if (limited) return limited;
+
+  // Purge failed and expired orders before creating a new checkout session.
+  try {
+    await sweepStaleOrders();
+  } catch (error) {
+    console.error('[payos] sweep failed:', (error as Error).message);
   }
 
   const code = (body as { code?: unknown } | null)?.code;
