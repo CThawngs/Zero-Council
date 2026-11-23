@@ -9,6 +9,12 @@
 
 import { splitDataUrl } from './read-image-web.ts';
 import {
+  checkKeyShape,
+  probeModel,
+  verifyProviderKey,
+  type VerifyTarget,
+} from '../../lib/byok/verify.ts';
+import {
   SILENT_TOKEN,
   USER_HANDLE,
   aliasTable,
@@ -115,7 +121,8 @@ export const PROVIDERS: Provider[] = [
     protocol: 'openai',
     baseUrl: 'https://integrate.api.nvidia.com/v1',
     lockedBaseUrl: true,
-    models: [{ id: 'meta/llama-3.1-70b-instruct', label: 'Llama 3.1 70B Instruct' }],
+    // The previous default (meta/llama-3.1-70b-instruct) is end-of-life on NIM and answers 410 Gone.
+    models: [{ id: 'nvidia/nemotron-3.5-super-vl-120b-a12b', label: 'Nemotron 3.5 Super 120B' }],
     keyHint: 'nvapi-…',
   },
   {
@@ -175,92 +182,94 @@ export const resolveProviderEndpoint = (
   };
 };
 
+/** Builds the strict-verification target (locked endpoint for built-ins) for a provider. */
+export const verifyTargetFor = (target: ProviderId | ProviderEndpointSpec): VerifyTarget => {
+  const { provider, protocol, baseUrl } = resolveProviderEndpoint(target);
+  return {
+    providerId: provider,
+    protocol,
+    baseUrl,
+    defaultModel: builtinProviderById(provider)?.models[0]?.id,
+  };
+};
+
+const throwCode = (code: string): never => {
+  throw new Error(code);
+};
+
 /**
- * Test connection + fetch the live model list in one call.
- * Supports all 8 built-in providers as well as custom OpenAI/Anthropic-compatible endpoints.
+ * Strict client-side verification (direct to the provider). Used by unit tests and as the fallback
+ * when the app's own `/api/providers/verify` is unavailable (signed-out demo / static preview).
+ * A public `200 /models` or a `200 text/html` page can NEVER pass: a real authenticated inference
+ * probe must succeed.
+ */
+export const verifyProviderKeyDirect = async (
+  target: ProviderId | ProviderEndpointSpec,
+  apiKey: string,
+  options: { model?: string } = {}
+): Promise<{ models: string[]; verifiedModel: string }> => {
+  const result = await verifyProviderKey(verifyTargetFor(target), apiKey, { model: options.model });
+  if (!result.ok) return throwCode(result.error);
+  return { models: result.models, verifiedModel: result.verifiedModel };
+};
+
+/**
+ * Test connection + fetch the live model list in one call (strict).
+ * Resolves only after the key passed a live inference probe; rejects with an error code
+ * (`INVALID_KEY`, `INVALID_BASE_URL`, `NO_MODELS`, …) otherwise.
  */
 export const fetchProviderModels = async (
   target: ProviderId | ProviderEndpointSpec,
   apiKey: string
-): Promise<string[]> => {
-  const key = apiKey.trim();
-  if (!key) throw new Error('EMPTY_KEY');
-  const { protocol, baseUrl, isBuiltin } = resolveProviderEndpoint(target);
-  if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw new Error('INVALID_BASE_URL');
+): Promise<string[]> => (await verifyProviderKeyDirect(target, apiKey)).models;
 
-  let response: Response;
+/**
+ * Verifies a key through the app server (`POST /api/providers/verify`) — no browser CORS issues and
+ * the same strict rules the save route enforces. Falls back to `verifyProviderKeyDirect` ONLY when
+ * the server cannot judge (signed out, route missing, app server unreachable); a server verdict
+ * such as `INVALID_KEY` is always final.
+ */
+export const verifyProviderConnection = async (
+  target: ProviderId | ProviderEndpointSpec,
+  apiKey: string,
+  options: { model?: string } = {}
+): Promise<{ models: string[]; verifiedModel: string }> => {
+  const shapeError = checkKeyShape(apiKey);
+  if (shapeError) return throwCode(shapeError);
+  const endpoint = resolveProviderEndpoint(target);
+
+  let response: Response | null = null;
   try {
-    if (protocol === 'anthropic') {
-      response = await fetch(`${baseUrl}/models`, {
-        headers: {
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-      });
-    } else if (protocol === 'google') {
-      response = await fetch(`${baseUrl}/models`, {
-        headers: { 'x-goog-api-key': key },
-      });
-    } else {
-      response = await fetch(`${baseUrl}/models`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-    }
+    response = await fetch('/api/providers/verify', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: endpoint.provider,
+        key: apiKey.trim(),
+        ...(options.model ? { model: options.model } : {}),
+        ...(endpoint.isBuiltin ? {} : { protocol: endpoint.protocol, baseUrl: endpoint.baseUrl }),
+      }),
+    });
   } catch {
-    throw new Error('NETWORK_FAILED');
+    response = null;
   }
 
-  if (
-    response.status === 401 ||
-    response.status === 403 ||
-    (protocol === 'google' && response.status === 400)
-  ) {
-    throw new Error('INVALID_KEY');
+  const payload = response
+    ? ((await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: unknown; models?: unknown; verifiedModel?: unknown }
+        | null)
+    : null;
+
+  const serverCannotJudge =
+    !response || !payload || response.status === 404 || payload.error === 'NEED_LOGIN';
+  if (serverCannotJudge) return verifyProviderKeyDirect(target, apiKey, options);
+
+  if (payload.ok === true && typeof payload.verifiedModel === 'string' && Array.isArray(payload.models)) {
+    const models = payload.models.filter((m): m is string => typeof m === 'string');
+    return { models: models.length > 0 ? models : [payload.verifiedModel], verifiedModel: payload.verifiedModel };
   }
-
-  // Some custom OpenAI/Anthropic-compatible gateways do not expose GET /models (404/405),
-  // allowing the user to add & test custom model IDs manually once the endpoint responds.
-  if (!isBuiltin && (response.status === 404 || response.status === 405)) {
-    return [];
-  }
-
-  if (!response.ok) throw new Error(`PROVIDER_${response.status}`);
-
-  if (protocol === 'google') {
-    const body = (await response.json().catch(() => null)) as {
-      models?: { name?: unknown; supportedGenerationMethods?: unknown }[];
-    } | null;
-    const ids = (body?.models ?? [])
-      .filter(
-        (entry) =>
-          !Array.isArray(entry?.supportedGenerationMethods) ||
-          entry.supportedGenerationMethods.includes('generateContent')
-      )
-      .map((entry) => (typeof entry?.name === 'string' ? entry.name.replace(/^models\//, '') : null))
-      .filter((id): id is string => Boolean(id));
-    return [...new Set(ids)].sort();
-  }
-
-  const body = (await response.json().catch(() => null)) as
-    | { data?: { id?: unknown }[]; models?: { id?: unknown; name?: unknown }[] }
-    | { id?: unknown }[]
-    | null;
-  const rawList = Array.isArray(body)
-    ? body
-    : Array.isArray(body?.data)
-      ? body.data
-      : Array.isArray(body?.models)
-        ? body.models
-        : [];
-  const ids = rawList
-    .map((entry) => {
-      if (typeof entry?.id === 'string') return entry.id;
-      if (entry && 'name' in entry && typeof entry.name === 'string') return entry.name;
-      return null;
-    })
-    .filter((id): id is string => Boolean(id));
-  return [...new Set(ids)].sort();
+  return throwCode(typeof payload.error === 'string' ? payload.error : 'PROVIDER_ERROR');
 };
 
 export interface Credentials {
@@ -272,84 +281,22 @@ export interface Credentials {
 }
 
 /**
- * Probes an exact model ID (used by "Add Custom Model" Test -> Save) with a minimal 1-token call
- * so the user gets immediate green/red verification that the model exists and accepts requests.
+ * Probes an exact model ID (used by "Add Custom Model" Test -> Save) with a real minimal inference
+ * call. Rejects with `INVALID_KEY` on 401/403/auth errors, `MODEL_NOT_FOUND` on unknown models and
+ * `INVALID_BASE_URL` when the endpoint answers with HTML or a non-inference body.
  */
 export const testProviderModel = async (
   credentials: Omit<Credentials, 'model'>,
   modelId: string
 ): Promise<true> => {
-  const key = credentials.apiKey.trim();
+  const shapeError = checkKeyShape(credentials.apiKey);
+  if (shapeError) return throwCode(shapeError);
   const model = modelId.trim();
-  if (!key) throw new Error('EMPTY_KEY');
-  if (!model) throw new Error('EMPTY_MODEL');
-  const { provider, protocol, baseUrl } = resolveProviderEndpoint(credentials);
-  if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw new Error('INVALID_BASE_URL');
-
-  let response: Response;
-  try {
-    if (protocol === 'anthropic') {
-      response = await fetch(`${baseUrl}/messages`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 4,
-          messages: [{ role: 'user', content: 'ping' }],
-        }),
-      });
-    } else if (protocol === 'google') {
-      const cleanModel = model.replace(/^models\//, '');
-      response = await fetch(
-        `${baseUrl}/models/${encodeURIComponent(cleanModel)}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-            'x-goog-api-key': key,
-          },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: 'ping' }] }],
-            generationConfig: { maxOutputTokens: 4 },
-          }),
-        }
-      );
-    } else {
-      const tokenField = provider === 'openai' ? { max_completion_tokens: 4 } : { max_tokens: 4 };
-      response = await fetch(`${baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: `Bearer ${key}`,
-        },
-        body: JSON.stringify({
-          model,
-          ...tokenField,
-          messages: [{ role: 'user', content: 'ping' }],
-        }),
-      });
-    }
-  } catch {
-    throw new Error('NETWORK_FAILED');
-  }
-
-  if (response.status === 401 || response.status === 403) throw new Error('INVALID_KEY');
-  if (response.status === 404) throw new Error('MODEL_NOT_FOUND');
-  if (!response.ok) {
-    const detail = (await response.text().catch(() => '')).toLowerCase();
-    if (detail.includes('model') && (detail.includes('not found') || detail.includes('does not exist') || detail.includes('invalid'))) {
-      throw new Error('MODEL_NOT_FOUND');
-    }
-    if (protocol === 'google' && detail.includes('api key')) {
-      throw new Error('INVALID_KEY');
-    }
-    throw new Error(`PROVIDER_${response.status}`);
-  }
+  if (!model) return throwCode('EMPTY_MODEL');
+  const target = verifyTargetFor(credentials);
+  if (!/^https?:\/\//i.test(target.baseUrl)) return throwCode('INVALID_BASE_URL');
+  const probe = await probeModel(target, credentials.apiKey.trim(), model);
+  if (!probe.ok) return throwCode(probe.error);
   return true;
 };
 

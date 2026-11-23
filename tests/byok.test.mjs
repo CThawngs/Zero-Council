@@ -117,7 +117,7 @@ test('testProviderModel verifies custom model IDs and throws on 404/400', async 
   await assert.rejects(
     () =>
       withResponse({ error: 'model not found' }, false, 404, () =>
-        testProviderModel({ provider: 'openai', apiKey: 'sk-test' }, 'nonexistent-model')
+        testProviderModel({ provider: 'openai', apiKey: 'sk-test-long-enough-key' }, 'nonexistent-model')
       ),
     /MODEL_NOT_FOUND|404/
   );
