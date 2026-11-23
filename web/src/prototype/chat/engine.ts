@@ -166,6 +166,8 @@ export interface ChatTurnRequest {
   signal?: AbortSignal;
   /** True when chatting 1-on-1 with a single solo bot (no cross-bot handoff tools). */
   soloMode?: boolean;
+  /** Room chat mode: `panel` (Independent) vs `round-robin` (Debate). */
+  mode?: ChatMode;
 }
 
 export type BotGenerator = (request: ChatTurnRequest) => Promise<BotTurn> | BotTurn;
@@ -480,22 +482,29 @@ export const runTurn = async ({
     }
 
     const bot = queue.shift() as ChatBot;
+    // `panel` maps to Independent mode (everyone answers once, isolated from peers in this round).
+    // `round-robin` maps to Debate mode (advisors see prior turns and can hand off).
+    const isIndependent = !soloMode && mode === 'panel';
     const isClosing = (mode === 'panel' && queue.length === 0) || (effectiveRounds > 1 && spoken.length + 1 >= turnBudget);
     // Everyone after this advisor in join order who still has a turn, so the floor goes round the table
-    // rather than always back to the first seat.
+    // rather than always back to the first seat. Independent advisors never hand off to each other.
     const fromHere = roster.findIndex((other) => other.id === bot.id);
-    const handoffTargets = isClosing
-      ? []
-      : effectiveRounds > 1
-        ? [...roster.slice(fromHere + 1), ...roster.slice(0, fromHere)].filter(
-            (other) => other.id !== bot.id && (turnsBy.get(other.id) ?? 0) < effectiveRounds
-          )
-        : [...queue].filter((other) => other.id !== bot.id);
+    const handoffTargets =
+      isClosing || isIndependent
+        ? []
+        : effectiveRounds > 1
+          ? [...roster.slice(fromHere + 1), ...roster.slice(0, fromHere)].filter(
+              (other) => other.id !== bot.id && (turnsBy.get(other.id) ?? 0) < effectiveRounds
+            )
+          : [...queue].filter((other) => other.id !== bot.id);
+    // In independent mode, freeze context at `[...history, userMessage]` so advisors answering the
+    // same user prompt never see each other's in-round replies (prior completed rounds remain visible).
+    const visibleHistory = isIndependent ? [...history, userMessage] : messages;
     const request: ChatTurnRequest = {
       bot,
       roster: [...roster],
-      history: buildContext(messages),
-      waiting: [...queue],
+      history: buildContext(visibleHistory),
+      waiting: isIndependent ? [] : [...queue],
       handoffTargets,
       isClosing,
       prompt: userMessage.body,
@@ -503,6 +512,7 @@ export const runTurn = async ({
       attachments: userMessage.attachments ?? [],
       signal,
       soloMode,
+      mode: soloMode ? undefined : mode,
     };
 
     let turn: BotTurn | null = null;

@@ -551,7 +551,7 @@ export const ChatRoomView: React.FC = () => {
                 </span>
                 {!isSolo && (
                   <span className="badge-neutral hidden shrink-0 text-[10px] md:inline-flex">
-                    {currentRoom.mode === 'panel' ? t.modePanel : t.modeRoundRobin}
+                    {currentRoom.mode === 'panel' ? t.modeIndependentTitle : t.modeDebateTitle}
                   </span>
                 )}
               </div>

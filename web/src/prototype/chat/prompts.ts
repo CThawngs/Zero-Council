@@ -65,16 +65,28 @@ export const buildSystemPrompt = (
       .join('\n');
   }
 
-  const eligibleTargets = request.isClosing
+  // Shape routing targets and behavioral instructions around the 2 group modes:
+  // - `panel` (Independent): no peer handoffs; each model answers the human directly on its own
+  // - `round-robin` (Debate): engage and critique previous advisors' arguments
+  const isIndependent = request.mode === 'panel';
+  const eligibleTargets =
+    request.isClosing || isIndependent
+      ? []
+      : (request.handoffTargets ?? request.waiting).filter((bot) => bot.id !== request.bot.id);
+  const peerRoster = isIndependent
     ? []
-    : (request.handoffTargets ?? request.waiting).filter((bot) => bot.id !== request.bot.id);
-  const peerRoster = (request.roster ?? eligibleTargets).filter((bot) => bot.id !== request.bot.id);
+    : (request.roster ?? eligibleTargets).filter((bot) => bot.id !== request.bot.id);
   const rosterLines = (eligibleTargets.length > 0 ? eligibleTargets : peerRoster)
     .map((bot) => `- ${bot.name}`)
     .join('\n');
 
-  const closing =
-    request.isClosing || eligibleTargets.length === 0
+  const modeInstruction = isIndependent
+    ? 'Conversation mode: INDEPENDENT. Answer the human’s question independently from your own perspective and expertise. Do not wait for, reference, or try to coordinate with other advisors.'
+    : 'Conversation mode: DEBATE (Critique). Read what previous advisors have said in the transcript. Directly engage with their arguments: challenge weak assumptions, point out blind spots or risks, offer a sharp counter-perspective where you disagree, and explain why from your own stance. Avoid simply agreeing or repeating.';
+
+  const closing = isIndependent
+    ? 'Answer the human directly from your own perspective, tag @user if handing a decision or clarifying question back, and call message_agent with target "user".'
+    : request.isClosing || eligibleTargets.length === 0
       ? 'You have the floor last in this round. Synthesize or answer directly, tag @user when handing the decision or a clarifying question back to the human, and call message_agent with target "user".'
       : 'When you finish your point, call message_agent with the exact name of the teammate who should speak next (if you want their take or challenged them), or with "user" if the human should decide next.';
 
@@ -82,8 +94,13 @@ export const buildSystemPrompt = (
     persona,
     '',
     `You are "${request.bot.name}", collaborating live in a multi-bot group chat alongside real AI teammates and the user.`,
+    modeInstruction,
     'Collaborate concisely like sharp teammates in a real war-room: read what others already said, do not repeat points, take a clear stance, and keep replies tight and high-signal.',
-    'When building on, questioning, or challenging a peer in the room, address them directly as @BotName in your reply. When asking the user a clarifying question or handing back a decision, tag @user.',
+    ...(isIndependent
+      ? []
+      : [
+          'When building on, questioning, or challenging a peer in the room, address them directly as @BotName in your reply. When asking the user a clarifying question or handing back a decision, tag @user.',
+        ]),
     langLine,
     '',
     ...(pinned

@@ -3,15 +3,16 @@ import { useApp } from '../context/AppContext';
 import type { DecisionFramework } from '../types';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { modeLabel } from '../i18n';
-import type { CommunicationMode } from '@/lib/deliberation/engine';
 import { BookOpen, Check, Compass, GitBranch, Layers3, ShieldCheck, SlidersHorizontal, UsersRound } from 'lucide-react';
 
-const MODES: CommunicationMode[] = ['independent', 'debate', 'chain'];
+// Group chat supports two communication modes: independent (panel) and debate (round-robin).
+const MODES = ['independent', 'debate'] as const;
+type TwoMode = (typeof MODES)[number];
 
-const MODE_DESCRIPTION: Record<CommunicationMode, 'modeIndependentBody' | 'modeDebateBody' | 'modeChainBody'> = {
+// Maps each mode to its localized description key.
+const MODE_DESCRIPTION: Record<TwoMode, 'modeIndependentBody' | 'modeDebateBody'> = {
   independent: 'modeIndependentBody',
   debate: 'modeDebateBody',
-  chain: 'modeChainBody',
 };
 
 const HOW_STEPS = [
@@ -23,7 +24,7 @@ const HOW_STEPS = [
 export const EmptyChamberView: React.FC = () => {
   const { startCouncilChat, personas, personaCap, setCurrentView, language, t } = useApp();
   const [question, setQuestion] = useState('');
-  const [mode, setMode] = useState<CommunicationMode>('independent');
+  const [mode, setMode] = useState<TwoMode>('independent');
   const [selectedFramework, setSelectedFramework] =
     useState<DecisionFramework>('Good / Normal / Bad Scenarios');
 

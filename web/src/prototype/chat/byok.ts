@@ -464,11 +464,13 @@ const toMessages = (request: ChatTurnRequest) => {
     normalized.unshift({ role: 'user', content: 'Continue the conversation.', images: [] });
   }
   if (normalized.length === 0 || normalized[normalized.length - 1]?.role === 'assistant') {
+    const modeCue =
+      request.mode === 'panel'
+        ? `Now it is your turn, ${request.bot.name}. Give your independent answer to the human.`
+        : `Now it is your turn, ${request.bot.name}. Critique and respond to the previous points.`;
     normalized.push({
       role: 'user',
-      content: request.soloMode
-        ? 'Continue.'
-        : `Now it is your turn, ${request.bot.name}. Respond to the group.`,
+      content: request.soloMode ? 'Continue.' : modeCue,
       images: [],
     });
   }

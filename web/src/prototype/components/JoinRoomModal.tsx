@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { planById } from '../data/plans';
-import { Bot, Check, Eye, LayoutList, Lock, MessagesSquare } from 'lucide-react';
+import { Bot, Check, Eye, Lock, MessagesSquare } from 'lucide-react';
 import type { ChatMode } from '../chat/engine';
 import type { AdvisorPersona, SavedConversation } from '../types';
 import type { CommunicationMode } from '@/lib/deliberation/engine';
@@ -115,6 +115,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
     joinRoom(roster, mode, groupTitle.trim() || undefined);
   };
 
+  // Two supported group modes: independent (`panel`) and debate (`round-robin`).
   const communicationModes = [
     {
       id: 'independent' as const,
@@ -128,13 +129,6 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
       title: t.modeDebateTitle,
       body: t.modeDebateBody,
       icon: MessagesSquare,
-      chatMode: 'round-robin' as ChatMode,
-    },
-    {
-      id: 'chain' as const,
-      title: t.modeChainTitle,
-      body: t.modeChainBody,
-      icon: LayoutList,
       chatMode: 'round-robin' as ChatMode,
     },
   ];

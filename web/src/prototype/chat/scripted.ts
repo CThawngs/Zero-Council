@@ -52,13 +52,35 @@ export const scriptedGenerator =
   (request: ChatTurnRequest): BotTurn => {
     if (alwaysSilent?.(request)) return { text: SILENT_TOKEN, handoffs: [], silent: true };
 
-    const { bot, history, waiting, handoffTargets, isClosing } = request;
-    const lang = request.language === 'vi' ? 'vi' : 'en';
-    const rawLens = lensOf?.(bot)?.trim() ?? '';
-    const resolvedLens = rawLens || DEFAULT_LENS[lang];
-    const opener = OPENERS[lang](resolvedLens);
-    const lastUser = [...history].reverse().find((message) => message.authorId === USER_HANDLE);
-    const echo = lastUser ? ECHO_PREFIX[lang](lastUser.body.slice(0, 120)) : '';
+    const { bot, history, waiting, handoffTargets, isClosing, language, mode } = request;
+    const opener = OPENERS[language](lensOf(bot));
+    // Scope peer lookup to the current round (messages after the latest user turn) so debate
+    // prefixes reference the advisor who just spoke rather than someone from an earlier round.
+    const lastUserIndex = history.map((message) => message.authorId).lastIndexOf(USER_HANDLE);
+    const lastUser = lastUserIndex >= 0 ? history[lastUserIndex] : undefined;
+    const echo = lastUser ? `On "${lastUser.body.slice(0, 120)}" — ` : '';
+    const lastBotInRound =
+      lastUserIndex >= 0
+        ? [...history.slice(lastUserIndex + 1)].reverse().find((message) => message.authorId !== USER_HANDLE)
+        : undefined;
+    const prevName = displayName(roster, lastBotInRound?.authorId ?? null);
+
+    // Independent (`panel`): never hand off or mention peers, and only append `@user` on the final
+    // advisor (`isClosing`) so `runTurn` lets every seated advisor finish their turn.
+    if (mode === 'panel') {
+      const body = `${echo}${opener}`;
+      return {
+        text: isClosing ? `${body} ${CLOSERS[language]} @${USER_HANDLE}` : body,
+        handoffs: [],
+      };
+    }
+
+    const debatePrefix = prevName
+      ? language === 'vi'
+        ? `Phản biện lại góc nhìn của ${prevName}, `
+        : `Countering ${prevName}'s angle, `
+      : '';
+
     // `waiting` first (the round's own order), then anyone the engine will still accept a handoff to —
     // which is what lets two scripted advisors keep passing the floor back and forth.
     const next = waiting[0] ?? handoffTargets?.[0] ?? null;
@@ -66,11 +88,11 @@ export const scriptedGenerator =
 
     // Closing hands back to the user: no handoff, and the prose names them so the UI can mark it.
     if (isClosing || !nextName) {
-      return { text: `${echo}${opener} ${CLOSERS[lang]} @${USER_HANDLE}`, handoffs: [] };
+      return { text: `${echo}${debatePrefix}${opener} ${CLOSERS[language]} @${USER_HANDLE}`, handoffs: [] };
     }
     // A STRUCTURED handoff. The `@name` in the prose is display only — the engine routes on the id.
     return {
-      text: `${echo}${opener} ${HANDOFF_LINES[lang](nextName)}`,
+      text: `${echo}${debatePrefix}${opener} @${nextName}, this is your side of it.`,
       handoffs: [next.id],
     };
   };
