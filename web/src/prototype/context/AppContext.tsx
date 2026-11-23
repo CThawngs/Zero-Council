@@ -61,6 +61,7 @@ import {
   type WhyStop,
 } from '../chat/engine';
 import { byokGenerator, completeByokText } from '../chat/byok';
+import { sanitizeApiKey } from '@/lib/byok/verify';
 import { analyzeChatRoomConclusion, matchPersonaId } from '../chat/conclusion';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
@@ -100,6 +101,9 @@ export interface ConnectProviderMeta {
   baseUrl?: string;
   isCustom?: boolean;
 }
+
+/** Outcome of saving a provider key: the server's stable error code on failure. */
+export type ConnectApiKeyResult = { ok: true; warning?: string } | { ok: false; error: string };
 
 type ToastKey = {
   [K in keyof (typeof copy)['en']]: (typeof copy)['en'][K] extends string ? K : never;
@@ -178,7 +182,7 @@ interface AppContextType {
     key: string,
     model: string,
     meta?: ConnectProviderMeta
-  ) => Promise<boolean>;
+  ) => Promise<ConnectApiKeyResult>;
   updateProviderModels: (
     provider: ModelProvider,
     model: string,
@@ -1882,14 +1886,17 @@ export const AppProvider: React.FC<{
 
   const connectApiKey = async (
     provider: ModelProvider,
-    key: string,
+    rawKey: string,
     model: string,
     meta: ConnectProviderMeta = {}
-  ): Promise<boolean> => {
+  ): Promise<ConnectApiKeyResult> => {
+    const key = sanitizeApiKey(rawKey);
     const modelList =
       meta.models && meta.models.length > 0
         ? [...new Set([model, ...meta.models])]
         : [model];
+    let savedBaseUrl = meta.baseUrl;
+    let warning: string | undefined;
     try {
       const response = await fetch('/api/providers', {
         method: 'POST',
@@ -1904,10 +1911,20 @@ export const AppProvider: React.FC<{
           ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
         }),
       });
-      if (!response.ok) return false;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        warning?: unknown;
+        provider?: { baseUrl?: unknown };
+      } | null;
+      if (!response.ok) {
+        return { ok: false, error: typeof payload?.error === 'string' ? payload.error : 'SAVE_FAILED' };
+      }
+      if (typeof payload?.provider?.baseUrl === 'string') savedBaseUrl = payload.provider.baseUrl;
+      if (typeof payload?.warning === 'string') warning = payload.warning;
     } catch {
-      return false;
+      return { ok: false, error: 'NETWORK_FAILED' };
     }
+    const finalMeta = { ...meta, ...(savedBaseUrl ? { baseUrl: savedBaseUrl } : {}) };
     setKeys((value) => ({ ...value, [provider]: key }));
     setApiKeys((value) => {
       const exists = value.some((item) => item.provider === provider);
@@ -1919,8 +1936,8 @@ export const AppProvider: React.FC<{
                 connected: true,
                 modelName: model,
                 models: modelList,
-                ...(meta.label ? { label: meta.label } : {}),
-                ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
+                ...(finalMeta.label ? { label: finalMeta.label } : {}),
+                ...(finalMeta.baseUrl ? { baseUrl: finalMeta.baseUrl } : {}),
               }
             : item
         );
@@ -1932,15 +1949,15 @@ export const AppProvider: React.FC<{
           modelName: model,
           models: modelList,
           connected: true,
-          label: meta.label ?? provider,
-          protocol: meta.protocol ?? 'openai',
-          baseUrl: meta.baseUrl ?? '',
+          label: finalMeta.label ?? provider,
+          protocol: finalMeta.protocol ?? 'openai',
+          baseUrl: finalMeta.baseUrl ?? '',
           isCustom: true,
         },
       ];
     });
-    showToast('toastProviderOn', { provider: meta.label ?? provider });
-    return true;
+    showToast('toastProviderOn', { provider: finalMeta.label ?? provider });
+    return warning ? { ok: true, warning } : { ok: true };
   };
 
   const updateProviderModels = async (

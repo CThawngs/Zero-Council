@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ModelProvider } from '../types';
 import { providerLabel } from '../data/mockData';
@@ -10,6 +10,7 @@ import {
   type ProviderProtocol,
 } from '../chat/byok';
 import { slugifyCustomProvider } from '@/lib/store/botValidation';
+import { isVerifyErrorCode, sanitizeApiKey } from '@/lib/byok/verify';
 import {
   AlertCircle,
   Check,
@@ -23,19 +24,49 @@ import {
 } from 'lucide-react';
 import { Modal } from './Modal';
 
+/**
+ * What a successful connection test proved. Save is offered only while the CURRENT inputs are
+ * exactly the ones that passed: any edit to the key or the Base URL invalidates it.
+ */
+type TestedConnection = {
+  models: string[];
+  selected: string;
+  /** The sanitized key that passed the live test. */
+  testedKey: string;
+  /** `protocol|normalized Base URL` that passed the live test. */
+  testedTarget: string;
+  /** Base URL to persist: normalized, with `/v1` appended when the API needed it. */
+  saveBaseUrl: string;
+  /** Key verified, but the provider reported a temporary quota / rate limit. */
+  warning?: string;
+  /** Save was refused by the server for a reason unrelated to the key (configuration, storage). */
+  saveError?: string;
+};
+
 type TestState =
   | { phase: 'idle' }
   | { phase: 'testing' }
-  | { phase: 'tested'; models: string[]; selected: string }
+  | ({ phase: 'tested' } & TestedConnection)
   | { phase: 'error'; message: string }
-  | { phase: 'saving'; models: string[]; selected: string };
+  | ({ phase: 'saving' } & TestedConnection);
 
 type CustomModelState =
   | { phase: 'idle' }
   | { phase: 'testing' }
-  | { phase: 'verified'; modelId: string }
+  | { phase: 'verified'; modelId: string; testedKey: string; testedTarget: string; saveBaseUrl: string }
   | { phase: 'error'; message: string }
   | { phase: 'saving'; modelId: string };
+
+/** Identifies the endpoint a test ran against; a different value means the test no longer applies. */
+const targetFingerprint = (protocol: string | undefined, baseUrl: string | undefined): string =>
+  `${protocol ?? ''}|${normalizeBaseUrl(baseUrl ?? '')}`;
+
+/** True only when `state` is a passed test for exactly this key and endpoint. */
+const testMatchesInput = (state: TestState, rawKey: string, target: string): boolean =>
+  (state.phase === 'tested' || state.phase === 'saving') &&
+  state.testedKey.length > 0 &&
+  state.testedKey === sanitizeApiKey(rawKey) &&
+  state.testedTarget === target;
 
 type RetestState =
   | { phase: 'idle' }
@@ -75,8 +106,22 @@ const errorText = (
       return t.apiVerifyInsufficientCredits;
     case 'PROVIDER_ERROR':
       return t.apiVerifyProviderError;
+    case 'MODEL_ACCESS_DENIED':
+      return t.apiVerifyModelAccessDenied;
     case 'SAVE_FAILED':
       return t.apiVerifySaveFailed;
+    case 'MISSING_PROVIDER_KEY_SECRET':
+      return t.apiSaveSecretMissing;
+    case 'INVALID_PROVIDER_KEY_SECRET':
+      return t.apiSaveSecretInvalid;
+    case 'STORE_NOT_CONFIGURED':
+      return t.apiSaveStoreNotConfigured;
+    case 'STORE_SCHEMA_OUTDATED':
+      return t.apiSaveStoreSchemaOutdated;
+    case 'NEED_LOGIN':
+      return t.apiSaveNeedLogin;
+    case 'INVALID_NAME':
+      return t.apiSaveInvalidName;
     default:
       return fallback ?? t.keyTestFailed;
   }
@@ -116,17 +161,32 @@ export const ApiKeysView: React.FC = () => {
   const [customModelInput, setCustomModelInput] = useState('');
   const [customModelState, setCustomModelState] = useState<CustomModelState>({ phase: 'idle' });
 
+  // Monotonic run ids: a test result is applied only if no newer test / edit / close happened since.
+  const builtinTestRun = useRef(0);
+  const customTestRun = useRef(0);
+  const customModelTestRun = useRef(0);
+
   const activeItem = activeProvider
     ? apiKeys.find((key) => key.provider === activeProvider)
     : undefined;
   const builtin = activeProvider ? builtinProviderById(activeProvider) : undefined;
 
   const resetCustomModelBox = () => {
+    customModelTestRun.current += 1;
     setCustomModelInput('');
     setCustomModelState({ phase: 'idle' });
   };
 
+  /** Any edit to the key / Base URL / standard sends the custom modal back to "Test". */
+  const invalidateCustomTest = () => {
+    customTestRun.current += 1;
+    customModelTestRun.current += 1;
+    setCustomTest({ phase: 'idle' });
+    setCustomModelState((current) => (current.phase === 'idle' ? current : { phase: 'idle' }));
+  };
+
   const openProvider = (next: ModelProvider) => {
+    builtinTestRun.current += 1;
     setActiveProvider(next);
     setDraftKey('');
     setTest({ phase: 'idle' });
@@ -135,6 +195,7 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const closeModal = () => {
+    builtinTestRun.current += 1;
     setActiveProvider(null);
     setDraftKey('');
     setTest({ phase: 'idle' });
@@ -143,6 +204,7 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const openCustomModal = () => {
+    customTestRun.current += 1;
     setIsCustomOpen(true);
     setCustomStandard('openai');
     setCustomName('');
@@ -153,39 +215,75 @@ export const ApiKeysView: React.FC = () => {
   };
 
   const closeCustomModal = () => {
+    customTestRun.current += 1;
     setIsCustomOpen(false);
     setCustomTest({ phase: 'idle' });
     resetCustomModelBox();
   };
 
+  const activeProtocol = (builtin?.protocol ?? activeItem?.protocol) as ProviderProtocol | undefined;
+  const activeEndpointUrl = activeProvider
+    ? builtin?.baseUrl ?? activeItem?.baseUrl ?? ''
+    : '';
+  const builtinTarget = targetFingerprint(activeProtocol, activeEndpointUrl);
+  const customTarget = targetFingerprint(customStandard, customBaseUrl);
+
   const testConnection = async () => {
     if (!activeProvider || test.phase === 'testing' || test.phase === 'saving') return;
+    const key = sanitizeApiKey(draftKey);
+    if (!key) {
+      setTest({ phase: 'error', message: 'EMPTY_KEY' });
+      return;
+    }
+    const runId = ++builtinTestRun.current;
+    const testedTarget = builtinTarget;
     setTest({ phase: 'testing' });
     try {
       const endpoint = resolveProviderEndpoint({
         provider: activeProvider,
-        protocol: (activeItem?.protocol ?? builtin?.protocol) as ProviderProtocol | undefined,
-        baseUrl: builtin ? builtin.baseUrl : activeItem?.baseUrl,
+        protocol: activeProtocol,
+        baseUrl: activeEndpointUrl,
       });
-      const { models, verifiedModel } = await verifyProviderConnection(endpoint, draftKey);
-      setTest({ phase: 'tested', models, selected: verifiedModel });
+      const result = await verifyProviderConnection(endpoint, key);
+      if (runId !== builtinTestRun.current) return;
+      setTest({
+        phase: 'tested',
+        models: result.models,
+        selected: result.verifiedModel,
+        testedKey: key,
+        testedTarget,
+        saveBaseUrl: result.resolvedBaseUrl ?? endpoint.baseUrl,
+        ...(result.warning ? { warning: result.warning } : {}),
+      });
     } catch (error) {
+      if (runId !== builtinTestRun.current) return;
       setTest({ phase: 'error', message: (error as Error).message });
     }
   };
 
+  /**
+   * Applies a failed save: a verification verdict (the server re-tested the key and it failed)
+   * sends the user back to Test; a server-side problem keeps the passed test so Save can be retried.
+   */
+  const savedOrError = (passed: TestedConnection, error: string): TestState =>
+    isVerifyErrorCode(error) || error === 'EMPTY_KEY'
+      ? { phase: 'error', message: error }
+      : { phase: 'tested', ...passed, saveError: error };
+
   const saveConnection = async () => {
     if (!activeProvider || test.phase !== 'tested') return;
-    setTest({ phase: 'saving', models: test.models, selected: test.selected });
-    const ok = await connectApiKey(activeProvider, draftKey.trim(), test.selected, {
-      models: test.models,
+    if (!testMatchesInput(test, draftKey, builtinTarget)) return;
+    const passed: TestedConnection = { ...test, saveError: undefined };
+    setTest({ ...passed, phase: 'saving' });
+    const result = await connectApiKey(activeProvider, passed.testedKey, passed.selected, {
+      models: passed.models,
       label: activeItem?.label ?? builtin?.label,
-      protocol: builtin?.protocol ?? activeItem?.protocol,
-      baseUrl: builtin?.baseUrl ?? activeItem?.baseUrl,
+      protocol: activeProtocol,
+      baseUrl: builtin?.baseUrl ?? passed.saveBaseUrl,
       isCustom: Boolean(activeItem?.isCustom && !builtin),
     });
-    if (!ok) {
-      setTest({ phase: 'error', message: 'SAVE_FAILED' });
+    if (!result.ok) {
+      setTest(savedOrError(passed, result.error));
       return;
     }
     closeModal();
@@ -194,54 +292,67 @@ export const ApiKeysView: React.FC = () => {
   const testCustomConnection = async () => {
     if (customTest.phase === 'testing' || customTest.phase === 'saving') return;
     const trimmedName = customName.trim();
-    const trimmedUrl = normalizeBaseUrl(customBaseUrl);
-    const trimmedKey = customKey.trim();
+    const normalizedUrl = normalizeBaseUrl(customBaseUrl);
+    const key = sanitizeApiKey(customKey);
     if (!trimmedName) {
       setCustomTest({ phase: 'error', message: 'INVALID_NAME' });
       return;
     }
-    if (!/^https?:\/\//i.test(trimmedUrl)) {
+    if (!/^https?:\/\/[^\s/]+/i.test(normalizedUrl)) {
       setCustomTest({ phase: 'error', message: 'BAD_URL_FORMAT' });
       return;
     }
-    if (!trimmedKey) {
+    if (!key) {
       setCustomTest({ phase: 'error', message: 'EMPTY_KEY' });
       return;
     }
     const providerId = slugifyCustomProvider(customStandard, trimmedName);
+    const runId = ++customTestRun.current;
+    const testedTarget = customTarget;
     setCustomTest({ phase: 'testing' });
     try {
       const typedModel = customModelInput.trim();
-      const { models, verifiedModel } = await verifyProviderConnection(
-        { provider: providerId, protocol: customStandard, baseUrl: trimmedUrl },
-        trimmedKey,
+      const result = await verifyProviderConnection(
+        { provider: providerId, protocol: customStandard, baseUrl: normalizedUrl },
+        key,
         typedModel ? { model: typedModel } : {}
       );
-      setCustomTest({ phase: 'tested', models, selected: verifiedModel });
+      if (runId !== customTestRun.current) return;
+      setCustomTest({
+        phase: 'tested',
+        models: result.models,
+        selected: result.verifiedModel,
+        testedKey: key,
+        testedTarget,
+        saveBaseUrl: result.resolvedBaseUrl ?? normalizedUrl,
+        ...(result.warning ? { warning: result.warning } : {}),
+      });
     } catch (error) {
+      if (runId !== customTestRun.current) return;
       setCustomTest({ phase: 'error', message: (error as Error).message });
     }
   };
 
   const saveCustomConnection = async () => {
     if (customTest.phase !== 'tested') return;
+    if (!testMatchesInput(customTest, customKey, customTarget)) return;
     const trimmedName = customName.trim();
-    const trimmedUrl = normalizeBaseUrl(customBaseUrl);
+    if (!trimmedName) {
+      setCustomTest({ phase: 'error', message: 'INVALID_NAME' });
+      return;
+    }
     const providerId = slugifyCustomProvider(customStandard, trimmedName);
-    setCustomTest({
-      phase: 'saving',
-      models: customTest.models,
-      selected: customTest.selected,
-    });
-    const ok = await connectApiKey(providerId, customKey.trim(), customTest.selected, {
-      models: customTest.models,
+    const passed: TestedConnection = { ...customTest, saveError: undefined };
+    setCustomTest({ ...passed, phase: 'saving' });
+    const result = await connectApiKey(providerId, passed.testedKey, passed.selected, {
+      models: passed.models,
       label: trimmedName,
       protocol: customStandard,
-      baseUrl: trimmedUrl,
+      baseUrl: passed.saveBaseUrl,
       isCustom: true,
     });
-    if (!ok) {
-      setCustomTest({ phase: 'error', message: 'SAVE_FAILED' });
+    if (!result.ok) {
+      setCustomTest(savedOrError(passed, result.error));
       return;
     }
     closeCustomModal();
@@ -291,38 +402,57 @@ export const ApiKeysView: React.FC = () => {
     if (!candidate || customModelState.phase === 'testing' || customModelState.phase === 'saving') {
       return;
     }
+    const key = sanitizeApiKey(context.apiKey);
+    const runId = ++customModelTestRun.current;
     setCustomModelState({ phase: 'testing' });
     try {
-      await verifyProviderConnection(
+      const result = await verifyProviderConnection(
         { provider: context.provider, protocol: context.protocol, baseUrl: context.baseUrl },
-        context.apiKey,
+        key,
         { model: candidate }
       );
-      setCustomModelState({ phase: 'verified', modelId: candidate });
+      if (runId !== customModelTestRun.current) return;
+      setCustomModelState({
+        phase: 'verified',
+        modelId: candidate,
+        testedKey: key,
+        testedTarget: targetFingerprint(context.protocol, context.baseUrl),
+        saveBaseUrl: result.resolvedBaseUrl ?? normalizeBaseUrl(context.baseUrl ?? ''),
+      });
     } catch (error) {
+      if (runId !== customModelTestRun.current) return;
       setCustomModelState({ phase: 'error', message: (error as Error).message });
     }
   };
 
+  /**
+   * A model test is a full live connection test for its key + endpoint, so it may mark the draft
+   * as tested — but only for the exact inputs it ran with.
+   */
   const saveCustomModelToConnectDraft = (isCustomProviderModal: boolean) => {
     if (customModelState.phase !== 'verified') return;
-    const verifiedModel = customModelState.modelId;
+    const verified = customModelState;
+    const currentKey = isCustomProviderModal ? customKey : draftKey;
+    const currentTarget = isCustomProviderModal ? customTarget : builtinTarget;
+    if (verified.testedKey !== sanitizeApiKey(currentKey) || verified.testedTarget !== currentTarget) {
+      setCustomModelState({ phase: 'idle' });
+      return;
+    }
+    const merge = (prev: TestState): TestState => {
+      const previousModels = prev.phase === 'tested' ? prev.models : [];
+      return {
+        phase: 'tested',
+        models: Array.from(new Set([verified.modelId, ...previousModels])),
+        selected: verified.modelId,
+        testedKey: verified.testedKey,
+        testedTarget: verified.testedTarget,
+        saveBaseUrl: prev.phase === 'tested' ? prev.saveBaseUrl : verified.saveBaseUrl,
+      };
+    };
     if (isCustomProviderModal) {
-      setCustomTest((prev) => {
-        if (prev.phase !== 'tested') {
-          return { phase: 'tested', models: [verifiedModel], selected: verifiedModel };
-        }
-        const merged = Array.from(new Set([verifiedModel, ...prev.models]));
-        return { phase: 'tested', models: merged, selected: verifiedModel };
-      });
+      setCustomTest(merge);
     } else {
-      setTest((prev) => {
-        if (prev.phase !== 'tested') {
-          return { phase: 'tested', models: [verifiedModel], selected: verifiedModel };
-        }
-        const merged = Array.from(new Set([verifiedModel, ...prev.models]));
-        return { phase: 'tested', models: merged, selected: verifiedModel };
-      });
+      setTest(merge);
     }
     resetCustomModelBox();
   };
@@ -352,15 +482,19 @@ export const ApiKeysView: React.FC = () => {
     await updateProviderModels(activeProvider, nextModel, merged);
   };
 
-  const tested = test.phase === 'tested' || test.phase === 'saving';
+  // Save is shown ONLY while the last passed test matches the exact current key + Base URL.
+  const tested = testMatchesInput(test, draftKey, builtinTarget);
   const busy = test.phase === 'testing' || test.phase === 'saving';
 
-  const customTested = customTest.phase === 'tested' || customTest.phase === 'saving';
+  const customTested = testMatchesInput(customTest, customKey, customTarget);
   const customBusy = customTest.phase === 'testing' || customTest.phase === 'saving';
 
-  const activeEndpointUrl = activeProvider
-    ? builtin?.baseUrl ?? activeItem?.baseUrl ?? ''
-    : '';
+  const warningText = (warning: string | undefined): string | null => {
+    if (warning === 'RATE_LIMITED') return t.apiVerifyWarningRateLimited;
+    if (warning === 'INSUFFICIENT_CREDITS') return t.apiVerifyWarningCredits;
+    return null;
+  };
+
   const activeSecret =
     (activeProvider ? getProviderSecret(activeProvider) : undefined) || draftKey.trim();
 
@@ -568,7 +702,7 @@ export const ApiKeysView: React.FC = () => {
                 type="button"
                 id="provider-test-btn"
                 onClick={() => void testConnection()}
-                disabled={busy || !draftKey.trim()}
+                disabled={busy || !sanitizeApiKey(draftKey)}
                 className={
                   test.phase === 'error'
                     ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-700 bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
@@ -758,8 +892,10 @@ export const ApiKeysView: React.FC = () => {
                   placeholder={builtin?.keyHint ?? 'sk-…'}
                   disabled={busy}
                   onChange={(event) => {
+                    builtinTestRun.current += 1;
                     setDraftKey(event.target.value);
                     setTest({ phase: 'idle' });
+                    setCustomModelState((current) => (current.phase === 'idle' ? current : { phase: 'idle' }));
                   }}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
                 />
@@ -774,14 +910,32 @@ export const ApiKeysView: React.FC = () => {
                 </p>
               )}
 
-              {(test.phase === 'tested' || test.phase === 'saving') && (
+              {tested && (test.phase === 'tested' || test.phase === 'saving') && (
                 <div className="space-y-4">
                   <p
                     role="status"
+                    id="provider-test-status"
                     className="rounded-lg border border-sage/40 bg-sage/10 px-3 py-2 text-sm font-medium text-sage"
                   >
                     {t.keyTestOk}
                   </p>
+                  {warningText(test.warning) && (
+                    <p
+                      id="provider-test-warning"
+                      className="rounded-lg border border-brass/40 bg-brass/10 px-3 py-2 text-sm font-medium text-ink"
+                    >
+                      {warningText(test.warning)}
+                    </p>
+                  )}
+                  {test.phase === 'tested' && test.saveError && (
+                    <p
+                      role="alert"
+                      id="provider-save-error"
+                      className="rounded-lg border border-terracotta/50 bg-terracotta/10 px-3 py-2.5 text-sm font-medium text-terracotta"
+                    >
+                      {describeError(test.saveError, t.apiVerifySaveFailed)}
+                    </p>
+                  )}
 
                   <label className="field">
                     <span className="field-label">{t.keyModelLabel}</span>
@@ -843,12 +997,16 @@ export const ApiKeysView: React.FC = () => {
                             activeProvider &&
                             void runCustomModelTest({
                               provider: activeProvider,
-                              apiKey: draftKey.trim(),
+                              apiKey: draftKey,
                               protocol: builtin?.protocol ?? activeItem?.protocol,
                               baseUrl: activeEndpointUrl,
                             })
                           }
-                          disabled={!customModelInput.trim() || customModelState.phase === 'testing'}
+                          disabled={
+                            !customModelInput.trim() ||
+                            !sanitizeApiKey(draftKey) ||
+                            customModelState.phase === 'testing'
+                          }
                           className={
                             customModelState.phase === 'error'
                               ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-700 bg-red-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
@@ -931,7 +1089,10 @@ export const ApiKeysView: React.FC = () => {
                 id="custom-provider-test-btn"
                 onClick={() => void testCustomConnection()}
                 disabled={
-                  customBusy || !customName.trim() || !customBaseUrl.trim() || !customKey.trim()
+                  customBusy ||
+                  !customName.trim() ||
+                  !normalizeBaseUrl(customBaseUrl) ||
+                  !sanitizeApiKey(customKey)
                 }
                 className={
                   customTest.phase === 'error'
@@ -961,7 +1122,7 @@ export const ApiKeysView: React.FC = () => {
                 id="custom-standard-openai"
                 onClick={() => {
                   setCustomStandard('openai');
-                  setCustomTest({ phase: 'idle' });
+                  invalidateCustomTest();
                 }}
                 aria-pressed={customStandard === 'openai'}
                 className={`rounded-xl border px-3.5 py-2.5 text-left text-xs font-semibold transition ${
@@ -977,7 +1138,7 @@ export const ApiKeysView: React.FC = () => {
                 id="custom-standard-anthropic"
                 onClick={() => {
                   setCustomStandard('anthropic');
-                  setCustomTest({ phase: 'idle' });
+                  invalidateCustomTest();
                 }}
                 aria-pressed={customStandard === 'anthropic'}
                 className={`rounded-xl border px-3.5 py-2.5 text-left text-xs font-semibold transition ${
@@ -1017,7 +1178,7 @@ export const ApiKeysView: React.FC = () => {
               disabled={customBusy}
               onChange={(event) => {
                 setCustomBaseUrl(event.target.value);
-                setCustomTest({ phase: 'idle' });
+                invalidateCustomTest();
               }}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 font-mono text-xs text-ink outline-none focus:border-brass"
             />
@@ -1035,7 +1196,7 @@ export const ApiKeysView: React.FC = () => {
               disabled={customBusy}
               onChange={(event) => {
                 setCustomKey(event.target.value);
-                setCustomTest({ phase: 'idle' });
+                invalidateCustomTest();
               }}
               className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
             />
@@ -1050,14 +1211,37 @@ export const ApiKeysView: React.FC = () => {
             </p>
           )}
 
-          {(customTest.phase === 'tested' || customTest.phase === 'saving') && (
+          {customTested && (customTest.phase === 'tested' || customTest.phase === 'saving') && (
             <div className="space-y-4">
               <p
                 role="status"
+                id="custom-provider-test-status"
                 className="rounded-lg border border-sage/40 bg-sage/10 px-3 py-2 text-sm font-medium text-sage"
               >
                 {t.keyTestOk}
               </p>
+              {customTest.saveBaseUrl !== normalizeBaseUrl(customBaseUrl) && (
+                <p id="custom-provider-url-adjusted" className="text-xs font-medium text-ink-muted">
+                  {t.apiVerifyBaseUrlAdjusted.replace('{url}', customTest.saveBaseUrl)}
+                </p>
+              )}
+              {warningText(customTest.warning) && (
+                <p
+                  id="custom-provider-test-warning"
+                  className="rounded-lg border border-brass/40 bg-brass/10 px-3 py-2 text-sm font-medium text-ink"
+                >
+                  {warningText(customTest.warning)}
+                </p>
+              )}
+              {customTest.phase === 'tested' && customTest.saveError && (
+                <p
+                  role="alert"
+                  id="custom-provider-save-error"
+                  className="rounded-lg border border-terracotta/50 bg-terracotta/10 px-3 py-2.5 text-sm font-medium text-terracotta"
+                >
+                  {describeError(customTest.saveError, t.apiVerifySaveFailed)}
+                </p>
+              )}
               <label className="field">
                 <span className="field-label">{t.keyModelLabel}</span>
                 <select
@@ -1120,15 +1304,15 @@ export const ApiKeysView: React.FC = () => {
                     const providerId = slugifyCustomProvider(customStandard, customName.trim() || 'gateway');
                     void runCustomModelTest({
                       provider: providerId,
-                      apiKey: customKey.trim(),
+                      apiKey: customKey,
                       protocol: customStandard,
                       baseUrl: normalizeBaseUrl(customBaseUrl),
                     });
                   }}
                   disabled={
                     !customModelInput.trim() ||
-                    !customBaseUrl.trim() ||
-                    !customKey.trim() ||
+                    !normalizeBaseUrl(customBaseUrl) ||
+                    !sanitizeApiKey(customKey) ||
                     customModelState.phase === 'testing'
                   }
                   className={
