@@ -77,6 +77,7 @@
      deliberate colour instead of a leftover theme token. */
   --color-brass: var(--color-accent);
   --color-accent: var(--color-accent);
+  --color-accent-ink: var(--color-accent-ink);
 
   /* Kept because `types.ts` and the persona components still name them; these
      are now identity colours rather than a muted gold family. */
@@ -122,7 +123,7 @@
   --color-accent-soft: color-mix(in srgb, var(--color-accent) 10%, transparent);
 
   --color-accent-sage: #16b981;
-  --color-accent-rust: #e5484d;
+  --color-accent-rust: #c93237;
 
   --color-persona-rose: #ff4d8d;
   --color-persona-sage: #16b981;

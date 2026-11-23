@@ -145,7 +145,7 @@ export const OverviewView: React.FC = () => {
             <Reveal key={title} as="li" delayMs={index * 100} className="lift persona-card relative flex flex-col justify-between p-6 sm:p-7">
               <div>
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-md" style={{ background: tint }}>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-accent-ink shadow-md" style={{ background: tint }}>
                     <Icon className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <span
@@ -257,7 +257,7 @@ export const OverviewView: React.FC = () => {
               >
                 <div>
                   {plan.popular && (
-                    <span className="absolute -top-3 right-6 rounded-full bg-[var(--tint-violet)] px-3 py-0.5 text-[11px] font-black uppercase text-white shadow-md">
+                    <span className="absolute -top-3 right-6 rounded-full bg-[var(--tint-violet)] px-3 py-0.5 text-[11px] font-black uppercase text-accent-ink shadow-md">
                       {t.badgePopular}
                     </span>
                   )}

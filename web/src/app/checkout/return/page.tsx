@@ -2,7 +2,9 @@
 
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { Moon, Sun } from 'lucide-react';
 import { Suspense, useEffect, useState } from 'react';
+import { useApp } from '@/prototype/context/AppContext';
 
 type OrderState = {
   status: 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED';
@@ -11,47 +13,21 @@ type OrderState = {
   amountUsd: string;
 };
 
-const copy = {
-  en: {
-    pending: 'Waiting for payOS to confirm',
-    pendingBody: 'payOS is confirming the transfer. This page updates itself — no refresh needed.',
-    paid: 'Payment received',
-    paidBody: 'payOS confirmed the transfer. Your plan is now active on this account.',
-    failed: 'Payment not completed',
-    failedBody: 'Nothing was charged. You can start the payment again from the pricing page.',
-    back: 'Back to Zero Council',
-    code: 'Order',
-  },
-  vi: {
-    pending: 'Đang chờ payOS xác nhận',
-    pendingBody: 'payOS đang xác nhận giao dịch chuyển khoản. Trang này tự cập nhật, không cần tải lại.',
-    paid: 'Đã nhận thanh toán',
-    paidBody:
-      'payOS đã xác nhận giao dịch. Gói của bạn đã được kích hoạt trên tài khoản này.',
-    failed: 'Thanh toán chưa hoàn tất',
-    failedBody: 'Không có khoản tiền nào bị trừ. Bạn có thể thanh toán lại từ trang Giá.',
-    back: 'Về Zero Council',
-    code: 'Mã đơn',
-  },
-} as const;
-
 // Same grouping as plans.ts `planAmountLine` so the number a buyer paid reads identically here.
 const number = new Intl.NumberFormat('en-US');
 
 function PaymentResult() {
   const params = useSearchParams();
   const orderCode = params.get('orderCode');
-  const [language, setLanguage] = useState<'en' | 'vi'>('vi');
+  const { language, setLanguage, theme, toggleTheme, t } = useApp();
   const [order, setOrder] = useState<OrderState | null>(null);
   const [lookupFailed, setLookupFailed] = useState(false);
   const missing = lookupFailed || !orderCode;
-  const text = copy[language];
 
   useEffect(() => {
     document.documentElement.lang = language;
-    document.title =
-      language === 'vi' ? 'Zero Council — Kết quả thanh toán' : 'Zero Council — Payment result';
-  }, [language]);
+    document.title = t.paymentReturnTitle;
+  }, [language, t.paymentReturnTitle]);
 
   useEffect(() => {
     if (!orderCode) return;
@@ -78,7 +54,7 @@ function PaymentResult() {
         if (active) setTimeout(poll, 5000);
       }
     };
-    poll();
+    void poll();
     return () => {
       active = false;
     };
@@ -86,42 +62,55 @@ function PaymentResult() {
   const paid = !missing && order?.status === 'PAID';
 
   const headline = missing
-    ? text.failed
+    ? t.paymentFailed
     : order?.status === 'PAID'
-      ? text.paid
+      ? t.paymentPaid
       : order?.status === 'PENDING'
-        ? text.pending
-        : text.failed;
+        ? t.paymentPending
+        : t.paymentFailed;
   const body = missing
-    ? text.failedBody
+    ? t.paymentFailedBody
     : order?.status === 'PAID'
-      ? text.paidBody
+      ? t.paymentPaidBody
       : order?.status === 'PENDING'
-        ? text.pendingBody
-        : text.failedBody;
+        ? t.paymentPendingBody
+        : t.paymentFailedBody;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-6 px-5 py-16">
-      <div className="flex justify-end">
-        <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label="Language">
+      <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label={t.language}>
           {(['vi', 'en'] as const).map((item) => (
             <button
               key={item}
               type="button"
               aria-pressed={language === item}
-              onClick={() => setLanguage(item)}
-              className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-white' : 'text-ink-muted hover:text-ink'}`}
+              onClick={() => void setLanguage(item)}
+              className={`min-h-11 rounded-full px-3 text-sm font-semibold transition ${language === item ? 'bg-brass text-accent-ink' : 'text-ink-muted hover:text-ink'}`}
             >
               {item === 'en' ? 'English' : 'Tiếng Việt'}
             </button>
           ))}
         </div>
+        <button
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? t.themeToLight : t.themeToDark}
+          title={theme === 'dark' ? t.themeToLight : t.themeToDark}
+          className="icon-button min-w-11 px-3"
+        >
+          {theme === 'dark' ? (
+            <Sun className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <Moon className="h-4 w-4" aria-hidden="true" />
+          )}
+        </button>
       </div>
 
       <section className="panel space-y-4 p-6 sm:p-8">
         <p className="eyebrow">
           <span className="status-dot" />
-          {text.code} {orderCode ?? '—'}
+          {t.paymentOrderCode} {orderCode ?? '—'}
         </p>
         <h1 className="font-serif text-3xl text-ink">{headline}</h1>
         <p className="text-sm leading-relaxed text-ink-muted">{body}</p>
@@ -131,7 +120,7 @@ function PaymentResult() {
           </p>
         ) : null}
         <Link href={paid ? '/?paid=1' : '/'} className="button-primary mt-2 min-h-11 justify-center">
-          {text.back}
+          {t.paymentBack}
         </Link>
       </section>
     </main>

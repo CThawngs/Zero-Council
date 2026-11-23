@@ -3,7 +3,7 @@
 import { Suspense, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { AlertCircle, ArrowLeft, Globe2, RefreshCw } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Globe2, Moon, RefreshCw, Sun } from 'lucide-react';
 import { useApp } from '@/prototype/context/AppContext';
 
 function cleanParam(value: string | null | undefined): string | null {
@@ -36,7 +36,7 @@ function getHashServerSnapshot() {
 
 function AuthCodeErrorContent() {
   const searchParams = useSearchParams();
-  const { t, language, setLanguage } = useApp();
+  const { t, language, setLanguage, theme, toggleTheme } = useApp();
   const hash = useSyncExternalStore(subscribeToHash, getHashSnapshot, getHashServerSnapshot);
 
   // 1. Check hash fragment if present (#error=...&error_code=...&error_description=...)
@@ -68,7 +68,7 @@ function AuthCodeErrorContent() {
       <div className="panel w-full max-w-lg space-y-6 p-6 sm:p-8">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-terracotta/10 text-terracotta">
               <AlertCircle className="h-6 w-6" />
             </div>
             <div className="min-w-0 flex-1">
@@ -78,15 +78,26 @@ function AuthCodeErrorContent() {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={toggleLanguage}
-            className="language-toggle inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-ink-muted transition-colors hover:border-brass/60 hover:text-ink"
-            aria-label={language === 'en' ? t.switchToVietnamese : t.switchToEnglish}
-          >
-            <Globe2 className="h-3.5 w-3.5 text-brass" />
-            <span>{language === 'en' ? 'VI' : 'EN'}</span>
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={toggleLanguage}
+              className="language-toggle inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-xs font-medium text-ink-muted transition-colors hover:border-brass/60 hover:text-ink"
+              aria-label={language === 'en' ? t.switchToVietnamese : t.switchToEnglish}
+            >
+              <Globe2 className="h-3.5 w-3.5 text-brass" />
+              <span>{language === 'en' ? 'VI' : 'EN'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === 'dark' ? t.themeToLight : t.themeToDark}
+              title={theme === 'dark' ? t.themeToLight : t.themeToDark}
+              className="inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border border-border px-2 text-ink-muted transition-colors hover:border-brass/60 hover:text-ink"
+            >
+              {theme === 'dark' ? <Sun className="h-3.5 w-3.5" aria-hidden="true" /> : <Moon className="h-3.5 w-3.5" aria-hidden="true" />}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-3 rounded-lg border border-border/80 bg-surface/60 p-4 text-sm">
@@ -126,9 +137,10 @@ function AuthCodeErrorContent() {
 }
 
 function AuthCodeErrorFallback() {
+  const { t } = useApp();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background text-ink">
-      <p className="text-sm text-ink-muted">Loading...</p>
+      <p className="text-sm text-ink-muted">{t.authErrorLoading}</p>
     </div>
   );
 }

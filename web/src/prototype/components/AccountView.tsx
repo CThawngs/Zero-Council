@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
 import type { PLANS } from "../data/plans";
-import { Check, Globe2, RotateCcw } from "lucide-react";
+import { Check, Globe2, Moon, RotateCcw, Sun } from "lucide-react";
 import { Modal } from "./Modal";
 import { PlanGrid } from "./PlanGrid";
 
@@ -9,6 +9,8 @@ export default function AccountView() {
       const {
         language,
         setLanguage,
+        theme,
+        toggleTheme,
         cancelPlanToFree,
         requestCheckout,
         purgeSessions,
@@ -68,6 +70,45 @@ export default function AccountView() {
                     >
                     <span>Tiếng Việt</span>
                     {language === 'vi' && <Check className="h-4 w-4" />}
+                    </button>
+                </div>
+                </section>
+
+                <section className="panel p-5 sm:p-6" aria-labelledby="theme-title">
+                <div className="flex items-center gap-2">
+                    {theme === 'dark' ? (
+                        <Moon className="h-4 w-4 text-brass" aria-hidden="true" />
+                    ) : (
+                        <Sun className="h-4 w-4 text-brass" aria-hidden="true" />
+                    )}
+                    <h2 id="theme-title" className="panel-title">
+                    {t.wsThemeTitle}
+                    </h2>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label={t.wsThemeTitle}>
+                    <button
+                    type="button"
+                    onClick={() => { if (theme !== 'light') toggleTheme(); }}
+                    aria-pressed={theme === 'light'}
+                    className="setting-choice"
+                    >
+                    <span className="inline-flex items-center gap-2">
+                        <Sun className="h-4 w-4" aria-hidden="true" />
+                        {t.themeLightLabel}
+                    </span>
+                    {theme === 'light' && <Check className="h-4 w-4" />}
+                    </button>
+                    <button
+                    type="button"
+                    onClick={() => { if (theme !== 'dark') toggleTheme(); }}
+                    aria-pressed={theme === 'dark'}
+                    className="setting-choice"
+                    >
+                    <span className="inline-flex items-center gap-2">
+                        <Moon className="h-4 w-4" aria-hidden="true" />
+                        {t.themeDarkLabel}
+                    </span>
+                    {theme === 'dark' && <Check className="h-4 w-4" />}
                     </button>
                 </div>
                 </section>

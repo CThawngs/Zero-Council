@@ -3,10 +3,11 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import type { ViewType } from '../types';
-import { Globe2, Lock, Menu, Moon, Plus, Sun, Users, X } from 'lucide-react';
+import { Globe2, Menu, Moon, PanelRight, Sun, X } from 'lucide-react';
 import { CouncilOrb } from './CouncilOrb';
-import { MARKETING_NAV, WORKSPACE_NAV } from '../navigation';
+import { MARKETING_NAV } from '../navigation';
 import { MobileSidebar } from './MobileSidebar';
+import { useBotSettingsPanel } from './BotSettingsPanel';
 
 interface HeaderProps {
   isWorkspace: boolean;
@@ -22,9 +23,13 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
     t,
     authUser,
     signOut,
+    currentRoom,
+    currentView,
   } = useApp();
   const router = useRouter();
   const labels = translations[language];
+  const panel = useBotSettingsPanel();
+  const showPanelToggle = isWorkspace && currentView === 'chat-room' && Boolean(currentRoom);
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -111,12 +116,13 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
         <button
           type="button"
           onClick={() => navigate('overview')}
-          className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2 text-left sm:gap-2.5"
+          aria-label={labels.brand}
+          className="group flex min-h-11 min-w-0 shrink items-center gap-2 text-left sm:gap-2.5"
         >
           <span className="brand-mark">
             <CouncilOrb />
           </span>
-          <span className="block truncate text-lg font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass sm:text-xl">
+          <span className="hidden min-[360px]:block truncate text-lg font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass sm:text-xl">
             {labels.brand}
           </span>
         </button>
@@ -144,6 +150,24 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
 
         {/* MỤC PHẢI */}
         <div className="flex shrink-0 items-center gap-1.5">
+          {showPanelToggle && (
+            <button
+              type="button"
+              id="bot-settings-toggle"
+              onClick={() => {
+                setMenuOpen(false);
+                panel.toggle();
+              }}
+              aria-pressed={panel.visible}
+              aria-label={t.wsTogglePanel}
+              title={t.wsTogglePanel}
+              className={`icon-button min-w-11 px-2.5 sm:min-w-14 sm:px-3 ${
+                panel.visible ? 'border-brass text-ink' : ''
+              }`}
+            >
+              <PanelRight className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
           <button
             type="button"
             onClick={changeLanguage}
@@ -151,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             aria-label={`${
               language === 'en' ? t.switchToVietnamese : t.switchToEnglish
             } (${language})`}
-            title={language === 'en' ? 'Tiếng Việt' : 'English'}
+            title={language === 'en' ? t.switchToVietnamese : t.switchToEnglish}
           >
             <Globe2 className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden="true" />
             <span className="text-xs font-extrabold uppercase leading-none sm:text-sm">
@@ -207,7 +231,10 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             type="button"
             id="mobile-menu-toggle"
             className="icon-button header-menu min-w-11"
-            onClick={() => setMenuOpen((value) => !value)}
+            onClick={() => {
+              if (!panel.docked && panel.visible) panel.close();
+              setMenuOpen((value) => !value);
+            }}
             aria-expanded={menuOpen}
             aria-controls="mobile-navigation"
             aria-label={menuOpen ? t.close : t.menu}
