@@ -1,107 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ChevronDown, ChevronUp, Copy, Plus } from 'lucide-react';
+import React from 'react';
+import { ArrowLeft, Copy, Plus } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
 import { Avatar, AttachmentGlyph } from './ChatRoomView';
-
-type ClampLines = 2 | 3 | 4 | 5;
-
-const CLAMP_CLASS: Record<ClampLines, string> = {
-  2: 'line-clamp-2',
-  3: 'line-clamp-3',
-  4: 'line-clamp-4',
-  5: 'line-clamp-5',
-};
-
-interface ExpandableTextProps {
-  text: string;
-  maxLines?: ClampLines;
-  as?: 'p' | 'h1' | 'span';
-  className?: string;
-  showMoreLabel: string;
-  showLessLabel: string;
-}
-
-/**
- * Wraps long or unbroken lines cleanly and clamps overflow beyond `maxLines` behind an
- * expand/collapse toggle. Only shows the toggle when the rendered text actually overflows.
- */
-const ExpandableText: React.FC<ExpandableTextProps> = ({
-  text,
-  maxLines = 4,
-  as = 'p',
-  className = '',
-  showMoreLabel,
-  showLessLabel,
-}) => {
-  const [expanded, setExpanded] = useState(false);
-  const [isTruncated, setIsTruncated] = useState(false);
-  const textRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const el = textRef.current;
-    if (!el || expanded) return;
-
-    const measure = () => {
-      const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight) || 20;
-      setIsTruncated(el.scrollHeight - el.clientHeight > lineHeight * 0.4);
-    };
-
-    const frame = requestAnimationFrame(measure);
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
-  }, [text, expanded, maxLines]);
-
-  const sharedClassName = `whitespace-pre-wrap [overflow-wrap:anywhere] ${!expanded ? CLAMP_CLASS[maxLines] : ''} ${className}`.trim();
-  const assignRef = (node: HTMLElement | null) => {
-    textRef.current = node;
-  };
-
-  return (
-    <div className="min-w-0">
-      {as === 'h1' ? (
-        <h1 ref={assignRef} className={sharedClassName}>
-          {text}
-        </h1>
-      ) : as === 'span' ? (
-        <span ref={assignRef} className={sharedClassName}>
-          {text}
-        </span>
-      ) : (
-        <p ref={assignRef} className={sharedClassName}>
-          {text}
-        </p>
-      )}
-      {(isTruncated || expanded) && (
-        <button
-          type="button"
-          onClick={() => setExpanded((prev) => !prev)}
-          aria-expanded={expanded}
-          className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium text-brass hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass/60"
-        >
-          {expanded ? (
-            <>
-              {showLessLabel}
-              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-            </>
-          ) : (
-            <>
-              {showMoreLabel}
-              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-            </>
-          )}
-        </button>
-      )}
-    </div>
-  );
-};
+import { ExpandableText } from './ExpandableText';
 
 /**
  * What the council said, in one page, after the user ends the meeting.
