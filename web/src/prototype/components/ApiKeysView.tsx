@@ -397,15 +397,48 @@ export const ApiKeysView: React.FC = () => {
     apiKey: string;
     protocol?: ProviderProtocol;
     baseUrl?: string;
+    useStoredKey?: boolean;
   }) => {
     const candidate = customModelInput.trim();
     if (!candidate || customModelState.phase === 'testing' || customModelState.phase === 'saving') {
       return;
     }
-    const key = sanitizeApiKey(context.apiKey);
     const runId = ++customModelTestRun.current;
     setCustomModelState({ phase: 'testing' });
     try {
+      if (context.useStoredKey) {
+        const response = await fetch('/api/providers/test', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ providerId: context.provider, model: candidate }),
+        });
+        const payload = (await response.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: unknown;
+          resolvedBaseUrl?: unknown;
+        } | null;
+        if (runId !== customModelTestRun.current) return;
+        if (payload?.ok !== true) {
+          setCustomModelState({
+            phase: 'error',
+            message: typeof payload?.error === 'string' ? payload.error : 'PROVIDER_ERROR',
+          });
+          return;
+        }
+        setCustomModelState({
+          phase: 'verified',
+          modelId: candidate,
+          testedKey: '',
+          testedTarget: targetFingerprint(context.protocol, context.baseUrl),
+          saveBaseUrl:
+            typeof payload.resolvedBaseUrl === 'string'
+              ? payload.resolvedBaseUrl
+              : normalizeBaseUrl(context.baseUrl ?? ''),
+        });
+        return;
+      }
+      const key = sanitizeApiKey(context.apiKey);
       const result = await verifyProviderConnection(
         { provider: context.provider, protocol: context.protocol, baseUrl: context.baseUrl },
         key,
@@ -783,7 +816,19 @@ export const ApiKeysView: React.FC = () => {
                 </select>
               </label>
 
-              {!getProviderSecret(activeItem.provider) && (
+              {activeItem.hasKey && !getProviderSecret(activeItem.provider) ? (
+                <label className="field">
+                  <span className="field-label">{t.keyLabel}</span>
+                  <input
+                    id="provider-masked-key"
+                    type="text"
+                    value={activeItem.maskedKey ?? '••••'}
+                    disabled
+                    readOnly
+                    className="w-full cursor-not-allowed rounded-lg border border-border bg-surface-2/70 px-3 py-2.5 font-mono text-xs text-ink-muted opacity-80"
+                  />
+                </label>
+              ) : !getProviderSecret(activeItem.provider) ? (
                 <label className="field">
                   <span className="field-label">{t.keyLabel}</span>
                   <input
@@ -796,7 +841,7 @@ export const ApiKeysView: React.FC = () => {
                     className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
                   />
                 </label>
-              )}
+              ) : null}
 
               {/* Add Custom Model ID -> Test (Red/Green) -> Save */}
               <div className="rounded-xl border border-border bg-background/60 p-3.5 space-y-2.5">
@@ -842,11 +887,12 @@ export const ApiKeysView: React.FC = () => {
                           apiKey: activeSecret,
                           protocol: builtin?.protocol ?? activeItem.protocol,
                           baseUrl: activeEndpointUrl,
+                          useStoredKey: !activeSecret && Boolean(activeItem.hasKey),
                         })
                       }
                       disabled={
                         !customModelInput.trim() ||
-                        !activeSecret ||
+                        (!activeSecret && !activeItem.hasKey) ||
                         customModelState.phase === 'testing'
                       }
                       className={

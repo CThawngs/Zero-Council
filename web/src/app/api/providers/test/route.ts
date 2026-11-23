@@ -1,10 +1,10 @@
 /**
  * POST /api/providers/test
  *
- * Re-tests an ALREADY SAVED provider key (the "Re-test connection" button).
- * Client sends only `{ providerId }` — the server decrypts the stored key and runs the same strict
- * verification as `/api/providers/verify` (live 1-token inference probe) for all three protocols:
- * `openai`, `anthropic` and `google`.
+ * Re-tests an ALREADY SAVED provider key (the "Re-test connection" button or custom-model probe).
+ * Client sends `{ providerId, model? }` — the server decrypts the stored key and runs the same
+ * strict verification as `/api/providers/verify` for all three protocols: `openai`, `anthropic`
+ * and `google`.
  *
  * Response: { ok: true, models, verifiedModel } on success, { ok: false, error: <code> } on failure.
  */
@@ -21,6 +21,7 @@ import { listProviderKeys, providerStoreErrorOf } from '@/lib/store/providerKeys
 export const maxDuration = 60;
 
 const MAX_BODY_BYTES = 32 * 1024;
+const MAX_MODEL_ID_LENGTH = 200;
 
 export async function POST(request: Request) {
   const { user, denied } = await currentUserOnly();
@@ -38,11 +39,18 @@ export async function POST(request: Request) {
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.data;
 
-  const { providerId } = (body && typeof body === 'object' ? body : {}) as {
+  const { providerId, model } = (body && typeof body === 'object' ? body : {}) as {
     providerId?: unknown;
+    model?: unknown;
   };
   if (typeof providerId !== 'string' || !providerId.trim()) {
     return Response.json({ ok: false, error: 'PROVIDER_ID_REQUIRED' }, { status: 400 });
+  }
+  if (
+    model !== undefined &&
+    (typeof model !== 'string' || !model.trim() || model.trim().length > MAX_MODEL_ID_LENGTH)
+  ) {
+    return Response.json({ ok: false, error: 'INVALID_MODEL' }, { status: 400 });
   }
 
   // Look up metadata (protocol, baseUrl, model) without the key.
@@ -78,7 +86,8 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: 'KEY_NOT_FOUND' }, { status: 404 });
   }
 
-  const result = await verifyProviderKey(resolved.target, apiKey, { model: record.model });
+  const targetModel = typeof model === 'string' ? model.trim() : record.model;
+  const result = await verifyProviderKey(resolved.target, apiKey, { model: targetModel });
   if (!result.ok) {
     console.warn(`[providers/test] ${providerId} failed: ${result.error}`);
     return Response.json(result, { status: httpStatusForVerifyError(result.error) });

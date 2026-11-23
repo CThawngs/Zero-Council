@@ -101,9 +101,12 @@ export const pickConclusionAnalyst = (
     sampleQuote: '',
   };
 
+  const isUsable = (item: ApiKeyConfig) =>
+    item.connected && (Boolean(keys[item.provider]) || Boolean(item.hasKey));
+
   for (const persona of seated) {
     const directKey = apiKeys.find(
-      (item) => item.provider === persona.provider && item.connected && Boolean(keys[item.provider])
+      (item) => item.provider === persona.provider && isUsable(item)
     );
     if (directKey) {
       return {
@@ -115,7 +118,7 @@ export const pickConclusionAnalyst = (
     }
   }
 
-  const anyConnected = apiKeys.find((item) => item.connected && Boolean(keys[item.provider]));
+  const anyConnected = apiKeys.find(isUsable);
   return {
     analyst: fallbackAdvisor,
     keyMeta: anyConnected,
@@ -806,14 +809,14 @@ export const analyzeChatRoomConclusion = async (params: {
 
   let analysis = fallback;
 
-  if (keyMeta && apiKey) {
+  if (keyMeta && (apiKey || (keyMeta.hasKey && completeFn !== completeByokText))) {
     try {
       const { system, prompt } = buildConclusionPrompt(topic, transcript, analyst, language);
       const rawText = await completeFn(
         {
           provider: keyMeta.provider,
           model,
-          apiKey,
+          apiKey: apiKey ?? '',
           protocol: keyMeta.protocol,
           baseUrl: keyMeta.baseUrl,
         },

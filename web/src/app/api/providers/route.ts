@@ -6,6 +6,7 @@ import {
   sanitizeApiKey,
   verifyProviderKey,
 } from '@/lib/byok/verify';
+import { maskProviderKey } from '@/lib/crypto/providerKeys';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson } from '@/lib/security/request-guard';
 import { isValidProviderId } from '@/lib/store/botValidation';
@@ -43,11 +44,21 @@ const cleanModelList = (value: unknown): string[] =>
         .filter((m) => m.length > 0 && m.length <= MAX_MODEL_ID_LENGTH)
     : [];
 
+/**
+ * Lists connected providers for the signed-in user.
+ * Plaintext API keys are NEVER returned to the browser — only `hasKey: true` and a masked
+ * display tail (`••••abcd`) are exposed.
+ */
 export async function GET() {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
   try {
-    const providers = await listProviderKeysWithSecrets(user.email);
+    const rows = await listProviderKeysWithSecrets(user.email);
+    const providers = rows.map(({ key, ...record }) => ({
+      ...record,
+      hasKey: true,
+      maskedKey: maskProviderKey(key),
+    }));
     return Response.json({ providers });
   } catch (error) {
     return storeFailure('list', error, 'LIST_FAILED');
@@ -130,7 +141,14 @@ export async function POST(request: Request) {
       baseUrl: verification.resolvedBaseUrl ?? resolved.target.baseUrl,
     });
     return Response.json(
-      { provider: saved, ...(verification.warning ? { warning: verification.warning } : {}) },
+      {
+        provider: {
+          ...saved,
+          hasKey: true,
+          maskedKey: maskProviderKey(cleanKey),
+        },
+        ...(verification.warning ? { warning: verification.warning } : {}),
+      },
       { status: 201 }
     );
   } catch (error) {
@@ -205,7 +223,13 @@ export async function PATCH(request: Request) {
       protocol: current.protocol,
       baseUrl: current.baseUrl,
     });
-    return Response.json({ provider: saved });
+    return Response.json({
+      provider: {
+        ...saved,
+        hasKey: true,
+        maskedKey: maskProviderKey(current.key),
+      },
+    });
   } catch (error) {
     return storeFailure('patch', error, 'SAVE_FAILED');
   }

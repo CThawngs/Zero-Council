@@ -162,3 +162,10 @@ export const decryptProviderKey = (envelope: string): string => {
   }
   throw lastError instanceof Error ? lastError : new Error('DECRYPT_FAILED');
 };
+
+/** Masks a plaintext API key for safe browser display (never reveals the key or its prefix). */
+export const maskProviderKey = (plainKey: string): string => {
+  const trimmed = plainKey.trim();
+  if (trimmed.length <= 8) return '••••';
+  return `••••${trimmed.slice(-4)}`;
+};
