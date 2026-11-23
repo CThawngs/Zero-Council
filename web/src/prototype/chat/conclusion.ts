@@ -34,20 +34,64 @@ export const matchPersonaId = (persona: { id: string }, targetId: string): boole
  * Prefers an advisor in the room whose provider key is connected; falls back to the
  * first seated advisor using any connected provider key, or offline mode if none is connected.
  */
+const CONCLUSION_LOCALIZED = {
+  en: {
+    analystName: 'AI Analyst',
+    analystArchetype: 'Analyst',
+    userLabel: 'User',
+    analyzedBy: (name: string) => `Analyzed by ${name}`,
+    goodTitle: (fallback: string) => fallback,
+    normalTitle: (fallback: string) => fallback,
+    badTitle: (fallback: string) => fallback,
+    singleSummary: (speaker: string, topic: string, body: string) =>
+      `Synthesis from ${speaker} on "${topic}": ${body}`,
+    multiSummary: (count: number, topic: string, body: string) =>
+      `Synthesis of ${count} chat responses on "${topic}": ${body}`,
+    multiDissent: (speakers: string, body: string) =>
+      `Contrasting perspectives across ${speakers}: ${body}`,
+    goodDesc: (body: string) => `Favorable outcome based on the chat discussion: ${body}`,
+    normalDesc: (body: string) => `Baseline trajectory synthesized from the conversation: ${body}`,
+    badDesc: (body: string) => `Risks and downside considerations raised in the chat: ${body}`,
+  },
+  vi: {
+    analystName: 'Chuyên gia Phân tích AI',
+    analystArchetype: 'Phân tích',
+    userLabel: 'Người dùng',
+    analyzedBy: (name: string) => `Phân tích bởi ${name}`,
+    goodTitle: () => 'Hướng Tốt (Tích cực)',
+    normalTitle: () => 'Hướng Bình thường (Cơ sở)',
+    badTitle: () => 'Hướng Xấu (Rủi ro)',
+    singleSummary: (speaker: string, topic: string, body: string) =>
+      `Tổng hợp từ ${speaker} về "${topic}": ${body}`,
+    multiSummary: (count: number, topic: string, body: string) =>
+      `Tổng hợp ${count} câu trả lời trong đoạn chat về "${topic}": ${body}`,
+    multiDissent: (speakers: string, body: string) =>
+      `Các góc nhìn bổ sung trong đoạn chat giữa ${speakers}: ${body}`,
+    goodDesc: (body: string) =>
+      `Khi các điều kiện thuận lợi theo phân tích từ cuộc trò chuyện: ${body}`,
+    normalDesc: (body: string) =>
+      `Diễn biến thực tế ở mức cơ sở dựa trên các ý kiến trong phòng chat: ${body}`,
+    badDesc: (body: string) =>
+      `Các rủi ro và trở ngại cần phòng ngừa từ cuộc thảo luận: ${body}`,
+  },
+} as const;
+
 export const pickConclusionAnalyst = (
   seated: AdvisorPersona[],
   apiKeys: ApiKeyConfig[],
-  keys: Record<string, string>
+  keys: Record<string, string>,
+  language: Language = 'en'
 ): {
   analyst: AdvisorPersona;
   keyMeta: ApiKeyConfig | undefined;
   apiKey: string | undefined;
   model: string;
 } => {
+  const loc = CONCLUSION_LOCALIZED[language];
   const fallbackAdvisor: AdvisorPersona = seated[0] ?? {
     id: 'analyst',
-    name: 'AI Analyst',
-    archetype: 'Analyst',
+    name: loc.analystName,
+    archetype: loc.analystArchetype,
     model: 'gpt-4o-mini',
     provider: 'openai',
     colorToken: 'persona-sage',
@@ -91,7 +135,7 @@ export const extractChatTranscriptAndContributions = (
   advisorMessages: ChatMessage[];
   contributions: Contribution[];
 } => {
-  const userLabel = language === 'vi' ? 'Người dùng' : 'User';
+  const userLabel = CONCLUSION_LOCALIZED[language].userLabel;
   const speakerName = (authorId: string): string => {
     if (authorId === USER_HANDLE) return userLabel;
     const found =
@@ -145,7 +189,7 @@ export const extractChatTranscriptAndContributions = (
 };
 
 export const analystSubtitle = (analyst: AdvisorPersona, language: Language): string =>
-  language === 'vi' ? `Phân tích bởi ${analyst.name}` : `Analyzed by ${analyst.name}`;
+  CONCLUSION_LOCALIZED[language].analyzedBy(analyst.name);
 
 export const buildFallbackConclusion = (
   topic: string,
@@ -155,6 +199,7 @@ export const buildFallbackConclusion = (
   language: Language
 ): ConclusionAnalysis => {
   const t = copy[language];
+  const loc = CONCLUSION_LOCALIZED[language];
   const { advisorMessages } = extractChatTranscriptAndContributions(
     messages,
     seated,
@@ -173,19 +218,19 @@ export const buildFallbackConclusion = (
       },
       scenarios: {
         good: {
-          title: language === 'vi' ? 'Hướng Tốt (Tích cực)' : t.favorableTitle,
+          title: loc.goodTitle(t.favorableTitle),
           subtitle,
           description: t.favorableDescription,
           actions: [t.favorableActionOne, t.favorableActionTwo],
         },
         normal: {
-          title: language === 'vi' ? 'Hướng Bình thường (Cơ sở)' : t.baselineTitle,
+          title: loc.normalTitle(t.baselineTitle),
           subtitle,
           description: t.baselineDescription,
           actions: [t.baselineActionOne, t.baselineActionTwo],
         },
         bad: {
-          title: language === 'vi' ? 'Hướng Xấu (Rủi ro)' : t.difficultTitle,
+          title: loc.badTitle(t.difficultTitle),
           subtitle,
           description: t.difficultDescription,
           actions: [t.difficultActionOne, t.difficultActionTwo],
@@ -206,63 +251,17 @@ export const buildFallbackConclusion = (
   const clip = (text: string, max = 280) =>
     text.length > max ? `${text.slice(0, max - 1).trim()}…` : text;
 
-  if (language === 'vi') {
-    const summaryText =
-      advisorMessages.length === 1
-        ? `Tổng hợp từ ${speakerOf(advisorMessages[0].authorId)} về "${topic}": ${clip(firstAnswer, 320)}`
-        : `Tổng hợp ${advisorMessages.length} câu trả lời trong đoạn chat về "${topic}": ${clip(
-            points.slice(0, 3).join(' | '),
-            380
-          )}`;
-    const dissentText =
-      advisorMessages.length > 1
-        ? `Các góc nhìn bổ sung trong đoạn chat giữa ${Array.from(
-            new Set(advisorMessages.map((m) => speakerOf(m.authorId)))
-          ).join(', ')}: ${clip(lastAnswer, 240)}`
-        : t.chairDissent;
-
-    return {
-      analyst,
-      chair: {
-        summary: summaryText,
-        dissent: dissentText,
-        recommendation: t.chairRecommendation,
-      },
-      scenarios: {
-        good: {
-          title: 'Hướng Tốt (Tích cực)',
-          subtitle,
-          description: `Khi các điều kiện thuận lợi theo phân tích từ cuộc trò chuyện: ${clip(firstAnswer, 240)}`,
-          actions: [t.favorableActionOne, t.favorableActionTwo],
-        },
-        normal: {
-          title: 'Hướng Bình thường (Cơ sở)',
-          subtitle,
-          description: `Diễn biến thực tế ở mức cơ sở dựa trên các ý kiến trong phòng chat: ${clip(middleAnswer, 240)}`,
-          actions: [t.baselineActionOne, t.baselineActionTwo],
-        },
-        bad: {
-          title: 'Hướng Xấu (Rủi ro)',
-          subtitle,
-          description: `Các rủi ro và trở ngại cần phòng ngừa từ cuộc thảo luận: ${clip(lastAnswer, 240)}`,
-          actions: [t.difficultActionOne, t.difficultActionTwo],
-        },
-      },
-    };
-  }
-
   const summaryText =
     advisorMessages.length === 1
-      ? `Synthesis from ${speakerOf(advisorMessages[0].authorId)} on "${topic}": ${clip(firstAnswer, 320)}`
-      : `Synthesis of ${advisorMessages.length} chat responses on "${topic}": ${clip(
-          points.slice(0, 3).join(' | '),
-          380
-        )}`;
+      ? loc.singleSummary(speakerOf(advisorMessages[0].authorId), topic, clip(firstAnswer, 320))
+      : loc.multiSummary(advisorMessages.length, topic, clip(points.slice(0, 3).join(' | '), 380));
+
   const dissentText =
     advisorMessages.length > 1
-      ? `Contrasting perspectives across ${Array.from(
-          new Set(advisorMessages.map((m) => speakerOf(m.authorId)))
-        ).join(', ')}: ${clip(lastAnswer, 240)}`
+      ? loc.multiDissent(
+          Array.from(new Set(advisorMessages.map((m) => speakerOf(m.authorId)))).join(', '),
+          clip(lastAnswer, 240)
+        )
       : t.chairDissent;
 
   return {
@@ -274,21 +273,21 @@ export const buildFallbackConclusion = (
     },
     scenarios: {
       good: {
-        title: t.favorableTitle,
+        title: loc.goodTitle(t.favorableTitle),
         subtitle,
-        description: `Favorable outcome based on the chat discussion: ${clip(firstAnswer, 240)}`,
+        description: loc.goodDesc(clip(firstAnswer, 240)),
         actions: [t.favorableActionOne, t.favorableActionTwo],
       },
       normal: {
-        title: t.baselineTitle,
+        title: loc.normalTitle(t.baselineTitle),
         subtitle,
-        description: `Baseline trajectory synthesized from the conversation: ${clip(middleAnswer, 240)}`,
+        description: loc.normalDesc(clip(middleAnswer, 240)),
         actions: [t.baselineActionOne, t.baselineActionTwo],
       },
       bad: {
-        title: t.difficultTitle,
+        title: loc.badTitle(t.difficultTitle),
         subtitle,
-        description: `Risks and downside considerations raised in the chat: ${clip(lastAnswer, 240)}`,
+        description: loc.badDesc(clip(lastAnswer, 240)),
         actions: [t.difficultActionOne, t.difficultActionTwo],
       },
     },
@@ -796,7 +795,7 @@ export const analyzeChatRoomConclusion = async (params: {
     completeFn = completeByokText,
   } = params;
 
-  const { analyst, keyMeta, apiKey, model } = pickConclusionAnalyst(seated, apiKeys, keys);
+  const { analyst, keyMeta, apiKey, model } = pickConclusionAnalyst(seated, apiKeys, keys, language);
   const { transcript, contributions } = extractChatTranscriptAndContributions(
     messages,
     seated,
