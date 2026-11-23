@@ -69,8 +69,8 @@ export const translations = {
 
 export const copy = {
   en: {
-    documentTitle: 'Zero Council — Multi-Agent BYOK AI Decision Council & Group Chat',
-    documentDescription: 'Convene 2–8 AI advisors and custom bots in one group chat room with your own API keys. Run structured Scenario, Six Thinking Hats, and Decision Matrix frameworks.',
+    documentTitle: 'Zero Council — Multi-Model AI Decision Council (BYOK)',
+    documentDescription: 'Convene 2–8 AI advisors across distinct models with Decision Matrix, Six Thinking Hats & Scenario Paths. AES-256 encrypted BYOK. Start free.',
     localBadge: 'Private by default',
     boundaryShort: 'Your conversations are encrypted and visible only to you.',
     menu: 'Menu',
@@ -375,8 +375,8 @@ export const copy = {
     authShowcaseFeature3Body: 'Every recommendation branches into the scenarios behind it, not just a verdict.',
 
     heroModelsActive: '4 Models Active',
-    heroModelsList: 'Sonnet · 4o · Mini',
-    heroFrameworkBadge: 'Consensus Matrix',
+    heroModelsList: 'Claude · GPT · Gemini · DeepSeek',
+    heroFrameworkBadge: 'Decision Matrix',
     heroFrameworkPrivacy: '100% Private',
     badgeStep1: 'Step 01',
     badgeStep2: 'Step 02',
@@ -1343,8 +1343,8 @@ export const copy = {
     faq6A: 'Zero Council starts with a Free plan (0 VND/month for up to 2 active bots/advisors), Pro at 139,000 VND/month (up to 4), and Ultra at 379,000 VND/month (up to 8). Subscriptions are billed in Vietnamese Đồng (VND) via PayOS, while model token usage stays on your own API keys.',
   },
   vi: {
-    documentTitle: 'Zero Council — Hội đồng AI đa tác nhân & Chat nhóm BYOK',
-    documentDescription: 'Triệu tập 2–8 cố vấn và bot AI tùy chỉnh trong cùng một phòng chat với khóa API riêng. Phân tích quyết định theo Kịch bản, 6 Chiếc mũ tư duy và Ma trận trọng số.',
+    documentTitle: 'Zero Council — Hội đồng cố vấn AI đa mô hình (BYOK)',
+    documentDescription: 'Triệu tập 2–8 cố vấn AI đa mô hình phân tích bằng Ma trận quyết định, 6 Chiếc Mũ & Nhánh kịch bản. Dùng API key riêng mã hóa AES-256. Bắt đầu miễn phí.',
     localBadge: 'Riêng tư mặc định',
     boundaryShort: 'Các cuộc hội thoại của bạn được mã hoá và chỉ bạn mới đọc được.',
     menu: 'Trình đơn',
@@ -1382,7 +1382,7 @@ export const copy = {
     frameworkTitle: 'Ba cách để suy nghĩ một quyết định',
     frameworkBody: 'Chọn cấu trúc hợp với quyết định. Mỗi khung áp dụng cách phân tích riêng.',
     framework1Title: 'Nhánh kịch bản',
-    framework1Body: 'Dự bảo các kết quả thuận lợi, trung tính và khó khăn trước khi bạn chốt.',
+    framework1Body: 'Dự báo các kết quả thuận lợi, trung tính và khó khăn trước khi bạn chốt.',
     framework2Title: 'Sáu chiếc mũ tư duy',
     framework2Body: 'Lần lượt đưa quyết định qua sự thật, cảm xúc, rủi ro và lợi ích.',
     framework3Title: 'Ma trận quyết định',
@@ -1632,8 +1632,8 @@ export const copy = {
     /* Hero decorative cards and section badges. These were hardcoded English and are the most
        visible untranslated strings on the landing page. */
     heroModelsActive: '4 mô hình đang chạy',
-    heroModelsList: 'Sonnet · 4o · Mini',
-    heroFrameworkBadge: 'Ma trận đồng thuận',
+    heroModelsList: 'Claude · GPT · Gemini · DeepSeek',
+    heroFrameworkBadge: 'Ma trận quyết định',
     heroFrameworkPrivacy: '100% riêng tư',
     badgeStep1: 'Bước 01',
     badgeStep2: 'Bước 02',

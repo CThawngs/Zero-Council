@@ -286,3 +286,22 @@ test('unused boilerplate public SVGs are removed and brand icon.svg exists', () 
   const iconContent = fs.readFileSync(iconSvgPath, 'utf8');
   assert.match(iconContent, /<svg[^>]*viewBox="0 0 64 64"/);
 });
+
+test('SERP CTR metadata and hero card copy match Growth audit in EN & VI', () => {
+  assert.equal(copy.en.documentTitle, 'Zero Council — Multi-Model AI Decision Council (BYOK)');
+  assert.equal(
+    copy.en.documentDescription,
+    'Convene 2–8 AI advisors across distinct models with Decision Matrix, Six Thinking Hats & Scenario Paths. AES-256 encrypted BYOK. Start free.'
+  );
+  assert.equal(copy.vi.documentTitle, 'Zero Council — Hội đồng cố vấn AI đa mô hình (BYOK)');
+  assert.equal(
+    copy.vi.documentDescription,
+    'Triệu tập 2–8 cố vấn AI đa mô hình phân tích bằng Ma trận quyết định, 6 Chiếc Mũ & Nhánh kịch bản. Dùng API key riêng mã hóa AES-256. Bắt đầu miễn phí.'
+  );
+  assert.ok(copy.vi.framework1Body.startsWith('Dự báo các kết quả'));
+  assert.ok(!copy.vi.framework1Body.includes('Dự bảo'));
+  assert.equal(copy.en.heroModelsList, 'Claude · GPT · Gemini · DeepSeek');
+  assert.equal(copy.vi.heroModelsList, 'Claude · GPT · Gemini · DeepSeek');
+  assert.equal(copy.en.heroFrameworkBadge, 'Decision Matrix');
+  assert.equal(copy.vi.heroFrameworkBadge, 'Ma trận quyết định');
+});

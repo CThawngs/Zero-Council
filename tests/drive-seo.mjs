@@ -84,7 +84,9 @@ async function rawGet(relPath) {
   const htmlVi = await resVi.text();
   check('GET /?lang=vi returns 200', resVi.status === 200, `status=${resVi.status}`);
   check('GET /?lang=vi renders <html lang="vi">', /<html[^>]*lang="vi"/i.test(htmlVi));
-  check('GET /?lang=vi renders Vietnamese <title>', htmlVi.includes('Hội đồng AI đa tác nhân'));
+  check('GET /?lang=vi renders Vietnamese <title>', htmlVi.includes('Zero Council — Hội đồng cố vấn AI đa mô hình (BYOK)'));
+  check('GET / renders upgraded EN SERP <title>', htmlEn.includes('Zero Council — Multi-Model AI Decision Council (BYOK)'));
+  check('GET / renders aligned hero models list', htmlEn.includes('Claude · GPT · Gemini · DeepSeek'));
   check('GET /?lang=vi renders og:locale vi_VN', htmlVi.includes('vi_VN'));
 }
 
