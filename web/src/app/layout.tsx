@@ -1,15 +1,25 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
+import { cookies, headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { THEME_BOOTSTRAP_SCRIPT } from '@/prototype/theme';
 import './globals.css';
-
-import { cookies } from 'next/headers';
 import { AppProvider } from '@/prototype/context/AppContext';
 import { createClient } from '@/lib/supabase/server';
 import { hasPasswordClaim } from '@/lib/auth-password';
 import { devLoginEmail, isSupabaseServerConfigured } from '@/lib/devAuth';
-import { redirect } from 'next/navigation';
+import { canAccessWithoutPasswordClaim } from '@/lib/supabase/proxy';
+import { SITE_NAME, getSiteUrl, resolveRequestLanguage } from '@/lib/seo';
 import { cookieLanguage } from '@/prototype/types';
 import { copy } from '@/prototype/i18n';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0c0c12' },
+  ],
+};
 
 export default async function RootLayout({
   children,
@@ -17,7 +27,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const language = cookieStore.get(cookieLanguage)?.value === 'vi' ? 'vi' : 'en';
+  const headerStore = await headers();
+  const pathname = headerStore.get('x-zc-pathname') ?? '';
+  const language = resolveRequestLanguage(null, cookieStore.get(cookieLanguage)?.value);
 
   let initialAuthUser: { id: string; email: string } | undefined;
   const devEmail = devLoginEmail();
@@ -31,7 +43,7 @@ export default async function RootLayout({
         data: { user },
       } = await supabase.auth.getUser();
       if (user?.email) {
-        if (!hasPasswordClaim(user)) {
+        if (!hasPasswordClaim(user) && !canAccessWithoutPasswordClaim(pathname)) {
           redirect('/auth');
         }
         initialAuthUser = { id: user.id, email: user.email.trim().toLowerCase() };
@@ -78,10 +90,42 @@ export default async function RootLayout({
 
 export async function generateMetadata(): Promise<Metadata> {
   const cookieStore = await cookies();
-  const language = cookieStore.get(cookieLanguage)?.value === 'vi' ? 'vi' : 'en';
+  const language = resolveRequestLanguage(null, cookieStore.get(cookieLanguage)?.value);
+  const title = copy[language].documentTitle;
+  const description = copy[language].documentDescription;
+  const locale = language === 'vi' ? 'vi_VN' : 'en_US';
+
   return {
-    title: copy[language].documentTitle,
-    description: copy[language].documentDescription,
+    metadataBase: new URL(getSiteUrl()),
+    applicationName: SITE_NAME,
+    title,
+    description,
+    manifest: '/manifest.webmanifest',
+    icons: {
+      icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+      apple: [{ url: '/apple-icon', sizes: '180x180', type: 'image/png' }],
+    },
+    openGraph: {
+      type: 'website',
+      siteName: SITE_NAME,
+      locale,
+      title,
+      description,
+      images: [
+        {
+          url: '/opengraph-image',
+          width: 1200,
+          height: 630,
+          alt: `${SITE_NAME} — Multi-Agent BYOK AI Workspace`,
+        },
+      ],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: ['/twitter-image'],
+    },
     other: { google: 'notranslate' },
   };
 }

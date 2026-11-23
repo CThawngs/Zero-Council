@@ -2,27 +2,63 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { hasPasswordClaim } from '@/lib/auth-password';
 import { devLoginEmail, isSupabaseServerConfigured } from '@/lib/devAuth';
+import {
+  canAccessWithoutPasswordClaim,
+  isPublicPath,
+  isValidLegalPath,
+  resolveRequestLanguage,
+} from '@/lib/seo';
+
+export { canAccessWithoutPasswordClaim, isPublicPath };
 
 export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (pathname === '/legal' || (pathname.startsWith('/legal/') && !isValidLegalPath(pathname))) {
+    return new NextResponse('Not Found', {
+      status: 404,
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Robots-Tag': 'noindex, nofollow',
+      },
+    });
+  }
   const isPageRequest = !pathname.startsWith('/api/');
-  const isPublicPath =
-    pathname === '/' ||
-    pathname.startsWith('/login') ||
-    pathname.startsWith('/auth') ||
-    pathname.startsWith('/checkout');
+  const publicRoute = isPublicPath(pathname);
+
+  const rawLang = request.nextUrl.searchParams.get('lang');
+  const hasExplicitLang =
+    typeof rawLang === 'string' &&
+    (rawLang.trim().toLowerCase() === 'vi' || rawLang.trim().toLowerCase() === 'en');
+  const queryLang = hasExplicitLang ? resolveRequestLanguage(rawLang, null) : null;
+
+  if (queryLang) {
+    request.cookies.set('zc-lang', queryLang);
+  }
+  request.headers.set('x-zc-pathname', pathname);
+
+  const attachLangCookie = (res: NextResponse) => {
+    if (queryLang) {
+      res.cookies.set('zc-lang', queryLang, {
+        path: '/',
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: 'lax',
+      });
+    }
+    return res;
+  };
 
   if (devLoginEmail()) {
-    return NextResponse.next({ request });
+    return attachLangCookie(NextResponse.next({ request }));
   }
 
   if (!isSupabaseServerConfigured()) {
-    if (isPageRequest && !isPublicPath) {
+    if (isPageRequest && !publicRoute) {
       const url = request.nextUrl.clone();
       url.pathname = '/auth';
       return NextResponse.redirect(url);
     }
-    return NextResponse.next({ request });
+    return attachLangCookie(NextResponse.next({ request }));
   }
 
   let supabaseResponse = NextResponse.next({
@@ -56,7 +92,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (isPageRequest && !user && !isPublicPath) {
+  if (isPageRequest && !user && !publicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth';
     return NextResponse.redirect(url);
@@ -64,10 +100,10 @@ export async function updateSession(request: NextRequest) {
 
   if (user) {
     const hasPassword = hasPasswordClaim(user as { user_metadata?: Record<string, unknown> });
-    if (!hasPassword && pathname !== '/auth') {
+    if (!hasPassword && !canAccessWithoutPasswordClaim(pathname)) {
       return NextResponse.redirect(new URL('/auth', request.url));
     }
   }
 
-  return supabaseResponse;
+  return attachLangCookie(supabaseResponse);
 }

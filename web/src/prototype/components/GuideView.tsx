@@ -1,18 +1,42 @@
-import React from 'react';
+'use client';
+
+import React, { useEffect } from 'react';
+import Link from 'next/link';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { GUIDE } from '../data/guide';
+import { Header } from './Header';
+import { Footer } from './Footer';
+import { Toast } from './Toast';
+import { AnalyticsLoader, CookieNotice } from './CookieNotice';
 
-export const GuideView: React.FC = () => {
+interface GuideViewProps {
+  standalone?: boolean;
+}
+
+export const GuideView: React.FC<GuideViewProps> = ({ standalone = false }) => {
   const { setCurrentView, language, t } = useApp();
   const sections = GUIDE[language];
+
+  useEffect(() => {
+    if (!standalone) return;
+    const applyMeta = () => {
+      document.title = `${t.guideTitle} — Zero Council`;
+      document
+        .querySelector('meta[name="description"]')
+        ?.setAttribute('content', t.guideIntro);
+    };
+    applyMeta();
+    const timer = window.setTimeout(applyMeta, 0);
+    return () => window.clearTimeout(timer);
+  }, [standalone, language, t.guideTitle, t.guideIntro]);
 
   const back = () => {
     setCurrentView('empty-chamber');
     window.scrollTo(0, 0);
   };
 
-  return (
+  const content = (
     <div className="mx-auto w-full max-w-3xl space-y-8 py-4 sm:py-8">
       <header>
         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
@@ -47,11 +71,59 @@ export const GuideView: React.FC = () => {
       ))}
 
       <div className="flex justify-end">
-        <button type="button" onClick={back} className="button-primary min-h-11 w-full justify-center sm:w-auto">
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
-          {t.guideBack}
-        </button>
+        {standalone ? (
+          <Link
+            href="/"
+            onClick={() => {
+              try {
+                sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+              } catch {}
+            }}
+            className="button-primary min-h-11 w-full justify-center sm:w-auto"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {t.back}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={back}
+            className="button-primary min-h-11 w-full justify-center sm:w-auto"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            {t.guideBack}
+          </button>
+        )}
       </div>
+    </div>
+  );
+
+  if (!standalone) {
+    return content;
+  }
+
+  return (
+    <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
+      <a href="#main-content" className="skip-link">
+        {t.skipToContent}
+      </a>
+      <Header isWorkspace={false} />
+      <div className="flex min-h-screen flex-1 pt-[76px]">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9"
+        >
+          {content}
+        </main>
+      </div>
+      <Footer />
+      <Toast />
+      <CookieNotice />
+      <AnalyticsLoader />
+      <span className="sr-only" aria-live="polite">
+        {t.localBadge}
+      </span>
     </div>
   );
 };

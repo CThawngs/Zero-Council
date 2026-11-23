@@ -1,8 +1,11 @@
+'use client';
+
 import React from 'react';
+import Link from 'next/link';
 import { useApp } from '../context/AppContext';
 import { translations } from '../i18n';
 import { CouncilOrb } from './CouncilOrb';
-import { LEGAL_DOCUMENTS, legalViewOf } from '../types';
+import { LEGAL_DOCUMENTS } from '../types';
 
 export const Footer: React.FC = () => {
   const { setCurrentView, language, t } = useApp();
@@ -27,16 +30,28 @@ export const Footer: React.FC = () => {
             <p className="mt-2.5 leading-relaxed">{labels.tagline}</p>
           </div>
 
-          {/* Grouped so the reader can tell a product destination from a legal one. A flat row of
-              seven identical links reads as noise and hides the terms that matter. */}
           <nav className="grid gap-6 sm:grid-cols-2 md:gap-10" aria-label={t.footerNavigation}>
             <div>
               <p className="nav-group-label px-0 pt-0">{t.footerProduct}</p>
               <ul className="grid gap-0.5">
                 <li>
-                  <button type="button" onClick={() => go('overview')} className="footer-link">
+                  <Link
+                    href="/"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+                      } catch {}
+                      setCurrentView('overview');
+                    }}
+                    className="footer-link inline-flex items-center"
+                  >
                     {t.footerOverview}
-                  </button>
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/guide" className="footer-link inline-flex items-center">
+                    {t.navGuide}
+                  </Link>
                 </li>
                 <li>
                   <button type="button" onClick={() => go('empty-chamber')} className="footer-link">
@@ -56,13 +71,12 @@ export const Footer: React.FC = () => {
               <ul className="grid gap-0.5">
                 {LEGAL_DOCUMENTS.map((document) => (
                   <li key={document}>
-                    <button
-                      type="button"
-                      onClick={() => go(legalViewOf(document))}
-                      className="footer-link"
+                    <Link
+                      href={`/legal/${document}`}
+                      className="footer-link inline-flex items-center"
                     >
                       {t.legal[document].title}
-                    </button>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -70,8 +84,6 @@ export const Footer: React.FC = () => {
           </nav>
         </div>
 
-        {/* The disclaimer is not decoration: it is the one sentence that tells a reader the
-            output is not professional advice, and burying it makes the whole site misleading. */}
         <p className="max-w-3xl leading-relaxed">{t.footerDisclaimer}</p>
 
         <p className="border-t border-border/70 pt-4">© 2026 {labels.brand}.</p>
