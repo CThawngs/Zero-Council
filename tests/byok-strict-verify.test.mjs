@@ -125,7 +125,7 @@ test('NVIDIA NIM garbage key: public 200 /models + 401/403 on inference -> INVAL
     const probe = calls.find((c) => c.method === 'POST');
     assert.equal(probe.url, 'https://integrate.api.nvidia.com/v1/chat/completions');
     assert.equal(probe.body.model, 'nvidia/nemotron-3.5-super-vl-120b-a12b');
-    assert.equal(probe.body.max_tokens, 1, 'probe must be a minimal 1-token call');
+    assert.equal(probe.body.max_tokens, 16, 'probe must be a minimal 16-token call');
   }
 });
 
@@ -281,7 +281,7 @@ test('failure results never carry provider text (which may echo part of the key)
 
 // ── Valid keys pass both model fetch and live probe ──────────────────────────────────────────
 
-test('valid OpenAI key: /models + 1-token probe (max_completion_tokens) -> verified', async () => {
+test('valid OpenAI key: /models + 16-token probe (max_completion_tokens) -> verified', async () => {
   const { impl, calls } = router([
     [endsWith('/models', 'GET'), json(200, { data: [{ id: 'gpt-4o' }, { id: 'text-embedding-3-small' }, { id: 'gpt-4o-mini' }] })],
     [endsWith('/chat/completions', 'POST'), json(200, { choices: [{ message: { content: 'p' }, finish_reason: 'length' }] })],
@@ -293,11 +293,11 @@ test('valid OpenAI key: /models + 1-token probe (max_completion_tokens) -> verif
     models: ['gpt-4o', 'gpt-4o-mini', 'text-embedding-3-small'],
   });
   const probe = calls.find((c) => c.method === 'POST');
-  assert.equal(probe.body.max_completion_tokens, 1);
+  assert.equal(probe.body.max_completion_tokens, 16);
   assert.equal(probe.body.max_tokens, undefined);
 });
 
-test('valid Anthropic key: x-api-key + anthropic-version, max_tokens 1 -> verified', async () => {
+test('valid Anthropic key: x-api-key + anthropic-version, max_tokens 16 -> verified', async () => {
   const { impl, calls } = router([
     [endsWith('/models', 'GET'), json(200, { data: [{ id: 'claude-sonnet-4-5', type: 'model' }] })],
     [endsWith('/messages', 'POST'), json(200, { type: 'message', content: [{ type: 'text', text: 'p' }] })],
@@ -308,10 +308,10 @@ test('valid Anthropic key: x-api-key + anthropic-version, max_tokens 1 -> verifi
   const probe = calls.find((c) => c.method === 'POST');
   assert.equal(probe.headers['x-api-key'], 'sk-ant-api03-validlooking');
   assert.equal(probe.headers['anthropic-version'], '2023-06-01');
-  assert.equal(probe.body.max_tokens, 1);
+  assert.equal(probe.body.max_tokens, 16);
 });
 
-test('valid Google key: generateContent with maxOutputTokens 1 -> verified', async () => {
+test('valid Google key: generateContent with maxOutputTokens 16 -> verified', async () => {
   const { impl, calls } = router([
     [
       endsWith('/models', 'GET'),
@@ -328,7 +328,7 @@ test('valid Google key: generateContent with maxOutputTokens 1 -> verified', asy
   assert.deepEqual(result, { ok: true, verifiedModel: 'gemini-2.5-flash', models: ['gemini-2.5-flash'] });
   const probe = calls.find((c) => c.method === 'POST');
   assert.equal(probe.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
-  assert.equal(probe.body.generationConfig.maxOutputTokens, 1);
+  assert.equal(probe.body.generationConfig.maxOutputTokens, 16);
 });
 
 test('valid OpenRouter key: /auth/key 200 + probe -> verified; free model tried when credits run out', async () => {
@@ -370,7 +370,7 @@ test('custom Base URL that is a website (HTML 404 on /models) and no model -> IN
   const { impl, calls } = router([[endsWith('/models', 'GET'), html(404)]]);
   const target = verifyTargetFor({ provider: 'custom:openai:site', protocol: 'openai', baseUrl: 'https://example.com' });
   assert.deepEqual(await verifyProviderKey(target, GARBAGE_KEY, { fetchImpl: impl }), { ok: false, error: 'INVALID_BASE_URL' });
-  assert.equal(calls.length, 1, 'no inference call is sent to a website');
+  assert.equal(calls.filter((c) => c.method === 'POST').length, 0, 'no inference call is sent to a website');
 });
 
 test('NVIDIA quirks: EOL model (410) and non-chat model (plain-text 404) are skipped, garbage key still -> INVALID_KEY', async () => {
@@ -472,7 +472,7 @@ test('token-parameter 400 is retried with the other field and passes on the retr
   assert.equal(result.ok, true);
   const probes = calls.filter((c) => c.method === 'POST');
   assert.equal(probes.length, 2);
-  assert.equal(probes[1].body.max_completion_tokens, 4);
+  assert.equal(probes[1].body.max_completion_tokens, 16);
 });
 
 test('a persistent token-parameter 400 passes ONLY when auth was proven elsewhere', async () => {
@@ -495,14 +495,23 @@ test('a persistent token-parameter 400 passes ONLY when auth was proven elsewher
   assert.deepEqual(nvidia, { ok: false, error: 'PROVIDER_ERROR' }, 'public /models proves nothing');
 });
 
-test('429 -> RATE_LIMITED, network error -> NETWORK_FAILED, timeout -> TIMEOUT (never verified)', async () => {
+test('429 without proven auth -> RATE_LIMITED, network error -> NETWORK_FAILED, timeout -> TIMEOUT (never verified)', async () => {
   const limited = router([
+    [endsWith('/models', 'GET'), publicModelList],
+    [endsWith('/chat/completions', 'POST'), json(429, { error: { message: 'Rate limit reached' } })],
+  ]);
+  assert.deepEqual(
+    await verifyProviderKey(verifyTargetFor('nvidia'), GARBAGE_KEY, { fetchImpl: limited.impl }),
+    { ok: false, error: 'RATE_LIMITED' }
+  );
+  // OpenAI's /models is authenticated, so the same 429 there means "valid key, busy right now".
+  const provenLimited = router([
     [endsWith('/models', 'GET'), json(200, { data: [{ id: 'gpt-4o' }] })],
     [endsWith('/chat/completions', 'POST'), json(429, { error: { message: 'Rate limit reached' } })],
   ]);
   assert.deepEqual(
-    await verifyProviderKey(verifyTargetFor('openai'), 'sk-proj-validlookingkey123', { fetchImpl: limited.impl }),
-    { ok: false, error: 'RATE_LIMITED' }
+    await verifyProviderKey(verifyTargetFor('openai'), 'sk-proj-validlookingkey123', { fetchImpl: provenLimited.impl }),
+    { ok: true, models: ['gpt-4o'], verifiedModel: 'gpt-4o', warning: 'RATE_LIMITED' }
   );
   const offline = async () => {
     throw new TypeError('fetch failed');
