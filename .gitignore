@@ -12,3 +12,14 @@ evidence/
 .zc-*.json
 .zc-tmp/
 node_modules/
+# Scratch artifacts - never commit
+# Windows reserved device name created by accidental `> nul` redirects in non-cmd shells
+nul
+**/nul
+commit-msg*.txt
+*.log
+.zc*-out.txt
+
+# Verify-driver output (screenshots + JSON traces). Directory is kept for the drivers.
+.agent/evidence/*
+!.agent/evidence/.gitkeep
