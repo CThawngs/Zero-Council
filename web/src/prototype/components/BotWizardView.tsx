@@ -16,7 +16,6 @@ export const BotWizardView: React.FC = () => {
     createBot,
     openBotChat,
     setCurrentView,
-    language,
     t,
   } = useApp();
   const [step, setStep] = useState(1);
@@ -87,13 +86,13 @@ export const BotWizardView: React.FC = () => {
           </p>
           <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-ink-muted">
             <span className="font-semibold text-ink">
-              {language === 'vi' ? `Bot thứ ${nextBotNumber}` : `Bot #${nextBotNumber}`}
+              {t.botWizardNumber.replace('{n}', String(nextBotNumber))}
             </span>
             <span aria-hidden="true">·</span>
             <span>
-              {language === 'vi'
-                ? `Còn lại ${remainingBots}/${botCap}`
-                : `${remainingBots}/${botCap} left`}
+              {t.botWizardRemaining
+                .replace('{remaining}', String(remainingBots))
+                .replace('{cap}', String(botCap))}
             </span>
           </span>
         </div>

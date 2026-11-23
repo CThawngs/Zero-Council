@@ -9,6 +9,7 @@ import { hasPasswordClaim } from '@/lib/auth-password';
 import { devLoginEmail, isSupabaseServerConfigured } from '@/lib/devAuth';
 import { redirect } from 'next/navigation';
 import { cookieLanguage } from '@/prototype/types';
+import { copy } from '@/prototype/i18n';
 
 export default async function RootLayout({
   children,
@@ -75,9 +76,12 @@ export default async function RootLayout({
   );
 }
 
-export const metadata: Metadata = {
-  title: 'Zero Council — AI decision council',
-  description:
-    'Convene multiple AI advisors — each with a distinct model and perspective — to think through your decision before you commit.',
-  other: { google: 'notranslate' },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const cookieStore = await cookies();
+  const language = cookieStore.get(cookieLanguage)?.value === 'vi' ? 'vi' : 'en';
+  return {
+    title: copy[language].documentTitle,
+    description: copy[language].documentDescription,
+    other: { google: 'notranslate' },
+  };
+}

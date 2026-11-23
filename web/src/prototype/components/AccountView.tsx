@@ -52,7 +52,7 @@ export default function AccountView() {
                     {t.language}
                     </h2>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label={t.language}>
+                <div className="mt-4 grid grid-cols-1 min-[380px]:grid-cols-2 gap-2" role="group" aria-label={t.language}>
                     <button
                     type="button"
                     onClick={() => setLanguage('en')}
@@ -85,7 +85,7 @@ export default function AccountView() {
                     {t.wsThemeTitle}
                     </h2>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2" role="group" aria-label={t.wsThemeTitle}>
+                <div className="mt-4 grid grid-cols-1 min-[380px]:grid-cols-2 gap-2" role="group" aria-label={t.wsThemeTitle}>
                     <button
                     type="button"
                     onClick={() => { if (theme !== 'light') toggleTheme(); }}

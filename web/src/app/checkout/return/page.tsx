@@ -13,8 +13,8 @@ type OrderState = {
   amountUsd: string;
 };
 
-// Same grouping as plans.ts `planAmountLine` so the number a buyer paid reads identically here.
-const number = new Intl.NumberFormat('en-US');
+const formatOrderVnd = (amount: number, language: 'en' | 'vi') =>
+  new Intl.NumberFormat(language === 'vi' ? 'vi-VN' : 'en-US').format(amount);
 
 function PaymentResult() {
   const params = useSearchParams();
@@ -77,8 +77,8 @@ function PaymentResult() {
         : t.paymentFailedBody;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-6 px-5 py-16">
-      <div className="flex items-center justify-end gap-2">
+    <main className="mx-auto flex min-h-screen w-full max-w-2xl flex-col justify-center gap-6 px-4 py-12 sm:px-5 sm:py-16">
+      <div className="flex flex-wrap items-center justify-end gap-2">
         <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label={t.language}>
           {(['vi', 'en'] as const).map((item) => (
             <button
@@ -116,7 +116,7 @@ function PaymentResult() {
         <p className="text-sm leading-relaxed text-ink-muted">{body}</p>
         {order && order.amountVnd > 0 ? (
           <p className="border-t border-border pt-4 font-serif text-2xl text-ink">
-            ₫{number.format(order.amountVnd)} (~${order.amountUsd})
+            ₫{formatOrderVnd(order.amountVnd, language)} (~${order.amountUsd})
           </p>
         ) : null}
         <Link href={paid ? '/?paid=1' : '/'} className="button-primary mt-2 min-h-11 justify-center">
@@ -129,7 +129,7 @@ function PaymentResult() {
 
 export default function PaymentReturnPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div className="min-h-screen bg-background text-ink" />}>
       <PaymentResult />
     </Suspense>
   );

@@ -20,6 +20,9 @@
  */
 
 /** Keeps a pasted 200 MB file from freezing the tab. */
+import { localizeAttachmentProblem } from '../i18n.ts';
+import type { Language } from '../types.ts';
+
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 /**
  * Pinned text rides in every advisor's prompt on every turn, on the user's own key. This is the
@@ -391,7 +394,7 @@ const cut = (text: string): FileReading => {
   return { text: cleaned.slice(0, end), truncated: true, totalChars: cleaned.length };
 };
 
-export const readFileInBrowser = async (file: FileLike): Promise<FileReading> => {
+const readFileRaw = async (file: FileLike): Promise<FileReading> => {
   const extension = extensionOf(file.name);
 
   if (LEGACY_OFFICE.has(extension)) {
@@ -438,4 +441,19 @@ export const readFileInBrowser = async (file: FileLike): Promise<FileReading> =>
   const reading = cut(text);
   if (!reading.text) throw new UnreadableFileError('No readable text was found in this file.');
   return reading;
+};
+
+export const readFileInBrowser = async (
+  file: FileLike,
+  options: { language?: Language } = {}
+): Promise<FileReading> => {
+  const language = options.language === 'vi' ? 'vi' : 'en';
+  try {
+    return await readFileRaw(file);
+  } catch (error) {
+    if (error instanceof UnreadableFileError && language !== 'en') {
+      throw new UnreadableFileError(localizeAttachmentProblem(error.reason, language));
+    }
+    throw error;
+  }
 };

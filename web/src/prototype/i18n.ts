@@ -1201,6 +1201,125 @@ export const copy = {
     paymentFailedBody: 'Nothing was charged. You can start the payment again from the pricing page.',
     paymentBack: 'Back to Zero Council',
     paymentOrderCode: 'Order',
+    loadingHome: 'Loading home',
+    loadingDashboard: 'Loading workspace',
+    planBots: '{count} bots',
+    billingSourcePayos: 'payOS',
+    billingSourceCoupon: 'Coupon',
+    billingSourceAdmin: 'Admin',
+    checkoutOriginalPrice: 'Original price:',
+    checkoutDiscountLine: 'Discount applied:',
+    checkoutTotalToPay: 'Total to pay:',
+    checkoutDiscountPlanScope: 'Discount codes apply strictly to the {plan} plan. Base price: {price}',
+    checkoutDiscountAppliedBanner: 'Applied {code} (−{percent}%) for {plan} only!',
+    checkoutDiscountSavedBanner: 'You save {amount}.',
+    checkoutPlanActivated: 'Plan activated.',
+    checkoutQrAmountDiscount: '{amount} (−{percent}% from {original})',
+    checkoutQrRemainingLabel: 'QR code validity remaining:',
+    checkoutQrAutoTracking: 'System is automatically tracking payment and will upgrade your plan upon completion.',
+    checkoutNeedLogin: 'Please sign in to proceed with payment.',
+    checkoutPayosNotConfigured: 'PayOS credentials (Client ID, API Key, Checksum Key) are not configured on the server.',
+    checkoutPayosRejected: 'PayOS rejected the payment request. Please check PayOS configuration.',
+    checkoutPayosCreateFailed: 'Could not create a PayOS payment link. Please try again.',
+    checkoutPayosMissingUrl: 'PayOS did not return a payment link.',
+    checkoutDevSimTitle: '🧪 Dev simulation mode (real PayOS keys not configured)',
+    checkoutDevSimBody: 'Click the button below to simulate payment success and test automatic plan upgrade.',
+    checkoutDevSimAction: '⚡ Simulate payment success',
+    botWizardNumber: 'Bot #{n}',
+    botWizardRemaining: '{remaining}/{cap} left',
+    apiVerifyInvalidEndpoint: 'This Base URL did not answer like an AI API (it returned a web page or an unexpected response). Check the URL.',
+    apiVerifyModelNotFound: 'The provider accepted the request, but this model was not found. Pick or type another model.',
+    apiVerifyNoModels: 'This endpoint does not list its models. Type an exact model ID below, then test again.',
+    apiVerifyRateLimited: 'The provider is rate-limiting this key right now. Wait a moment, then test again.',
+    apiVerifyInsufficientCredits: 'The key works, but the account has no credits for this model. Top up or pick a free model.',
+    apiVerifyProviderError: 'The provider answered with an error, so the key could not be verified. Nothing was saved.',
+    apiVerifySaveFailed: 'The server re-checked this key and did not save it. Test the connection again.',
+    apiVerifyRetest: 'Re-test connection',
+    apiVerifyRetestOk: 'Connection re-verified with a live call',
+    relJustNow: 'just now',
+    relMinutesAgo: '{n}m ago',
+    relHoursAgo: '{n}h ago',
+    relDaysAgo: '{n}d ago',
+    relMonthsAgo: '{n}mo ago',
+    defaultSoloTitle: 'New Chat',
+    defaultGroupTitle: 'Group Chat',
+    chatMaxImagesError: 'At most {max} images per message.',
+    adminPageTitle: 'Zero Council — Admin',
+    adminLabel: 'ADMIN',
+    adminTitle: 'Coupons & accounts',
+    adminIntro: 'Discount codes apply at payOS checkout. One redemption per account per code; a 100% code activates the plan immediately.',
+    adminNew: 'New coupon',
+    adminEdit: 'Edit coupon',
+    adminCode: 'Code',
+    adminPercent: 'Discount (%)',
+    adminExpires: 'Expires',
+    adminNever: 'Never expires',
+    adminCap: 'Total redemption limit',
+    adminUnlimited: 'Unlimited',
+    adminActive: 'Active',
+    adminNote: 'Internal note',
+    adminSave: 'Save',
+    adminCancel: 'Cancel',
+    adminRemove: 'Delete',
+    adminConfirmDelete: 'Delete this coupon? Past redemptions stay on record.',
+    adminUsed: 'Used',
+    adminEmptyCoupons: 'No coupons yet.',
+    adminEmptyAccounts: 'No accounts yet.',
+    adminAccounts: 'Accounts',
+    adminMakeAdmin: 'Make admin',
+    adminRemoveAdmin: 'Remove admin',
+    adminResetPassword: 'Set password',
+    adminNewPassword: 'New password (8+ chars)',
+    adminResetDone: 'Password updated.',
+    adminSignedOut: 'Sign in with an admin account first, then open /admin again.',
+    adminSignIn: 'Go to sign in',
+    adminDenied: 'This account is not an admin.',
+    adminFailed: 'Request failed.',
+    adminSync: 'Synced across admins every 5s.',
+    adminCouponOffBadge: '(off)',
+    adminActionTurnOff: 'Turn off',
+    adminActionTurnOn: 'Turn on',
+    adminRoleAdmin: 'Admin',
+    adminRoleUser: 'Member',
+    adminUnknownError: 'Unexpected error.',
+    adminErrInvalidJson: 'Invalid request body.',
+    adminErrInvalidCode: 'Code must be 2–32 letters, numbers, dashes, or underscores.',
+    adminErrInvalidPercent: 'Discount must be a whole number from 1 to 100.',
+    adminErrInvalidCap: 'Redemption limit must be a positive whole number, or blank for unlimited.',
+    adminErrInvalidExpiry: 'Expiry date is not valid.',
+    adminErrBadRole: 'Role must be user or admin.',
+    adminErrCouponExists: 'That code already exists.',
+    adminErrCodeImmutable: 'A code cannot be renamed — its redemptions point at it.',
+    adminErrLastAdmin: 'This is the last admin. Removing it would leave nobody able to promote anyone.',
+    adminErrFounderLocked: 'The founder account can never be demoted.',
+    adminErrOnlyFounderDemote: 'Only the founder can remove admin role.',
+    adminErrOnlyFounder: 'Only the founder can reset passwords.',
+    adminErrPasswordTooShort: 'Password must be at least 8 characters.',
+    adminErrResetFailed: 'Password reset failed on the server.',
+    adminErrUnknownUser: 'No such account.',
+    adminErrForbidden: 'This account is not an admin.',
+    adminErrNeedLogin: 'No account is signed in on this device.',
+    fixturePageTitle: 'Zero Council — Content reference',
+    fixtureLabel: 'CONTENT REFERENCE',
+    fixtureTitle: 'Council content reference',
+    fixtureDescription: 'The shape of a council: the question, the advisor viewpoints, and the synthesis the Chair returns.',
+    fixtureOpen: 'Open the workspace',
+    fixtureIntro: 'The shape of a council: the question, the advisor viewpoints, and the synthesis the Chair returns.',
+    fixtureLenses: 'Viewpoint lenses',
+    fixtureFixed: 'reference text',
+    fixtureSynthesis: 'Council synthesis',
+    authErrInvalidCredentials: 'Incorrect email or password.',
+    authErrEmailNotConfirmed: 'Please confirm your email address before signing in.',
+    authErrUserAlreadyRegistered: 'An account with this email already exists. Try signing in instead.',
+    authErrPasswordTooShort: 'Password must be at least 8 characters long.',
+    authErrSamePassword: 'New password must be different from your current password.',
+    authErrRateLimited: 'Too many requests. Please wait a moment and try again.',
+    authErrInvalidEmail: 'Please enter a valid email address.',
+    authErrPasswordRequired: 'Please enter a valid password.',
+    authErrSessionMissing: 'Your authentication session expired. Please request a new link.',
+    authErrMissingCode: 'No authentication code or token was provided.',
+    authErrTokenExpired: 'This authentication link has expired or was already used.',
+    authErrOAuthDenied: 'Sign-in was cancelled or denied by the provider.',
   },
   vi: {
     documentTitle: 'Zero Council — Hội đồng quyết định AI',
@@ -1341,7 +1460,6 @@ export const copy = {
     scenarios: 'Nhánh kịch bản',
     scenarioWarning: 'Kịch bản là dự phóng, không phải dự đoán. Hãy kiểm chứng bằng chứng trước khi dựa vào nó.',
     testimonies: 'Ghi chú của cố vấn',
-    fixtureOutput: 'Kết quả hội đồng',
     copySummary: 'Sao chép tóm tắt',
     copied: 'Đã sao chép',
     copyText: 'Sao chép văn bản',
@@ -2134,7 +2252,7 @@ export const copy = {
     signUpButton: 'Đăng ký',
     signUpSuccess: 'Kiểm tra email của bạn để nhận liên kết xác nhận.',
     emailLabel: 'Email',
-    emailPlaceholder: 'you@example.com',
+    emailPlaceholder: 'ban@example.com',
     passwordLabel: 'Mật khẩu',
     passwordPlaceholderSignIn: 'Mật khẩu của bạn',
     passwordPlaceholderSignUp: 'Ít nhất 8 ký tự',
@@ -2319,6 +2437,126 @@ export const copy = {
     paymentFailedBody: 'Không có khoản tiền nào bị trừ. Bạn có thể thanh toán lại từ trang Giá.',
     paymentBack: 'Về Zero Council',
     paymentOrderCode: 'Mã đơn',
+    loadingHome: 'Đang tải trang chủ',
+    loadingDashboard: 'Đang tải không gian làm việc',
+    planBots: '{count} bot',
+    billingSourcePayos: 'payOS',
+    billingSourceCoupon: 'Mã giảm giá',
+    billingSourceAdmin: 'Quản trị',
+    checkoutOriginalPrice: 'Giá gốc:',
+    checkoutDiscountLine: 'Số tiền đã giảm:',
+    checkoutTotalToPay: 'Số tiền thanh toán:',
+    checkoutDiscountPlanScope: 'Mã giảm giá áp dụng duy nhất cho gói {plan}. Giá gốc: {price}',
+    checkoutDiscountAppliedBanner: 'Đã áp dụng mã {code} giảm {percent}% chỉ cho gói {plan}!',
+    checkoutDiscountSavedBanner: 'Bạn tiết kiệm được {amount}.',
+    checkoutPlanActivated: 'Đã kích hoạt gói.',
+    checkoutQrAmountDiscount: '{amount} (−{percent}% từ {original})',
+    checkoutQrRemainingLabel: 'Thời gian còn lại của mã QR:',
+    checkoutQrAutoTracking: 'Hệ thống đang tự động kiểm tra giao dịch chuyển khoản và sẽ nâng cấp gói ngay khi thanh toán thành công.',
+    checkoutNeedLogin: 'Bạn cần đăng nhập để tiếp tục thanh toán.',
+    checkoutPayosNotConfigured: 'Chưa cấu hình Client ID, API Key, Checksum Key của PayOS trên máy chủ.',
+    checkoutPayosRejected: 'Cổng thanh toán PayOS từ chối yêu cầu. Vui lòng kiểm tra lại cấu hình PayOS.',
+    checkoutPayosCreateFailed: 'Không thể tạo liên kết thanh toán PayOS. Vui lòng thử lại.',
+    checkoutPayosMissingUrl: 'PayOS không trả về liên kết thanh toán.',
+    checkoutDevSimTitle: '🧪 Chế độ mô phỏng dev (chưa gắn khóa PayOS thật)',
+    checkoutDevSimBody: 'Bạn có thể nhấn nút bên dưới để giả lập thanh toán thành công và kiểm tra tự động nâng cấp gói.',
+    checkoutDevSimAction: '⚡ Thử thanh toán thành công (Mô phỏng)',
+    botWizardNumber: 'Bot thứ {n}',
+    botWizardRemaining: 'Còn lại {remaining}/{cap}',
+    apiVerifyInvalidEndpoint: 'Base URL này không phản hồi như một API AI (trả về trang web hoặc dữ liệu không hợp lệ). Kiểm tra lại URL.',
+    apiVerifyModelNotFound: 'Nhà cung cấp đã nhận yêu cầu nhưng không tìm thấy mô hình này. Chọn hoặc nhập mô hình khác.',
+    apiVerifyNoModels: 'Endpoint này không liệt kê mô hình. Nhập chính xác mã mô hình bên dưới rồi kiểm tra lại.',
+    apiVerifyRateLimited: 'Nhà cung cấp đang giới hạn tốc độ cho khóa này. Đợi một chút rồi kiểm tra lại.',
+    apiVerifyInsufficientCredits: 'Khóa hợp lệ nhưng tài khoản hết credit cho mô hình này. Nạp thêm hoặc chọn mô hình miễn phí.',
+    apiVerifyProviderError: 'Nhà cung cấp trả về lỗi nên chưa xác minh được khóa. Chưa lưu gì cả.',
+    apiVerifySaveFailed: 'Máy chủ đã kiểm tra lại khóa và không lưu. Hãy kiểm tra kết nối lần nữa.',
+    apiVerifyRetest: 'Kiểm tra lại kết nối',
+    apiVerifyRetestOk: 'Đã xác minh lại kết nối bằng một lệnh gọi thật',
+    relJustNow: 'vừa xong',
+    relMinutesAgo: '{n}p',
+    relHoursAgo: '{n}g',
+    relDaysAgo: '{n}n',
+    relMonthsAgo: '{n}th',
+    defaultSoloTitle: 'Cuộc trò chuyện mới',
+    defaultGroupTitle: 'Nhóm trò chuyện',
+    chatMaxImagesError: 'Tối đa {max} ảnh mỗi tin nhắn.',
+    adminPageTitle: 'Zero Council — Quản trị',
+    adminLabel: 'QUẢN TRỊ',
+    adminTitle: 'Mã giảm giá & tài khoản',
+    adminIntro: 'Mã giảm giá áp dụng ở bước thanh toán payOS. Mỗi tài khoản dùng mỗi mã tối đa một lần; mã 100% kích hoạt gói ngay.',
+    adminNew: 'Tạo mã mới',
+    adminEdit: 'Sửa mã',
+    adminCode: 'Mã',
+    adminPercent: 'Mức giảm (%)',
+    adminExpires: 'Hết hạn',
+    adminNever: 'Không hết hạn',
+    adminCap: 'Giới hạn tổng lượt dùng',
+    adminUnlimited: 'Không giới hạn',
+    adminActive: 'Đang bật',
+    adminNote: 'Ghi chú nội bộ',
+    adminSave: 'Lưu',
+    adminCancel: 'Hủy',
+    adminRemove: 'Xóa',
+    adminConfirmDelete: 'Xóa mã này? Lịch sử các lượt đã dùng vẫn giữ nguyên.',
+    adminUsed: 'Đã dùng',
+    adminEmptyCoupons: 'Chưa có mã giảm giá nào.',
+    adminEmptyAccounts: 'Chưa có tài khoản nào.',
+    adminAccounts: 'Tài khoản',
+    adminMakeAdmin: 'Cấp quyền quản trị',
+    adminRemoveAdmin: 'Gỡ quyền quản trị',
+    adminResetPassword: 'Đặt mật khẩu',
+    adminNewPassword: 'Mật khẩu mới (từ 8 ký tự)',
+    adminResetDone: 'Đã cập nhật mật khẩu.',
+    adminSignedOut: 'Đăng nhập bằng tài khoản quản trị trước rồi mở lại /admin.',
+    adminSignIn: 'Về trang đăng nhập',
+    adminDenied: 'Tài khoản này không có quyền quản trị.',
+    adminFailed: 'Thao tác không thành công.',
+    adminSync: 'Tự đồng bộ giữa các quản trị viên mỗi 5 giây.',
+    adminCouponOffBadge: '(đã tắt)',
+    adminActionTurnOff: 'Tắt',
+    adminActionTurnOn: 'Bật',
+    adminRoleAdmin: 'Quản trị viên',
+    adminRoleUser: 'Thành viên',
+    adminUnknownError: 'Lỗi không xác định.',
+    adminErrInvalidJson: 'Dữ liệu gửi lên không hợp lệ.',
+    adminErrInvalidCode: 'Mã dài 2–32 ký tự, chỉ gồm chữ, số, gạch ngang hoặc gạch dưới.',
+    adminErrInvalidPercent: 'Mức giảm phải là số nguyên từ 1 đến 100.',
+    adminErrInvalidCap: 'Giới hạn lượt dùng phải là số nguyên dương, hoặc để trống nếu không giới hạn.',
+    adminErrInvalidExpiry: 'Ngày hết hạn không hợp lệ.',
+    adminErrBadRole: 'Vai trò phải là thành viên hoặc quản trị viên.',
+    adminErrCouponExists: 'Mã đó đã tồn tại.',
+    adminErrCodeImmutable: 'Không đổi được tên mã — các lượt đã dùng gắn vào mã đó.',
+    adminErrLastAdmin: 'Đây là quản trị viên cuối cùng. Gỡ quyền sẽ khiến không còn ai cấp quyền được nữa.',
+    adminErrFounderLocked: 'Tài khoản sáng lập không bao giờ bị gỡ quyền quản trị.',
+    adminErrOnlyFounderDemote: 'Chỉ người sáng lập mới được gỡ quyền quản trị của người khác.',
+    adminErrOnlyFounder: 'Chỉ người sáng lập mới được đặt lại mật khẩu.',
+    adminErrPasswordTooShort: 'Mật khẩu phải dài ít nhất 8 ký tự.',
+    adminErrResetFailed: 'Đặt lại mật khẩu thất bại trên máy chủ.',
+    adminErrUnknownUser: 'Không tìm thấy tài khoản này.',
+    adminErrForbidden: 'Tài khoản này không có quyền quản trị.',
+    adminErrNeedLogin: 'Thiết bị này chưa đăng nhập tài khoản nào.',
+    fixturePageTitle: 'Zero Council — Tham chiếu nội dung',
+    fixtureLabel: 'THAM CHIẾU NỘI DUNG',
+    fixtureTitle: 'Nội dung hội đồng dùng chung',
+    fixtureDescription: 'Hình dạng của một hội đồng: câu hỏi, các góc nhìn của cố vấn, và bản tổng hợp Ghế chủ tọa trả về.',
+    fixtureOpen: 'Mở không gian làm việc',
+    fixtureIntro: 'Hình dạng của một hội đồng: câu hỏi, các góc nhìn của cố vấn, và bản tổng hợp Ghế chủ tọa trả về.',
+    fixtureLenses: 'Các góc nhìn',
+    fixtureFixed: 'văn bản tham chiếu',
+    fixtureOutput: 'Kết quả hội đồng',
+    fixtureSynthesis: 'Tổng hợp hội đồng',
+    authErrInvalidCredentials: 'Email hoặc mật khẩu không chính xác.',
+    authErrEmailNotConfirmed: 'Vui lòng xác nhận địa chỉ email trước khi đăng nhập.',
+    authErrUserAlreadyRegistered: 'Email này đã được đăng ký. Vui lòng chuyển sang đăng nhập.',
+    authErrPasswordTooShort: 'Mật khẩu phải có ít nhất 8 ký tự.',
+    authErrSamePassword: 'Mật khẩu mới phải khác mật khẩu hiện tại.',
+    authErrRateLimited: 'Bạn thao tác quá nhanh. Vui lòng đợi ít phút rồi thử lại.',
+    authErrInvalidEmail: 'Vui lòng nhập địa chỉ email hợp lệ.',
+    authErrPasswordRequired: 'Vui lòng nhập mật khẩu hợp lệ.',
+    authErrSessionMissing: 'Phiên xác thực đã hết hạn. Vui lòng yêu cầu liên kết mới.',
+    authErrMissingCode: 'Không tìm thấy mã xác thực trong liên kết.',
+    authErrTokenExpired: 'Liên kết xác thực đã hết hạn hoặc đã được sử dụng.',
+    authErrOAuthDenied: 'Đăng nhập đã bị hủy hoặc bị từ chối bởi nhà cung cấp.',
   },
 } as const;
 
@@ -2347,3 +2585,171 @@ export type CopyStringKey = {
 }[keyof Copy];
 
 export const t = (language: 'en' | 'vi', key: CopyStringKey): string => copy[language][key];
+
+/** Maps raw Supabase / OAuth English error messages or codes to localized user-facing copy. */
+export const localizeAuthError = (
+  rawMessage: string,
+  languageOrCopy: Language | Copy
+): string => {
+  const trimmed = rawMessage.trim();
+  if (!trimmed) return '';
+  const dict: Copy =
+    typeof languageOrCopy === 'string' ? copy[languageOrCopy] : languageOrCopy;
+  const lower = trimmed.toLowerCase();
+
+  if (
+    lower.includes('invalid login credentials') ||
+    lower.includes('invalid_credentials') ||
+    lower.includes('invalid email or password')
+  ) {
+    return dict.authErrInvalidCredentials;
+  }
+  if (lower.includes('email not confirmed') || lower.includes('email_not_confirmed')) {
+    return dict.authErrEmailNotConfirmed;
+  }
+  if (
+    lower.includes('user already registered') ||
+    lower.includes('user_already_exists') ||
+    lower.includes('email_exists')
+  ) {
+    return dict.authErrUserAlreadyRegistered;
+  }
+  if (
+    lower.includes('password should be at least') ||
+    lower.includes('weak_password') ||
+    lower.includes('at least 8 characters') ||
+    lower.includes('at least 6 characters')
+  ) {
+    return dict.authErrPasswordTooShort;
+  }
+  if (lower.includes('new password should be different') || lower.includes('same_password')) {
+    return dict.authErrSamePassword;
+  }
+  if (
+    lower.includes('for security purposes') ||
+    lower.includes('rate limit') ||
+    lower.includes('over_email_send_rate_limit') ||
+    lower.includes('over_request_rate_limit') ||
+    lower.includes('too many requests')
+  ) {
+    return dict.authErrRateLimited;
+  }
+  if (
+    lower.includes('unable to validate email address') ||
+    lower.includes('validation_failed') ||
+    lower.includes('invalid format')
+  ) {
+    return dict.authErrInvalidEmail;
+  }
+  if (lower.includes('signup requires a valid password')) {
+    return dict.authErrPasswordRequired;
+  }
+  if (lower.includes('auth session missing') || lower.includes('session_not_found')) {
+    return dict.authErrSessionMissing;
+  }
+  if (
+    lower.includes('no authentication code or token was provided') ||
+    lower === 'missing_code'
+  ) {
+    return dict.authErrMissingCode;
+  }
+  if (
+    lower.includes('token has expired or is invalid') ||
+    lower.includes('email link is invalid or has expired') ||
+    lower.includes('otp_expired') ||
+    lower.includes('flow_state_expired')
+  ) {
+    return dict.authErrTokenExpired;
+  }
+  if (lower.includes('access_denied') || lower.includes('user_cancelled')) {
+    return dict.authErrOAuthDenied;
+  }
+  if (lower === 'server_error' || lower === 'unexpected_failure') {
+    return dict.authErrorDefaultMessage;
+  }
+  return trimmed;
+};
+
+const ATTACHMENT_EXACT_PAIRS: ReadonlyArray<readonly [string, string]> = [
+  ['This does not look like a text file.', 'Tệp này không giống tệp văn bản.'],
+  ['The text encoding is not supported. Save it as UTF-8 and try again.', 'Bảng mã văn bản không được hỗ trợ. Hãy lưu dưới dạng UTF-8 rồi thử lại.'],
+  ['This file is damaged or is not an Office document.', 'Tệp này bị hỏng hoặc không phải tài liệu Office.'],
+  ['This archive is too large to read (ZIP64).', 'Tệp nén quá lớn để đọc (ZIP64).'],
+  ['This file is password-protected.', 'Tệp này đang được đặt mật khẩu bảo vệ.'],
+  ['This document is too large to read.', 'Tài liệu này quá lớn để đọc.'],
+  ['This file uses a compression the reader does not support.', 'Tệp này dùng chuẩn nén không được hỗ trợ.'],
+  ['This is not a Word document (.docx).', 'Đây không phải tài liệu Word (.docx).'],
+  ['This is not a PowerPoint file (.pptx).', 'Đây không phải tệp PowerPoint (.pptx).'],
+  ['This is not an Excel file (.xlsx).', 'Đây không phải tệp Excel (.xlsx).'],
+  ['The file is empty.', 'Tệp đang trống.'],
+  ['This file could not be read. It may be damaged.', 'Không thể đọc tệp này. Có thể tệp đã bị hỏng.'],
+  ['No readable text was found in this file.', 'Không tìm thấy văn bản đọc được trong tệp này.'],
+  ['This image could not be opened. The format may not be supported by your browser.', 'Không mở được ảnh này. Định dạng có thể chưa được trình duyệt hỗ trợ.'],
+  ['This browser cannot process images.', 'Trình duyệt này không hỗ trợ xử lý ảnh.'],
+  ['This image is too detailed to send. Try a smaller one.', 'Ảnh quá chi tiết nên vượt giới hạn gửi. Hãy thử ảnh nhỏ hơn.'],
+  ['The video file is empty.', 'Tệp video đang trống.'],
+  ['That does not look like a link.', 'Đường dẫn này không giống một liên kết hợp lệ.'],
+  ['Only http and https links can be read.', 'Chỉ đọc được liên kết http và https.'],
+  ['The page had no readable text.', 'Trang này không có nội dung văn bản đọc được.'],
+  ['The page took too long to answer.', 'Trang phản hồi quá lâu.'],
+  ['The browser would not share this page. Most sites block that.', 'Trình duyệt không cho phép đọc trực tiếp trang này (đa số trang web chặn CORS).'],
+  ['The video was not kept when the page reloaded. Attach it again.', 'Video không được giữ lại sau khi tải lại trang. Vui lòng đính kèm lại.'],
+  ['The image was not kept when the page reloaded. Attach it again.', 'Ảnh không được giữ lại sau khi tải lại trang. Vui lòng đính kèm lại.'],
+];
+
+/** Bidirectional EN <-> VI translator for browser file/image/video/link/reload attachment problems. */
+export const localizeAttachmentProblem = (problem: string, language: Language): string => {
+  const trimmed = problem.trim();
+  if (!trimmed) return '';
+
+  for (const [enText, viText] of ATTACHMENT_EXACT_PAIRS) {
+    if (trimmed === enText || trimmed === viText) {
+      return language === 'vi' ? viText : enText;
+    }
+  }
+
+  let m = /^Old (\.[a-z0-9]+) files are not supported. Save it as (\.[a-z0-9]+) and attach that\.$/i.exec(trimmed)
+    ?? /^Không hỗ trợ tệp (\.[a-z0-9]+) cũ. Hãy lưu thành (\.[a-z0-9]+) rồi đính kèm lại\.$/i.exec(trimmed);
+  if (m) {
+    return language === 'vi'
+      ? `Không hỗ trợ tệp ${m[1]} cũ. Hãy lưu thành ${m[2]} rồi đính kèm lại.`
+      : `Old ${m[1]} files are not supported. Save it as ${m[2]} and attach that.`;
+  }
+
+  m = /^Supported files: (.+)\.$/i.exec(trimmed)
+    ?? /^Định dạng hỗ trợ: (.+)\.$/i.exec(trimmed);
+  if (m) {
+    return language === 'vi'
+      ? `Định dạng hỗ trợ: ${m[1]}.`
+      : `Supported files: ${m[1]}.`;
+  }
+
+  m = /^The (file|image|video) is larger than (\d+) MB\.$/i.exec(trimmed);
+  if (m) {
+    if (language === 'en') return trimmed;
+    const kindVi = m[1].toLowerCase() === 'image' ? 'Ảnh' : m[1].toLowerCase() === 'video' ? 'Video' : 'Tệp';
+    return `${kindVi} lớn hơn giới hạn ${m[2]} MB.`;
+  }
+  m = /^(Tệp|Ảnh|Video) lớn hơn giới hạn (\d+) MB\.$/i.exec(trimmed);
+  if (m) {
+    if (language === 'vi') return trimmed;
+    const kindEn = m[1] === 'Ảnh' ? 'image' : m[1] === 'Video' ? 'video' : 'file';
+    return `The ${kindEn} is larger than ${m[2]} MB.`;
+  }
+
+  m = /^The page answered (\d+)\.$/i.exec(trimmed)
+    ?? /^Trang phản hồi mã trạng thái (\d+)\.$/i.exec(trimmed);
+  if (m) {
+    return language === 'vi'
+      ? `Trang phản hồi mã trạng thái ${m[1]}.`
+      : `The page answered ${m[1]}.`;
+  }
+
+  m = /^At most (\d+) images per message\.$/i.exec(trimmed)
+    ?? /^Tối đa (\d+) ảnh mỗi tin nhắn\.$/i.exec(trimmed);
+  if (m) {
+    return copy[language].chatMaxImagesError.replace('{max}', m[1]);
+  }
+
+  return trimmed;
+};

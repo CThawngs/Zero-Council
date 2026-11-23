@@ -35,7 +35,7 @@ export const PlanGrid: React.FC<PlanGridProps> = ({
         <p className="mt-2 text-xs font-medium text-brass">
           {t.billingActiveExpires.replace(
             '{date}',
-            new Date(planExpiresAt).toLocaleDateString()
+            new Date(planExpiresAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US')
           )}
         </p>
       )}
@@ -70,7 +70,7 @@ export const PlanGrid: React.FC<PlanGridProps> = ({
                 </p>
                 <p className="mt-1 text-xs leading-relaxed text-ink-muted">
                   {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))} ·{' '}
-                  {`${plan.maxBots} bots`}
+                  {t.planBots.replace('{count}', String(plan.maxBots))}
                 </p>
               </div>
 

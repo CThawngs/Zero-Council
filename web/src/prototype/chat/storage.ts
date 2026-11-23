@@ -1,3 +1,6 @@
+import { localizeAttachmentProblem } from '../i18n.ts';
+import type { Language } from '../types.ts';
+
 const SCHEMA = 2;
 const KEY = 'zero-council:room';
 
@@ -56,7 +59,7 @@ const withoutHeavyBytes = <
     return copy;
   });
 
-export const readStoredRoom = (): StoredRoom | null => {
+export const readStoredRoom = (language: Language = 'en'): StoredRoom | null => {
   if (typeof window === 'undefined') return null;
   try {
     const raw = window.sessionStorage.getItem(KEY);
@@ -69,10 +72,12 @@ export const readStoredRoom = (): StoredRoom | null => {
       (attachment.kind === 'image' || attachment.kind === 'video') && !attachment.problem
         ? {
             ...attachment,
-            problem:
+            problem: localizeAttachmentProblem(
               attachment.kind === 'video'
                 ? 'The video was not kept when the page reloaded. Attach it again.'
                 : 'The image was not kept when the page reloaded. Attach it again.',
+              language
+            ),
           }
         : attachment
     );

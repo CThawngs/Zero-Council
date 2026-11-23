@@ -47,38 +47,8 @@ type RetestState =
  * Copy for verification outcomes that have no entry in the shared i18n table yet. Kept next to the
  * only view that uses it; English and Vietnamese always ship together so the language toggle covers it.
  */
-const VERIFY_COPY = {
-  en: {
-    invalidEndpoint:
-      'This Base URL did not answer like an AI API (it returned a web page or an unexpected response). Check the URL.',
-    modelNotFound: 'The provider accepted the request, but this model was not found. Pick or type another model.',
-    noModels: 'This endpoint does not list its models. Type an exact model ID below, then test again.',
-    rateLimited: 'The provider is rate-limiting this key right now. Wait a moment, then test again.',
-    insufficientCredits: 'The key works, but the account has no credits for this model. Top up or pick a free model.',
-    providerError: 'The provider answered with an error, so the key could not be verified. Nothing was saved.',
-    saveFailed: 'The server re-checked this key and did not save it. Test the connection again.',
-    retest: 'Re-test connection',
-    retestOk: 'Connection re-verified with a live call',
-  },
-  vi: {
-    invalidEndpoint:
-      'Base URL này không phản hồi như một API AI (trả về trang web hoặc dữ liệu không hợp lệ). Kiểm tra lại URL.',
-    modelNotFound: 'Nhà cung cấp đã nhận yêu cầu nhưng không tìm thấy mô hình này. Chọn hoặc nhập mô hình khác.',
-    noModels: 'Endpoint này không liệt kê mô hình. Nhập chính xác mã mô hình bên dưới rồi kiểm tra lại.',
-    rateLimited: 'Nhà cung cấp đang giới hạn tốc độ cho khóa này. Đợi một chút rồi kiểm tra lại.',
-    insufficientCredits: 'Khóa hợp lệ nhưng tài khoản hết credit cho mô hình này. Nạp thêm hoặc chọn mô hình miễn phí.',
-    providerError: 'Nhà cung cấp trả về lỗi nên chưa xác minh được khóa. Chưa lưu gì cả.',
-    saveFailed: 'Máy chủ đã kiểm tra lại khóa và không lưu. Hãy kiểm tra kết nối lần nữa.',
-    retest: 'Kiểm tra lại kết nối',
-    retestOk: 'Đã xác minh lại kết nối bằng một lệnh gọi thật',
-  },
-} as const;
-
-type VerifyCopy = (typeof VERIFY_COPY)[keyof typeof VERIFY_COPY];
-
 const errorText = (
   t: Record<string, string>,
-  copy: VerifyCopy,
   message: string,
   fallback?: string
 ): string => {
@@ -90,23 +60,23 @@ const errorText = (
     case 'BAD_URL_FORMAT':
       return t.keyTestInvalidUrl;
     case 'INVALID_BASE_URL':
-      return copy.invalidEndpoint;
+      return t.apiVerifyInvalidEndpoint;
     case 'NETWORK_FAILED':
     case 'TIMEOUT':
       return t.keyTestNetwork;
     case 'MODEL_NOT_FOUND':
     case 'EMPTY_MODEL':
-      return copy.modelNotFound;
+      return t.apiVerifyModelNotFound;
     case 'NO_MODELS':
-      return copy.noModels;
+      return t.apiVerifyNoModels;
     case 'RATE_LIMITED':
-      return copy.rateLimited;
+      return t.apiVerifyRateLimited;
     case 'INSUFFICIENT_CREDITS':
-      return copy.insufficientCredits;
+      return t.apiVerifyInsufficientCredits;
     case 'PROVIDER_ERROR':
-      return copy.providerError;
+      return t.apiVerifyProviderError;
     case 'SAVE_FAILED':
-      return copy.saveFailed;
+      return t.apiVerifySaveFailed;
     default:
       return fallback ?? t.keyTestFailed;
   }
@@ -120,13 +90,11 @@ export const ApiKeysView: React.FC = () => {
     getProviderSecret,
     removeApiKey,
     revokeAllKeys,
-    language,
     t,
   } = useApp();
 
-  const verifyCopy = language === 'vi' ? VERIFY_COPY.vi : VERIFY_COPY.en;
   const describeError = (message: string, fallback?: string) =>
-    errorText(t as unknown as Record<string, string>, verifyCopy, message, fallback);
+    errorText(t as unknown as Record<string, string>, message, fallback);
   const [retest, setRetest] = useState<RetestState>({ phase: 'idle' });
 
   const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
@@ -537,9 +505,9 @@ export const ApiKeysView: React.FC = () => {
                 disabled={retest.phase === 'testing'}
                 className={
                   retest.phase === 'error'
-                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-600 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-700 bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
                     : retest.phase === 'ok'
-                      ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50'
+                      ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50'
                       : 'button-secondary min-h-11 justify-center'
                 }
               >
@@ -550,7 +518,7 @@ export const ApiKeysView: React.FC = () => {
                 ) : (
                   <ShieldCheck className="h-4 w-4" aria-hidden="true" />
                 )}
-                {verifyCopy.retest}
+                {t.apiVerifyRetest}
               </button>
               <button
                 type="button"
@@ -577,7 +545,7 @@ export const ApiKeysView: React.FC = () => {
                 id="provider-save-btn"
                 onClick={() => void saveConnection()}
                 disabled={busy}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
               >
                 {busy ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -603,7 +571,7 @@ export const ApiKeysView: React.FC = () => {
                 disabled={busy || !draftKey.trim()}
                 className={
                   test.phase === 'error'
-                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-600 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-700 bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
                     : 'button-primary min-h-11 justify-center'
                 }
               >
@@ -648,16 +616,16 @@ export const ApiKeysView: React.FC = () => {
                 <p
                   role="status"
                   id="provider-retest-status"
-                  className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-500"
+                  className="rounded-lg border border-sage/40 bg-sage/10 px-3 py-2 text-sm font-medium text-sage"
                 >
-                  {verifyCopy.retestOk} ({retest.model})
+                  {t.apiVerifyRetestOk} ({retest.model})
                 </p>
               )}
               {retest.phase === 'error' && (
                 <p
                   role="alert"
                   id="provider-retest-status"
-                  className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-sm font-medium text-red-500"
+                  className="rounded-lg border border-terracotta/50 bg-terracotta/10 px-3 py-2.5 text-sm font-medium text-terracotta"
                 >
                   {describeError(retest.message)}
                 </p>
@@ -721,7 +689,7 @@ export const ApiKeysView: React.FC = () => {
                       id="custom-model-save-btn"
                       onClick={() => void saveCustomModelToConnectedProvider()}
                       disabled={customModelState.phase === 'saving'}
-                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                      className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
                     >
                       {customModelState.phase === 'saving' ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
@@ -749,7 +717,7 @@ export const ApiKeysView: React.FC = () => {
                       }
                       className={
                         customModelState.phase === 'error'
-                          ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-600 bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                          ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-700 bg-red-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
                           : 'button-secondary min-h-10 shrink-0 justify-center text-xs disabled:opacity-50'
                       }
                     >
@@ -765,12 +733,12 @@ export const ApiKeysView: React.FC = () => {
                   )}
                 </div>
                 {customModelState.phase === 'verified' && (
-                  <p role="status" className="text-xs font-medium text-emerald-500">
+                  <p role="status" className="text-xs font-medium text-sage">
                     {t.providerModelTestOk}
                   </p>
                 )}
                 {customModelState.phase === 'error' && (
-                  <p role="alert" className="text-xs font-medium text-red-500">
+                  <p role="alert" className="text-xs font-medium text-terracotta">
                     {describeError(customModelState.message, t.providerModelTestFail)}
                   </p>
                 )}
@@ -800,7 +768,7 @@ export const ApiKeysView: React.FC = () => {
               {test.phase === 'error' && (
                 <p
                   role="alert"
-                  className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-sm font-medium text-red-500"
+                  className="rounded-lg border border-terracotta/50 bg-terracotta/10 px-3 py-2.5 text-sm font-medium text-terracotta"
                 >
                   {describeError(test.message)}
                 </p>
@@ -810,7 +778,7 @@ export const ApiKeysView: React.FC = () => {
                 <div className="space-y-4">
                   <p
                     role="status"
-                    className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-500"
+                    className="rounded-lg border border-sage/40 bg-sage/10 px-3 py-2 text-sm font-medium text-sage"
                   >
                     {t.keyTestOk}
                   </p>
@@ -862,7 +830,7 @@ export const ApiKeysView: React.FC = () => {
                           type="button"
                           id="connect-custom-model-save-btn"
                           onClick={() => saveCustomModelToConnectDraft(false)}
-                          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                          className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800"
                         >
                           <Check className="h-3.5 w-3.5" aria-hidden="true" />
                           {t.providerModelSave}
@@ -883,7 +851,7 @@ export const ApiKeysView: React.FC = () => {
                           disabled={!customModelInput.trim() || customModelState.phase === 'testing'}
                           className={
                             customModelState.phase === 'error'
-                              ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-600 bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                              ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-700 bg-red-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
                               : 'button-secondary min-h-10 shrink-0 justify-center text-xs disabled:opacity-50'
                           }
                         >
@@ -899,12 +867,12 @@ export const ApiKeysView: React.FC = () => {
                       )}
                     </div>
                     {customModelState.phase === 'verified' && (
-                      <p role="status" className="text-xs font-medium text-emerald-500">
+                      <p role="status" className="text-xs font-medium text-sage">
                         {t.providerModelTestOk}
                       </p>
                     )}
                     {customModelState.phase === 'error' && (
-                      <p role="alert" className="text-xs font-medium text-red-500">
+                      <p role="alert" className="text-xs font-medium text-terracotta">
                         {describeError(customModelState.message, t.providerModelTestFail)}
                       </p>
                     )}
@@ -939,7 +907,7 @@ export const ApiKeysView: React.FC = () => {
                 id="custom-provider-save-btn"
                 onClick={() => void saveCustomConnection()}
                 disabled={customBusy}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-700 bg-emerald-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-800 disabled:opacity-50"
               >
                 {customBusy ? (
                   <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -967,7 +935,7 @@ export const ApiKeysView: React.FC = () => {
                 }
                 className={
                   customTest.phase === 'error'
-                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-600 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-700 bg-red-700 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
                     : 'button-primary min-h-11 justify-center'
                 }
               >
@@ -1076,7 +1044,7 @@ export const ApiKeysView: React.FC = () => {
           {customTest.phase === 'error' && (
             <p
               role="alert"
-              className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-sm font-medium text-red-500"
+              className="rounded-lg border border-terracotta/50 bg-terracotta/10 px-3 py-2.5 text-sm font-medium text-terracotta"
             >
               {describeError(customTest.message)}
             </p>
@@ -1086,7 +1054,7 @@ export const ApiKeysView: React.FC = () => {
             <div className="space-y-4">
               <p
                 role="status"
-                className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-500"
+                className="rounded-lg border border-sage/40 bg-sage/10 px-3 py-2 text-sm font-medium text-sage"
               >
                 {t.keyTestOk}
               </p>
@@ -1139,7 +1107,7 @@ export const ApiKeysView: React.FC = () => {
                   type="button"
                   id="custom-provider-model-save-btn"
                   onClick={() => saveCustomModelToConnectDraft(true)}
-                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-600 bg-emerald-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-emerald-700 bg-emerald-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-emerald-800"
                 >
                   <Check className="h-3.5 w-3.5" aria-hidden="true" />
                   {t.providerModelSave}
@@ -1165,7 +1133,7 @@ export const ApiKeysView: React.FC = () => {
                   }
                   className={
                     customModelState.phase === 'error'
-                      ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-600 bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                      ? 'inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-700 bg-red-700 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-800 disabled:opacity-50'
                       : 'button-secondary min-h-10 shrink-0 justify-center text-xs disabled:opacity-50'
                   }
                 >
@@ -1181,12 +1149,12 @@ export const ApiKeysView: React.FC = () => {
               )}
             </div>
             {customModelState.phase === 'verified' && (
-              <p role="status" className="text-xs font-medium text-emerald-500">
+              <p role="status" className="text-xs font-medium text-sage">
                 {t.providerModelTestOk}
               </p>
             )}
             {customModelState.phase === 'error' && (
-              <p role="alert" className="text-xs font-medium text-red-500">
+              <p role="alert" className="text-xs font-medium text-terracotta">
                 {describeError(customModelState.message, t.providerModelTestFail)}
               </p>
             )}

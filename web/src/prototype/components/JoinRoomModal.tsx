@@ -260,8 +260,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
                     </span>
                     {isSelected && (
                       <span
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold"
-                        style={{ color: 'var(--color-accent-ink)' }}
+                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold text-accent-ink"
                         aria-label={`${selected.indexOf(persona.id) + 1}`}
                       >
                         {selected.indexOf(persona.id) + 1}
@@ -299,13 +298,15 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
                       <Icon className="h-4 w-4" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block w-full pr-24 font-medium text-ink">{title}</span>
-                      {isSelected && (
-                        <span className="badge-success absolute right-4 top-4 shrink-0">
-                          <Check className="h-3 w-3" aria-hidden="true" />
-                          {t.selected}
-                        </span>
-                      )}
+                      <span className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium text-ink">{title}</span>
+                        {isSelected && (
+                          <span className="badge-success shrink-0">
+                            <Check className="h-3 w-3" aria-hidden="true" />
+                            {t.selected}
+                          </span>
+                        )}
+                      </span>
                       <span className="mt-2 block text-xs leading-relaxed text-ink-muted">
                         {body}
                       </span>

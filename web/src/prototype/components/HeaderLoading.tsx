@@ -12,13 +12,13 @@ export const HeaderLoading: React.FC<HeaderLoadingProps> = ({ isWorkspace = fals
       className="fixed inset-x-0 top-0 z-40 border-b border-border bg-surface-2/80 backdrop-blur-xl"
       aria-hidden="true"
     >
-      <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[75px] max-w-[1600px] items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-8">
         {/* Brand logo & title */}
-        <div className="group flex min-h-11 min-w-0 shrink-0 items-center gap-2.5 text-left">
+        <div className="group flex min-h-11 min-w-0 shrink items-center gap-2 text-left sm:gap-2.5">
           <span className="brand-mark">
             <CouncilOrb />
           </span>
-          <span className="block whitespace-nowrap text-xl font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass">
+          <span className="hidden min-[360px]:block truncate text-lg font-extrabold tracking-tight text-ink transition-colors group-hover:text-brass sm:text-xl">
             Zero Council
           </span>
         </div>

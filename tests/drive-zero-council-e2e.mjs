@@ -16,8 +16,13 @@
  * Zero new dependencies — Node 22+ built-in WebSocket + fetch only.
  */
 import { spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import path, { dirname } from 'node:path';
+
+if (!process.env.ZC_PROVIDER_KEYS_STORE && existsSync(path.resolve('web'))) {
+  process.env.ZC_PROVIDER_KEYS_STORE = path.resolve('web', '.zc-provider-keys.json');
+}
+const { deleteProviderKey, saveProviderKey } = await import('../web/src/lib/store/providerKeys.ts');
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const BASE    = process.argv[2] ?? 'http://127.0.0.1:3232';
@@ -270,21 +275,21 @@ try {
   // ── 3. Custom Model Test->Save ─────────────────────────────────────────────
   note('section', '3. Custom Model Test->Save');
   // Ensure anthropic is connected so its Manage modal exposes #custom-model-input & #custom-model-test-btn on clean stores
-  const seededAnthropic = await evaluate(`
+  const anthropicCheck = await evaluate(`
+    const me = await (await fetch('/api/me')).json().catch(() => null);
     const list = (await (await fetch('/api/providers')).json()).providers ?? [];
-    if (list.some(p => p.provider === 'anthropic' && p.connected !== false)) return false;
-    const res = await fetch('/api/providers', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        provider: 'anthropic',
-        model: 'claude-sonnet-4-20250514',
-        models: ['claude-sonnet-4-20250514'],
-        key: 'sk-ant-e2e-fixture-0000000000000000',
-      }),
-    });
-    return res.ok;
+    return {
+      email: me?.email ?? null,
+      connected: list.some(p => p.provider === 'anthropic' && p.connected !== false),
+    };
   `);
+  let seededAnthropic = false;
+  if (!anthropicCheck.connected && anthropicCheck.email) {
+    await saveProviderKey(anthropicCheck.email, 'anthropic', 'claude-sonnet-4-20250514', 'sk-ant-e2e-fixture-0000000000000000', {
+      models: ['claude-sonnet-4-20250514'],
+    });
+    seededAnthropic = true;
+  }
   if (seededAnthropic) {
     await send('Page.reload', { ignoreCache: true });
     await sleep(2500);
@@ -320,8 +325,8 @@ try {
     await closeModalBtn();
     await sleep(400);
   }
-  if (seededAnthropic) {
-    await evaluate(`await fetch('/api/providers?provider=anthropic', { method: 'DELETE' });`);
+  if (seededAnthropic && anthropicCheck.email) {
+    await deleteProviderKey(anthropicCheck.email, 'anthropic').catch(() => {});
   }
 
   // ── 4. Bot Wizard ─────────────────────────────────────────────────────────

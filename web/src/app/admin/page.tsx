@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Moon, Sun } from 'lucide-react';
 import { useApp } from '@/prototype/context/AppContext';
+import type { Copy } from '@/prototype/i18n';
 
 type Coupon = {
   code: string;
@@ -19,97 +20,52 @@ type Coupon = {
 
 type User = { email: string; role: 'user' | 'admin'; createdAt: string };
 
-const copy = {
-  en: {
-    label: 'ADMIN',
-    title: 'Coupon management',
-    intro:
-      'Codes are percentage-only. Each account may use a given code once, and the limit is enforced by the database rather than by this page.',
-    new: 'New coupon',
-    code: 'Code',
-    percent: 'Discount %',
-    expires: 'Expires',
-    never: 'Never expires',
-    cap: 'Max total redemptions',
-    unlimited: 'Unlimited',
-    note: 'Note',
-    active: 'Active',
-    save: 'Save',
-    create: 'Create',
-    cancel: 'Cancel',
-    edit: 'Edit',
-    remove: 'Delete',
-    used: 'Used',
-    accounts: 'Accounts',
-    promote: 'Make admin',
-    demote: 'Make user',
-    resetPassword: 'Reset password',
-    newPassword: 'New password (8+ chars)',
-    resetDone: 'Password reset.',
-    sync: 'Syncing with other admins every 5s',
-    denied: 'This page is for admin accounts only.',
-    signedOut: 'No account is signed in on this device.',
-    empty: 'No coupon yet.',
-    confirmDelete: 'Delete this code? Its redemptions stay as the usage record.',
-    failed: 'Could not reach the server.',
-    signIn: 'Sign in',
-  },
-  vi: {
-    label: 'QUẢN TRỊ',
-    title: 'Quản lý coupon',
-    intro:
-      'Mã chỉ giảm theo phần trăm. Mỗi tài khoản chỉ dùng được một mã đó một lần, và giới hạn do database kiểm soát chứ không phải trang này.',
-    new: 'Tạo coupon',
-    code: 'Mã',
-    percent: 'Giảm %',
-    expires: 'Hết hạn',
-    never: 'Không bao giờ hết hạn',
-    cap: 'Tổng số lượt dùng tối đa',
-    unlimited: 'Không giới hạn',
-    note: 'Ghi chú',
-    active: 'Đang bật',
-    save: 'Lưu',
-    create: 'Tạo',
-    cancel: 'Huỷ',
-    edit: 'Sửa',
-    remove: 'Xoá',
-    used: 'Đã dùng',
-    accounts: 'Tài khoản',
-    promote: 'Cho làm admin',
-    demote: 'Bỏ admin',
-    resetPassword: 'Đặt lại mật khẩu',
-    newPassword: 'Mật khẩu mới (8+ ký tự)',
-    resetDone: 'Đã đặt lại mật khẩu.',
-    sync: 'Đang đồng bộ với admin khác mỗi 5 giây',
-    denied: 'Trang này chỉ dành cho tài khoản admin.',
-    signedOut: 'Thiết bị này chưa đăng nhập tài khoản nào.',
-    empty: 'Chưa có coupon nào.',
-    confirmDelete: 'Xoá mã này? Các lượt đã dùng vẫn được giữ làm lịch sử.',
-    failed: 'Không kết nối được máy chủ.',
-    signIn: 'Đăng nhập',
-  },
-} as const;
-
-const ERROR_TEXT: Record<string, { en: string; vi: string }> = {
-  BAD_CODE: { en: 'Code must be 1–32 characters, A–Z, 0–9, dash or underscore.', vi: 'Mã phải dài 1–32 ký tự, chữ A–Z, số, gạch ngang hoặc gạch dưới.' },
-  BAD_PERCENT: { en: 'Discount must be a whole number from 1 to 100.', vi: 'Phần trăm phải là số nguyên từ 1 đến 100.' },
-  BAD_EXPIRY: { en: 'That expiry date is not a valid date.', vi: 'Ngày hết hạn không hợp lệ.' },
-  BAD_LIMIT: { en: 'The redemption cap must be empty or a whole number of 1 or more.', vi: 'Giới hạn lượt dùng phải để trống hoặc là số nguyên từ 1 trở lên.' },
-  BAD_ROLE: { en: 'Role must be user or admin.', vi: 'Vai trò phải là user hoặc admin.' },
-  COUPON_EXISTS: { en: 'That code already exists.', vi: 'Mã đó đã tồn tại.' },
-  CODE_IMMUTABLE: { en: 'A code cannot be renamed — its redemptions point at it.', vi: 'Không đổi được tên mã — các lượt đã dùng gắn vào mã đó.' },
-  LAST_ADMIN: { en: 'This is the last admin. Removing it would leave nobody able to promote anyone.', vi: 'Đây là admin cuối cùng. Bỏ đi thì không còn ai phong được admin nữa.' },
-  FOUNDER_LOCKED: { en: 'The founder account can never be demoted.', vi: 'Tài khoản founder không bao giờ bị bỏ admin.' },
-  ONLY_FOUNDER_CAN_DEMOTE: { en: 'Only the founder can remove admin role.', vi: 'Chỉ founder mới được bỏ admin của người khác.' },
-  ONLY_FOUNDER: { en: 'Only the founder can reset passwords.', vi: 'Chỉ founder mới được đặt lại mật khẩu.' },
-  PASSWORD_TOO_SHORT: { en: 'Password must be at least 8 characters.', vi: 'Mật khẩu phải dài ít nhất 8 ký tự.' },
-  RESET_FAILED: { en: 'Password reset failed on the server.', vi: 'Đặt lại mật khẩu thất bại trên máy chủ.' },
-  UNKNOWN_USER: { en: 'No such account.', vi: 'Không có tài khoản này.' },
-  FORBIDDEN: { en: 'This account is not an admin.', vi: 'Tài khoản này không phải admin.' },
-  NEED_LOGIN: { en: 'No account is signed in on this device.', vi: 'Thiết bị này chưa đăng nhập tài khoản nào.' },
-};
-
 const EMPTY_FORM = { code: '', percent: '20', expires: '', never: true, cap: '', active: true, note: '' };
+
+const adminErrorMessage = (code: string | undefined, t: Copy): string => {
+  switch (code) {
+    case 'INVALID_JSON':
+      return t.adminErrInvalidJson;
+    case 'BAD_CODE':
+    case 'INVALID_CODE':
+      return t.adminErrInvalidCode;
+    case 'BAD_PERCENT':
+    case 'INVALID_PERCENT':
+      return t.adminErrInvalidPercent;
+    case 'BAD_LIMIT':
+    case 'INVALID_CAP':
+      return t.adminErrInvalidCap;
+    case 'BAD_EXPIRY':
+    case 'INVALID_EXPIRY':
+      return t.adminErrInvalidExpiry;
+    case 'BAD_ROLE':
+      return t.adminErrBadRole;
+    case 'COUPON_EXISTS':
+      return t.adminErrCouponExists;
+    case 'CODE_IMMUTABLE':
+      return t.adminErrCodeImmutable;
+    case 'LAST_ADMIN':
+      return t.adminErrLastAdmin;
+    case 'FOUNDER_LOCKED':
+      return t.adminErrFounderLocked;
+    case 'ONLY_FOUNDER_CAN_DEMOTE':
+      return t.adminErrOnlyFounderDemote;
+    case 'ONLY_FOUNDER':
+      return t.adminErrOnlyFounder;
+    case 'PASSWORD_TOO_SHORT':
+      return t.adminErrPasswordTooShort;
+    case 'RESET_FAILED':
+      return t.adminErrResetFailed;
+    case 'UNKNOWN_USER':
+      return t.adminErrUnknownUser;
+    case 'FORBIDDEN':
+      return t.adminErrForbidden;
+    case 'NEED_LOGIN':
+      return t.adminErrNeedLogin;
+    default:
+      return code || t.adminUnknownError;
+  }
+};
 
 /** A date input gives a day; a coupon that expires on the 30th is usable through the 30th. */
 const endOfDay = (date: string): string | null => {
@@ -121,7 +77,7 @@ const endOfDay = (date: string): string | null => {
 const toDateInput = (iso: string | null): string => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 
 export default function AdminPage() {
-  const { language, setLanguage, theme, toggleTheme, t: appCopy } = useApp();
+  const { language, setLanguage, theme, toggleTheme, t } = useApp();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [status, setStatus] = useState<'loading' | 'ok' | 'denied' | 'signedOut'>('loading');
@@ -132,18 +88,9 @@ export default function AdminPage() {
   const [me, setMe] = useState<{ email: string; isFounder: boolean } | null>(null);
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [newPassword, setNewPassword] = useState('');
-  // The ref closes the double-submit window synchronously; the state drives the disabled button.
-  // A ref read during render is a React error, so it cannot do both jobs.
   const busy = useRef(false);
   const [saving, setSaving] = useState(false);
 
-  const t = copy[language];
-
-  /**
-   * Pure data, no setState — so both the poller and the buttons after a mutation can share it.
-   * The `active` flag belongs to the poller, because a poll that resolves after unmount, or after
-   * a newer poll started, must not write stale rows over fresh ones.
-   */
   const fetchAll = useCallback(async () => {
     const [couponResponse, userResponse] = await Promise.all([
       fetch('/api/admin/coupons'),
@@ -168,9 +115,9 @@ export default function AdminPage() {
         setStatus(next.kind);
       }
     } catch {
-      setError(t.failed);
+      setError(t.adminFailed);
     }
-  }, [fetchAll, t.failed]);
+  }, [fetchAll, t.adminFailed]);
 
   useEffect(() => {
     let active = true;
@@ -186,25 +133,22 @@ export default function AdminPage() {
           setStatus(next.kind);
         }
       } catch {
-        if (active) setError(t.failed);
+        if (active) setError(t.adminFailed);
       }
     };
     void poll();
-    // The other-admin sync. Polling rather than a socket: the data changes only when someone
-    // edits it, a five-second lag is invisible here, and it needs no realtime publication set up
-    // on the database. ponytail: swap for Supabase Realtime if admins ever need sub-second sync.
     const timer = setInterval(() => void poll(), 5000);
     return () => {
       active = false;
       clearInterval(timer);
     };
-  }, [fetchAll, t.failed]);
+  }, [fetchAll, t.adminFailed]);
 
   useEffect(() => {
     document.documentElement.lang = language;
-  }, [language]);
+    document.title = t.adminPageTitle;
+  }, [language, t.adminPageTitle]);
 
-  // Caller identity: decides who sees the demote button and the password-reset row.
   useEffect(() => {
     let active = true;
     void fetch('/api/me')
@@ -249,14 +193,14 @@ export default function AdminPage() {
           });
       if (!response.ok) {
         const json = (await response.json().catch(() => ({}))) as { error?: string };
-        setError(ERROR_TEXT[json.error ?? '']?.[language] ?? json.error ?? 'UNKNOWN');
+        setError(adminErrorMessage(json.error, t));
         return;
       }
       setForm(EMPTY_FORM);
       setEditing(null);
       await refresh();
     } catch {
-      setError(t.failed);
+      setError(t.adminFailed);
     } finally {
       busy.current = false;
       setSaving(false);
@@ -278,11 +222,11 @@ export default function AdminPage() {
   };
 
   const remove = async (coupon: Coupon) => {
-    if (!window.confirm(t.confirmDelete)) return;
+    if (!window.confirm(t.adminConfirmDelete)) return;
     const response = await fetch(`/api/admin/coupons/${encodeURIComponent(coupon.code)}`, { method: 'DELETE' });
     if (!response.ok) {
       const json = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(ERROR_TEXT[json.error ?? '']?.[language] ?? json.error ?? 'UNKNOWN');
+      setError(adminErrorMessage(json.error, t));
       return;
     }
     if (editing === coupon.code) {
@@ -305,7 +249,7 @@ export default function AdminPage() {
     setError(null);
     setNotice(null);
     if (newPassword.length < 8) {
-      setError(ERROR_TEXT.PASSWORD_TOO_SHORT[language]);
+      setError(t.adminErrPasswordTooShort);
       return;
     }
     const response = await fetch(`/api/admin/users/${encodeURIComponent(user.email)}/password`, {
@@ -315,12 +259,12 @@ export default function AdminPage() {
     });
     if (!response.ok) {
       const json = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(ERROR_TEXT[json.error ?? '']?.[language] ?? json.error ?? 'UNKNOWN');
+      setError(adminErrorMessage(json.error, t));
       return;
     }
     setResetFor(null);
     setNewPassword('');
-    setNotice(t.resetDone);
+    setNotice(t.adminResetDone);
   };
 
   const setRole = async (user: User, role: 'user' | 'admin') => {
@@ -332,7 +276,7 @@ export default function AdminPage() {
     });
     if (!response.ok) {
       const json = (await response.json().catch(() => ({}))) as { error?: string };
-      setError(ERROR_TEXT[json.error ?? '']?.[language] ?? json.error ?? 'UNKNOWN');
+      setError(adminErrorMessage(json.error, t));
     }
     await refresh();
   };
@@ -344,15 +288,45 @@ export default function AdminPage() {
   const button = 'min-h-11 rounded-full border border-border px-4 text-sm text-ink transition hover:border-brass/50';
   const primary = 'min-h-11 rounded-full bg-brass px-5 text-sm font-medium text-accent-ink transition disabled:opacity-50';
 
+  const headerControls = (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label={t.language}>
+        {(['en', 'vi'] as const).map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-accent-ink' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
+            aria-pressed={language === item}
+            onClick={() => void setLanguage(item)}
+          >
+            {item === 'en' ? 'English' : 'Tiếng Việt'}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={toggleTheme}
+        aria-label={theme === 'dark' ? t.themeToLight : t.themeToDark}
+        title={theme === 'dark' ? t.themeToLight : t.themeToDark}
+        className="icon-button min-w-11 px-3"
+      >
+        {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+      </button>
+    </div>
+  );
+
   if (status === 'signedOut' || status === 'denied' || status === 'loading') {
     return (
-      <main className="mx-auto w-full max-w-3xl px-5 py-16 text-center sm:px-10">
-        <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
-        <h1 className="mt-3 font-serif text-3xl text-ink">{t.title}</h1>
-        <p className="mt-4 text-ink-muted">{status === 'loading' ? '…' : status === 'denied' ? t.denied : t.signedOut}</p>
+      <main lang={language} className="mx-auto w-full max-w-3xl px-4 py-10 text-center sm:px-10">
+        <div className="mb-8 flex justify-end">{headerControls}</div>
+        <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.adminLabel}</p>
+        <h1 className="mt-3 font-serif text-3xl text-ink">{t.adminTitle}</h1>
+        <p className="mt-4 text-ink-muted">
+          {status === 'loading' ? '…' : status === 'denied' ? t.adminDenied : t.adminSignedOut}
+        </p>
         {status !== 'loading' && (
           <Link href="/" className={`${button} mt-6 inline-flex items-center`}>
-            {t.signIn}
+            {t.adminSignIn}
           </Link>
         )}
       </main>
@@ -360,50 +334,27 @@ export default function AdminPage() {
   }
 
   return (
-    <main lang={language} className="mx-auto w-full max-w-5xl space-y-10 px-5 py-10 sm:px-10">
+    <main lang={language} className="mx-auto w-full max-w-5xl space-y-10 px-4 py-10 sm:px-10">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-6">
-        <div>
-          <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
-          <h1 className="mt-2 font-serif text-3xl text-ink">{t.title}</h1>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.adminLabel}</p>
+          <h1 className="mt-2 font-serif text-3xl text-ink">{t.adminTitle}</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label={appCopy.language}>
-          {(['en', 'vi'] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-accent-ink' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
-              aria-pressed={language === item}
-              onClick={() => void setLanguage(item)}
-            >
-              {item === 'en' ? 'English' : 'Tiếng Việt'}
-            </button>
-          ))}
-        </div>
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? appCopy.themeToLight : appCopy.themeToDark}
-            title={theme === 'dark' ? appCopy.themeToLight : appCopy.themeToDark}
-            className="icon-button min-w-11 px-3"
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
-          </button>
-        </div>
+        {headerControls}
       </header>
 
-      <p className="max-w-3xl text-ink-muted">{t.intro}</p>
-      <p className="text-sm text-ink-muted">{t.sync}</p>
+      <p className="max-w-3xl text-ink-muted">{t.adminIntro}</p>
+      <p className="text-sm text-ink-muted">{t.adminSync}</p>
       {error && <p role="alert" className="rounded-xl border border-terracotta/40 bg-terracotta/10 px-4 py-3 text-sm text-terracotta">{error}</p>}
       {notice && <p role="status" className="rounded-xl border border-brass/40 bg-brass/10 px-4 py-3 text-sm text-ink">{notice}</p>}
 
-      <section className="rounded-2xl border border-border bg-surface p-6" aria-labelledby="form-heading">
+      <section className="rounded-2xl border border-border bg-surface p-5 sm:p-6" aria-labelledby="form-heading">
         <h2 id="form-heading" className="font-serif text-xl text-ink">
-          {editing ? t.edit : t.new}
+          {editing ? t.adminEdit : t.adminNew}
         </h2>
         <form className="mt-4 grid gap-4 sm:grid-cols-2" onSubmit={submit}>
           <div>
-            <label className={label} htmlFor="code">{t.code}</label>
+            <label className={label} htmlFor="code">{t.adminCode}</label>
             <input
               id="code"
               className={field}
@@ -414,7 +365,7 @@ export default function AdminPage() {
             />
           </div>
           <div>
-            <label className={label} htmlFor="percent">{t.percent}</label>
+            <label className={label} htmlFor="percent">{t.adminPercent}</label>
             <input
               id="percent"
               className={field}
@@ -434,7 +385,7 @@ export default function AdminPage() {
                 checked={form.never}
                 onChange={(e) => setForm({ ...form, never: e.target.checked })}
               />
-              {t.never}
+              {t.adminNever}
             </label>
             <input
               id="expires"
@@ -446,19 +397,19 @@ export default function AdminPage() {
             />
           </div>
           <div>
-            <label className={label} htmlFor="cap">{t.cap}</label>
+            <label className={label} htmlFor="cap">{t.adminCap}</label>
             <input
               id="cap"
               className={field}
               type="number"
               min={1}
-              placeholder={t.unlimited}
+              placeholder={t.adminUnlimited}
               value={form.cap}
               onChange={(e) => setForm({ ...form, cap: e.target.value })}
             />
           </div>
           <div>
-            <label className={label} htmlFor="note">{t.note}</label>
+            <label className={label} htmlFor="note">{t.adminNote}</label>
             <input
               id="note"
               className={field}
@@ -473,12 +424,12 @@ export default function AdminPage() {
                 checked={form.active}
                 onChange={(e) => setForm({ ...form, active: e.target.checked })}
               />
-              {t.active}
+              {t.adminActive}
             </label>
           </div>
           <div className="flex flex-wrap gap-2 sm:col-span-2">
             <button type="submit" className={primary} disabled={saving}>
-              {editing ? t.save : t.create}
+              {t.adminSave}
             </button>
             {editing && (
               <button
@@ -489,7 +440,7 @@ export default function AdminPage() {
                   setForm(EMPTY_FORM);
                 }}
               >
-                {t.cancel}
+                {t.adminCancel}
               </button>
             )}
           </div>
@@ -497,31 +448,31 @@ export default function AdminPage() {
       </section>
 
       <section className="space-y-3" aria-labelledby="coupons-heading">
-        <h2 id="coupons-heading" className="font-serif text-xl text-ink">{t.code}</h2>
-        {coupons.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
+        <h2 id="coupons-heading" className="font-serif text-xl text-ink">{t.adminCode}</h2>
+        {coupons.length === 0 && <p className="text-ink-muted">{t.adminEmptyCoupons}</p>}
         {coupons.map((coupon) => (
           <article key={coupon.code} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
             <div className="min-w-0">
               <p className="font-mono text-ink">
                 {coupon.code} <span className="text-brass">−{coupon.percent}%</span>
-                {!coupon.active && <span className="ml-2 text-sm text-ink-muted">(off)</span>}
+                {!coupon.active && <span className="ml-2 text-sm text-ink-muted">{t.adminCouponOffBadge}</span>}
               </p>
               <p className="mt-1 text-sm text-ink-muted">
-                {t.expires}: {coupon.expiresAt ? dateFormat.format(new Date(coupon.expiresAt)) : t.never} · {t.used}{' '}
+                {t.adminExpires}: {coupon.expiresAt ? dateFormat.format(new Date(coupon.expiresAt)) : t.adminNever} · {t.adminUsed}{' '}
                 {coupon.used}
-                {coupon.maxTotalRedemptions === null ? ` / ${t.unlimited}` : ` / ${coupon.maxTotalRedemptions}`}
+                {coupon.maxTotalRedemptions === null ? ` / ${t.adminUnlimited}` : ` / ${coupon.maxTotalRedemptions}`}
                 {coupon.note ? ` · ${coupon.note}` : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" className={button} onClick={() => toggleActive(coupon)}>
-                {coupon.active ? 'Off' : 'On'}
+                {coupon.active ? t.adminActionTurnOff : t.adminActionTurnOn}
               </button>
               <button type="button" className={button} onClick={() => startEdit(coupon)}>
-                {t.edit}
+                {t.adminEdit}
               </button>
               <button type="button" className={button} onClick={() => remove(coupon)}>
-                {t.remove}
+                {t.adminRemove}
               </button>
             </div>
           </article>
@@ -529,69 +480,70 @@ export default function AdminPage() {
       </section>
 
       <section className="space-y-3" aria-labelledby="users-heading">
-        <h2 id="users-heading" className="font-serif text-xl text-ink">{t.accounts}</h2>
-        {users.length === 0 && <p className="text-ink-muted">{t.empty}</p>}
+        <h2 id="users-heading" className="font-serif text-xl text-ink">{t.adminAccounts}</h2>
+        {users.length === 0 && <p className="text-ink-muted">{t.adminEmptyAccounts}</p>}
         {users.map((user) => {
           const isFounderRow = Boolean(me?.isFounder && me.email.toLowerCase() === user.email.toLowerCase());
           const canDemote = Boolean(me?.isFounder && !isFounderRow);
           return (
-          <article key={user.email} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
-            <div className="min-w-0 grow">
-              <p className="truncate text-ink">{user.email}</p>
-              <p className="mt-1 text-sm text-ink-muted">{user.role}</p>
-              {me?.isFounder && resetFor === user.email ? (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <input
-                    type="password"
-                    className={field}
-                    style={{ maxWidth: '16rem' }}
-                    value={newPassword}
-                    autoComplete="new-password"
-                    placeholder={t.newPassword}
-                    aria-label={t.newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                  <button type="button" className={primary} onClick={() => void resetPassword(user)}>
-                    {t.resetPassword}
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {user.role === 'admin' ? (
-                canDemote ? (
+            <article key={user.email} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-surface p-4">
+              <div className="min-w-0 grow">
+                <p className="truncate text-ink">{user.email}</p>
+                <p className="mt-1 text-sm text-ink-muted">
+                  {user.role === 'admin' ? t.adminRoleAdmin : t.adminRoleUser}
+                </p>
+                {me?.isFounder && resetFor === user.email ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <input
+                      type="password"
+                      className={`${field} sm:max-w-xs`}
+                      value={newPassword}
+                      autoComplete="new-password"
+                      placeholder={t.adminNewPassword}
+                      aria-label={t.adminNewPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                    <button type="button" className={primary} onClick={() => void resetPassword(user)}>
+                      {t.adminResetPassword}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {user.role === 'admin' ? (
+                  canDemote ? (
+                    <button
+                      type="button"
+                      className={button}
+                      onClick={() => setRole(user, 'user')}
+                    >
+                      {t.adminRemoveAdmin}
+                    </button>
+                  ) : null
+                ) : (
                   <button
                     type="button"
                     className={button}
-                    onClick={() => setRole(user, 'user')}
+                    onClick={() => setRole(user, 'admin')}
                   >
-                    {t.demote}
+                    {t.adminMakeAdmin}
                   </button>
-                ) : null
-              ) : (
-                <button
-                  type="button"
-                  className={button}
-                  onClick={() => setRole(user, 'admin')}
-                >
-                  {t.promote}
-                </button>
-              )}
-              {me?.isFounder ? (
-                <button
-                  type="button"
-                  className={button}
-                  onClick={() => {
-                    setResetFor(resetFor === user.email ? null : user.email);
-                    setNewPassword('');
-                    setError(null);
-                  }}
-                >
-                  {t.resetPassword}
-                </button>
-              ) : null}
-            </div>
-          </article>
+                )}
+                {me?.isFounder ? (
+                  <button
+                    type="button"
+                    className={button}
+                    onClick={() => {
+                      setResetFor(resetFor === user.email ? null : user.email);
+                      setNewPassword('');
+                      setError(null);
+                    }}
+                  >
+                    {t.adminResetPassword}
+                  </button>
+                ) : null}
+              </div>
+            </article>
           );
         })}
       </section>

@@ -1,8 +1,15 @@
+'use client';
+
 import { HeaderLoading } from "@/prototype/components/HeaderLoading";
+import { useOptionalApp } from "@/prototype/context/AppContext";
+import { copy } from "@/prototype/i18n";
 
 export default function DashboardLoading() {
+  const app = useOptionalApp();
+  const label = app?.t.loadingDashboard ?? copy.en.loadingDashboard;
+
   return (
-    <div className="min-h-screen bg-background text-ink animate-pulse" aria-busy="true" aria-label="Loading dashboard">
+    <div className="min-h-screen bg-background text-ink animate-pulse" aria-busy="true" aria-label={label}>
       {/* Header Skeleton using shared HeaderLoading (Workspace mode) */}
       <HeaderLoading isWorkspace={true} />
 

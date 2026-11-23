@@ -15,6 +15,8 @@
  */
 
 import { UnreadableFileError } from './read-file-web.ts';
+import { localizeAttachmentProblem } from '../i18n.ts';
+import type { Language } from '../types.ts';
 
 /** Raw input ceiling. The output is far smaller; this only stops a pasted 500 MB file. */
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
@@ -53,7 +55,7 @@ export interface ImageReading {
   height: number;
 }
 
-export const readImageInBrowser = async (file: Blob & { name: string }): Promise<ImageReading> => {
+const readImageRaw = async (file: Blob & { name: string }): Promise<ImageReading> => {
   if (file.size === 0) throw new UnreadableFileError('The file is empty.');
   if (file.size > MAX_IMAGE_BYTES) {
     throw new UnreadableFileError(`The image is larger than ${MAX_IMAGE_BYTES / (1024 * 1024)} MB.`);
@@ -86,5 +88,20 @@ export const readImageInBrowser = async (file: Blob & { name: string }): Promise
     throw new UnreadableFileError('This image is too detailed to send. Try a smaller one.');
   } finally {
     bitmap.close();
+  }
+};
+
+export const readImageInBrowser = async (
+  file: Blob & { name: string },
+  options: { language?: Language } = {}
+): Promise<ImageReading> => {
+  const language = options.language === 'vi' ? 'vi' : 'en';
+  try {
+    return await readImageRaw(file);
+  } catch (error) {
+    if (error instanceof UnreadableFileError && language !== 'en') {
+      throw new UnreadableFileError(localizeAttachmentProblem(error.reason, language));
+    }
+    throw error;
   }
 };

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/client';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '../context/AppContext';
+import { localizeAuthError } from '../i18n';
 import { Eye, EyeOff, LockKeyhole, Mail, RefreshCw, Save } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
@@ -63,7 +64,7 @@ export const SetPasswordView: React.FC = () => {
     });
     
     if (error) {
-      setError(error.message);
+      setError(localizeAuthError(error.message, t));
       return;
     }
 
@@ -94,7 +95,7 @@ export const SetPasswordView: React.FC = () => {
           ) : !isValidToken ? (
             /* TRẠNG THÁI 2: Link không hợp lệ / Hết hạn */
             <div className="panel p-6 text-center space-y-4">
-              <p className="text-red-500 font-medium">{t.authInvalidTokenTitle}</p>
+              <p className="text-terracotta font-medium">{t.authInvalidTokenTitle}</p>
               <p className="text-sm text-ink-muted">{t.authInvalidTokenBody}</p>
               <a 
                 href="/auth"
@@ -113,7 +114,7 @@ export const SetPasswordView: React.FC = () => {
                 <input
                   type="email"
                   value={email ? email : ''}
-                  placeholder="you@example.com"
+                  placeholder={t.emailPlaceholder}
                   required
                   readOnly
                   style={{ paddingLeft: '2.25rem' }}
