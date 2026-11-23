@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-
-type Language = 'en' | 'vi';
+import { Moon, Sun } from 'lucide-react';
+import { useApp } from '@/prototype/context/AppContext';
 
 type Coupon = {
   code: string;
@@ -121,7 +121,7 @@ const endOfDay = (date: string): string | null => {
 const toDateInput = (iso: string | null): string => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
 
 export default function AdminPage() {
-  const [language, setLanguage] = useState<Language>('en');
+  const { language, setLanguage, theme, toggleTheme, t: appCopy } = useApp();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [status, setStatus] = useState<'loading' | 'ok' | 'denied' | 'signedOut'>('loading');
@@ -342,7 +342,7 @@ export default function AdminPage() {
   const field =
     'min-h-11 w-full rounded-xl border border-border bg-background px-3 text-sm text-ink outline-none focus:border-brass/60';
   const button = 'min-h-11 rounded-full border border-border px-4 text-sm text-ink transition hover:border-brass/50';
-  const primary = 'min-h-11 rounded-full bg-brass px-5 text-sm font-medium text-white transition disabled:opacity-50';
+  const primary = 'min-h-11 rounded-full bg-brass px-5 text-sm font-medium text-accent-ink transition disabled:opacity-50';
 
   if (status === 'signedOut' || status === 'denied' || status === 'loading') {
     return (
@@ -366,24 +366,35 @@ export default function AdminPage() {
           <p className="text-sm font-semibold tracking-widest text-brass">ZERO COUNCIL · {t.label}</p>
           <h1 className="mt-2 font-serif text-3xl text-ink">{t.title}</h1>
         </div>
-        <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label="Language">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label={appCopy.language}>
           {(['en', 'vi'] as const).map((item) => (
             <button
               key={item}
               type="button"
-              className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-white' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
+              className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-accent-ink' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
               aria-pressed={language === item}
-              onClick={() => setLanguage(item)}
+              onClick={() => void setLanguage(item)}
             >
               {item === 'en' ? 'English' : 'Tiếng Việt'}
             </button>
           ))}
         </div>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === 'dark' ? appCopy.themeToLight : appCopy.themeToDark}
+            title={theme === 'dark' ? appCopy.themeToLight : appCopy.themeToDark}
+            className="icon-button min-w-11 px-3"
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
+          </button>
+        </div>
       </header>
 
       <p className="max-w-3xl text-ink-muted">{t.intro}</p>
       <p className="text-sm text-ink-muted">{t.sync}</p>
-      {error && <p role="alert" className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="rounded-xl border border-terracotta/40 bg-terracotta/10 px-4 py-3 text-sm text-terracotta">{error}</p>}
       {notice && <p role="status" className="rounded-xl border border-brass/40 bg-brass/10 px-4 py-3 text-sm text-ink">{notice}</p>}
 
       <section className="rounded-2xl border border-border bg-surface p-6" aria-labelledby="form-heading">

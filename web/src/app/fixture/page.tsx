@@ -79,7 +79,7 @@ export default function FixturePage() {
               <button
                 key={item}
                 type="button"
-                className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-white' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
+                className={`min-h-11 rounded-full px-3 text-sm transition ${language === item ? 'bg-brass text-accent-ink' : 'text-ink-muted hover:bg-background hover:text-ink'}`}
                 aria-pressed={language === item}
                 onClick={() => setLanguage(item)}
               >

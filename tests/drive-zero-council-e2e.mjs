@@ -86,7 +86,7 @@ const send = (method, params = {}) => new Promise((res, rej) => {
 
 async function evaluate(expression) {
   const { result, exceptionDetails } = await send('Runtime.evaluate', {
-    expression: `(() => { ${expression} })()`,
+    expression: `(async () => { ${expression} })()`,
     returnByValue: true,
     awaitPromise: true,
   });
@@ -125,7 +125,7 @@ const typeInto = (sel, val) => evaluate(`
 const closeModalBtn = () => evaluate(`
   const btn = [...document.querySelectorAll('button')].find(b => {
     const r = b.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && (b.textContent.trim() === 'Cancel' || b.textContent.trim() === 'Close');
+    return r.width > 0 && r.height > 0 && ['Cancel', 'Close', 'Hủy', 'Đóng'].includes(b.textContent.trim());
   });
   if (!btn) return 'NOT FOUND';
   btn.click(); return 'closed';
@@ -142,7 +142,7 @@ const navTo = async label => {
       const txt = b.textContent.replace(/\\s+/g, ' ').trim().toLowerCase();
       if (r.width === 0 || r.height === 0) return false;
       if (txt === target || txt.includes(target)) return true;
-      if (target === 'api keys' && (txt.includes('integrations') || txt.includes('tích hợp'))) return true;
+      if (target === 'api keys' && (txt.includes('api keys') || txt.includes('khóa api') || txt.includes('integrations') || txt.includes('tích hợp'))) return true;
       if (target === 'personas' && (txt.includes('advisors') || txt.includes('cố vấn'))) return true;
       if (target === 'advisors' && (txt.includes('advisors') || txt.includes('cố vấn'))) return true;
       if (target === 'billing' && (txt.includes('billing') || txt.includes('thanh toán'))) return true;
@@ -163,6 +163,7 @@ const enterWorkspace = async () => {
       || !!document.querySelector('nav, #provider-base-url, [role="log"]');
   `);
   if (inWorkspace) {
+    await evaluate(`await fetch('/api/language', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ language: 'en' }) });`);
     note('enter-workspace', 'already in workspace');
     return 'clicked';
   }
@@ -268,7 +269,29 @@ try {
 
   // ── 3. Custom Model Test->Save ─────────────────────────────────────────────
   note('section', '3. Custom Model Test->Save');
-  // Open first Connect modal to test custom model box
+  // Ensure anthropic is connected so its Manage modal exposes #custom-model-input & #custom-model-test-btn on clean stores
+  const seededAnthropic = await evaluate(`
+    const list = (await (await fetch('/api/providers')).json()).providers ?? [];
+    if (list.some(p => p.provider === 'anthropic' && p.connected !== false)) return false;
+    const res = await fetch('/api/providers', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-20250514',
+        models: ['claude-sonnet-4-20250514'],
+        key: 'sk-ant-e2e-fixture-0000000000000000',
+      }),
+    });
+    return res.ok;
+  `);
+  if (seededAnthropic) {
+    await send('Page.reload', { ignoreCache: true });
+    await sleep(2500);
+    await navTo('API Keys');
+    await sleep(900);
+  }
+
   const openConn = await evaluate(`
     const btn = document.querySelector('#provider-connect-anthropic')
       || [...document.querySelectorAll('button')].find(b => {
@@ -297,20 +320,23 @@ try {
     await closeModalBtn();
     await sleep(400);
   }
+  if (seededAnthropic) {
+    await evaluate(`await fetch('/api/providers?provider=anthropic', { method: 'DELETE' });`);
+  }
 
   // ── 4. Bot Wizard ─────────────────────────────────────────────────────────
   note('section', '4. Bot Wizard');
-  const toAdvisors = await navTo('Advisors');
-  note('nav-advisors', toAdvisors);
-  check('nav to Advisors', toAdvisors === 'clicked', toAdvisors);
-  await sleep(1200);
-
-  // Click New bot button
+  // Click New bot button directly in the workspace left-bar (#sidebar-new-bot-btn)
   const toNewBot = await evaluate(`
+    const direct = document.querySelector('#sidebar-new-bot-btn');
+    if (direct && direct.getBoundingClientRect().width > 0) {
+      direct.click();
+      return 'clicked';
+    }
     const btn = [...document.querySelectorAll('button, a')].find(b => {
       const r = b.getBoundingClientRect();
       const txt = b.textContent.trim().toLowerCase();
-      return r.width > 0 && r.height > 0 && (txt.includes('new bot') || txt.includes('tạo bot'));
+      return r.width > 0 && r.height > 0 && (txt.includes('new bot') || txt.includes('bot mới') || txt.includes('tạo bot'));
     });
     if (!btn) return 'MISSING';
     btn.click(); return 'clicked';
@@ -332,14 +358,16 @@ try {
 
   // ── 5. Group Chat (>= 2 bots) & A2A conversation ─────────────────────────
   note('section', '5. Group Chat & A2A natural conversation');
-  await navTo('Advisors');
-  await sleep(1000);
-
   const openGroupModal = await evaluate(`
+    const direct = document.querySelector('#sidebar-new-group-btn');
+    if (direct && direct.getBoundingClientRect().width > 0) {
+      direct.click();
+      return 'clicked';
+    }
     const btn = [...document.querySelectorAll('button')].find(b => {
       const r = b.getBoundingClientRect();
       const txt = b.textContent.trim().toLowerCase();
-      return r.width > 0 && r.height > 0 && (txt.includes('new group chat') || txt.includes('phòng nhóm') || txt.includes('open room'));
+      return r.width > 0 && r.height > 0 && (txt.includes('new group chat') || txt.includes('tạo nhóm chat') || txt.includes('phòng nhóm') || txt.includes('open room'));
     });
     if (!btn) return 'MISSING';
     btn.click(); return 'clicked';

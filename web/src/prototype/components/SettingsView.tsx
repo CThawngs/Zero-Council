@@ -1,8 +1,5 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Check, Globe2, RotateCcw } from 'lucide-react';
-import { PLANS, planPrice } from '../data/plans';
-import { Modal } from './Modal';
 import { translations } from '../i18n';
 import { WORKSPACE_NAV } from '../navigation';
 import { ViewType } from '../types';
