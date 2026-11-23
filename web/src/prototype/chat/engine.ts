@@ -35,6 +35,7 @@ export const USER_HANDLE = 'user';
 export const SILENT_TOKEN = '[SILENT]';
 
 /** Mentions that address every held advisor at once, for a resume. */
+export const USER_ALIASES = ['user', 'you'];
 export const RESUME_ALIASES = ['all', 'everyone'];
 
 /** Context window per advisor turn, matching the Hermes budget rather than an unbounded transcript. */
@@ -214,6 +215,7 @@ const normalize = (value: string): string =>
   value
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
+    .replace(/[đĐ]/g, 'd')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
@@ -240,7 +242,10 @@ const aliasTable = (roster: ChatBot[]): Map<string, string> => {
   for (const bot of roster) {
     for (const alias of aliasesOf(bot)) if (!byAlias.has(alias)) byAlias.set(alias, bot.id);
   }
-  byAlias.set(normalize(USER_HANDLE), USER_HANDLE);
+  for (const alias of USER_ALIASES) {
+    const key = normalize(alias);
+    if (!byAlias.has(key)) byAlias.set(key, USER_HANDLE);
+  }
   for (const alias of RESUME_ALIASES) byAlias.set(normalize(alias), RESUME_ALL);
   return byAlias;
 };
@@ -339,8 +344,20 @@ export const planSpeakers = ({
 }: Pick<RunTurnInput, 'roster' | 'mode' | 'history' | 'userMessage'>): { speakers: ChatBot[]; closes: boolean } => {
   if (roster.length === 0) return { speakers: [], closes: false };
 
+  const hasAll = userMessage.mentioned.includes(RESUME_ALL);
   const mentioned = userMessage.mentioned.filter((id) => id !== USER_HANDLE && id !== RESUME_ALL);
   if (mode === 'panel') return { speakers: [...roster], closes: true };
+
+  if (hasAll) {
+    const namedFirst = mentioned
+      .map((id) => roster.find((bot) => bot.id === id))
+      .filter((bot): bot is ChatBot => Boolean(bot));
+    const remaining = roster.filter((bot) => !namedFirst.some((n) => n.id === bot.id));
+    return {
+      speakers: [...namedFirst, ...remaining],
+      closes: false,
+    };
+  }
 
   if (mentioned.length > 0) {
     return {
