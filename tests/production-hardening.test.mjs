@@ -48,6 +48,7 @@ test('providerKeys: dev/test mode falls back cleanly when ZC_PROVIDER_KEY_SECRET
       VERCEL: undefined,
       ZC_REQUIRE_PROD_SECRETS: undefined,
       ZC_PROVIDER_KEY_SECRET: undefined,
+      SUPABASE_SERVICE_ROLE_KEY: undefined,
     },
     () => {
       assert.equal(isEncryptionKeyConfigured(), false);
@@ -58,22 +59,24 @@ test('providerKeys: dev/test mode falls back cleanly when ZC_PROVIDER_KEY_SECRET
 });
 
 test('providerKeys: VERCEL=1 refuses missing, malformed, or wrong-length ZC_PROVIDER_KEY_SECRET', () => {
-  for (const invalidSecret of [
-    undefined,
-    '',
-    'not-valid-base64!!!',
-    randomBytes(16).toString('base64'),
-    randomBytes(48).toString('base64'),
-  ]) {
+  const cases = [
+    [undefined, /MISSING_PROVIDER_KEY_SECRET/],
+    ['', /MISSING_PROVIDER_KEY_SECRET/],
+    ['not-valid-base64!!!', /INVALID_PROVIDER_KEY_SECRET/],
+    [randomBytes(16).toString('base64'), /INVALID_PROVIDER_KEY_SECRET/],
+    [randomBytes(48).toString('base64'), /INVALID_PROVIDER_KEY_SECRET/],
+  ];
+  for (const [invalidSecret, expectedError] of cases) {
     withEnv(
       {
         VERCEL: '1',
         ZC_REQUIRE_PROD_SECRETS: undefined,
         ZC_PROVIDER_KEY_SECRET: invalidSecret,
+        SUPABASE_SERVICE_ROLE_KEY: undefined,
       },
       () => {
         assert.equal(isEncryptionKeyConfigured(), false);
-        assert.throws(() => encryptProviderKey('sk-prod-test'), /MISSING_PROVIDER_KEY_SECRET/);
+        assert.throws(() => encryptProviderKey('sk-prod-test'), expectedError);
       }
     );
   }
@@ -88,6 +91,7 @@ test('providerKeys: ZC_REQUIRE_PROD_SECRETS=1 enforces explicit 32-byte base64 k
       VERCEL: undefined,
       ZC_REQUIRE_PROD_SECRETS: '1',
       ZC_PROVIDER_KEY_SECRET: validSecret,
+      SUPABASE_SERVICE_ROLE_KEY: undefined,
     },
     () => {
       assert.equal(isEncryptionKeyConfigured(), true);
@@ -101,6 +105,7 @@ test('providerKeys: ZC_REQUIRE_PROD_SECRETS=1 enforces explicit 32-byte base64 k
       VERCEL: undefined,
       ZC_REQUIRE_PROD_SECRETS: '1',
       ZC_PROVIDER_KEY_SECRET: undefined,
+      SUPABASE_SERVICE_ROLE_KEY: undefined,
     },
     () => {
       assert.throws(() => decryptProviderKey(envelope), /MISSING_PROVIDER_KEY_SECRET/);

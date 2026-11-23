@@ -1,4 +1,4 @@
-import { isEncryptionKeyConfigured } from '@/lib/crypto/providerKeys';
+import { getEncryptionMode, isEncryptionKeyConfigured } from '@/lib/crypto/providerKeys';
 import { isSupabaseServerConfigured } from '@/lib/devAuth';
 import { serverEnv } from '@/lib/serverEnv';
 
@@ -19,6 +19,8 @@ const buildHealthPayload = () => ({
         (serverEnv('PAYOS_CHECKSUM_KEY') || serverEnv('PAYLOS_CHECKSUM_KEY'))
     ),
     encryptionKeyConfigured: isEncryptionKeyConfigured(),
+    // Which key protects stored provider keys — a label only, never key material.
+    encryptionMode: getEncryptionMode(),
   },
 });
 
