@@ -4,10 +4,9 @@ import { ModelProvider } from '../types';
 import { providerLabel } from '../data/mockData';
 import {
   builtinProviderById,
-  fetchProviderModels,
   normalizeBaseUrl,
   resolveProviderEndpoint,
-  testProviderModel,
+  verifyProviderConnection,
   type ProviderProtocol,
 } from '../chat/byok';
 import { slugifyCustomProvider } from '@/lib/store/botValidation';
@@ -16,7 +15,6 @@ import {
   Check,
   Loader2,
   Lock,
-  LockKeyhole,
   Plus,
   RotateCcw,
   Settings2,
@@ -39,18 +37,78 @@ type CustomModelState =
   | { phase: 'error'; message: string }
   | { phase: 'saving'; modelId: string };
 
-const errorText = (t: Record<string, string>, message: string): string => {
+type RetestState =
+  | { phase: 'idle' }
+  | { phase: 'testing' }
+  | { phase: 'ok'; model: string }
+  | { phase: 'error'; message: string };
+
+/**
+ * Copy for verification outcomes that have no entry in the shared i18n table yet. Kept next to the
+ * only view that uses it; English and Vietnamese always ship together so the language toggle covers it.
+ */
+const VERIFY_COPY = {
+  en: {
+    invalidEndpoint:
+      'This Base URL did not answer like an AI API (it returned a web page or an unexpected response). Check the URL.',
+    modelNotFound: 'The provider accepted the request, but this model was not found. Pick or type another model.',
+    noModels: 'This endpoint does not list its models. Type an exact model ID below, then test again.',
+    rateLimited: 'The provider is rate-limiting this key right now. Wait a moment, then test again.',
+    insufficientCredits: 'The key works, but the account has no credits for this model. Top up or pick a free model.',
+    providerError: 'The provider answered with an error, so the key could not be verified. Nothing was saved.',
+    saveFailed: 'The server re-checked this key and did not save it. Test the connection again.',
+    retest: 'Re-test connection',
+    retestOk: 'Connection re-verified with a live call',
+  },
+  vi: {
+    invalidEndpoint:
+      'Base URL này không phản hồi như một API AI (trả về trang web hoặc dữ liệu không hợp lệ). Kiểm tra lại URL.',
+    modelNotFound: 'Nhà cung cấp đã nhận yêu cầu nhưng không tìm thấy mô hình này. Chọn hoặc nhập mô hình khác.',
+    noModels: 'Endpoint này không liệt kê mô hình. Nhập chính xác mã mô hình bên dưới rồi kiểm tra lại.',
+    rateLimited: 'Nhà cung cấp đang giới hạn tốc độ cho khóa này. Đợi một chút rồi kiểm tra lại.',
+    insufficientCredits: 'Khóa hợp lệ nhưng tài khoản hết credit cho mô hình này. Nạp thêm hoặc chọn mô hình miễn phí.',
+    providerError: 'Nhà cung cấp trả về lỗi nên chưa xác minh được khóa. Chưa lưu gì cả.',
+    saveFailed: 'Máy chủ đã kiểm tra lại khóa và không lưu. Hãy kiểm tra kết nối lần nữa.',
+    retest: 'Kiểm tra lại kết nối',
+    retestOk: 'Đã xác minh lại kết nối bằng một lệnh gọi thật',
+  },
+} as const;
+
+type VerifyCopy = (typeof VERIFY_COPY)[keyof typeof VERIFY_COPY];
+
+const errorText = (
+  t: Record<string, string>,
+  copy: VerifyCopy,
+  message: string,
+  fallback?: string
+): string => {
   switch (message) {
     case 'INVALID_KEY':
       return t.keyTestInvalid;
     case 'EMPTY_KEY':
       return t.keyTestEmpty;
-    case 'INVALID_BASE_URL':
+    case 'BAD_URL_FORMAT':
       return t.keyTestInvalidUrl;
+    case 'INVALID_BASE_URL':
+      return copy.invalidEndpoint;
     case 'NETWORK_FAILED':
+    case 'TIMEOUT':
       return t.keyTestNetwork;
+    case 'MODEL_NOT_FOUND':
+    case 'EMPTY_MODEL':
+      return copy.modelNotFound;
+    case 'NO_MODELS':
+      return copy.noModels;
+    case 'RATE_LIMITED':
+      return copy.rateLimited;
+    case 'INSUFFICIENT_CREDITS':
+      return copy.insufficientCredits;
+    case 'PROVIDER_ERROR':
+      return copy.providerError;
+    case 'SAVE_FAILED':
+      return copy.saveFailed;
     default:
-      return t.keyTestFailed;
+      return fallback ?? t.keyTestFailed;
   }
 };
 
@@ -62,8 +120,14 @@ export const ApiKeysView: React.FC = () => {
     getProviderSecret,
     removeApiKey,
     revokeAllKeys,
+    language,
     t,
   } = useApp();
+
+  const verifyCopy = language === 'vi' ? VERIFY_COPY.vi : VERIFY_COPY.en;
+  const describeError = (message: string, fallback?: string) =>
+    errorText(t as unknown as Record<string, string>, verifyCopy, message, fallback);
+  const [retest, setRetest] = useState<RetestState>({ phase: 'idle' });
 
   const [activeProvider, setActiveProvider] = useState<ModelProvider | null>(null);
   const [isCustomOpen, setIsCustomOpen] = useState(false);
@@ -98,6 +162,7 @@ export const ApiKeysView: React.FC = () => {
     setActiveProvider(next);
     setDraftKey('');
     setTest({ phase: 'idle' });
+    setRetest({ phase: 'idle' });
     resetCustomModelBox();
   };
 
@@ -105,6 +170,7 @@ export const ApiKeysView: React.FC = () => {
     setActiveProvider(null);
     setDraftKey('');
     setTest({ phase: 'idle' });
+    setRetest({ phase: 'idle' });
     resetCustomModelBox();
   };
 
@@ -133,9 +199,8 @@ export const ApiKeysView: React.FC = () => {
         protocol: (activeItem?.protocol ?? builtin?.protocol) as ProviderProtocol | undefined,
         baseUrl: builtin ? builtin.baseUrl : activeItem?.baseUrl,
       });
-      const models = await fetchProviderModels(endpoint, draftKey);
-      if (models.length === 0) throw new Error('NO_MODELS');
-      setTest({ phase: 'tested', models, selected: models[0] });
+      const { models, verifiedModel } = await verifyProviderConnection(endpoint, draftKey);
+      setTest({ phase: 'tested', models, selected: verifiedModel });
     } catch (error) {
       setTest({ phase: 'error', message: (error as Error).message });
     }
@@ -168,7 +233,7 @@ export const ApiKeysView: React.FC = () => {
       return;
     }
     if (!/^https?:\/\//i.test(trimmedUrl)) {
-      setCustomTest({ phase: 'error', message: 'INVALID_BASE_URL' });
+      setCustomTest({ phase: 'error', message: 'BAD_URL_FORMAT' });
       return;
     }
     if (!trimmedKey) {
@@ -178,24 +243,13 @@ export const ApiKeysView: React.FC = () => {
     const providerId = slugifyCustomProvider(customStandard, trimmedName);
     setCustomTest({ phase: 'testing' });
     try {
-      const models = await fetchProviderModels(
+      const typedModel = customModelInput.trim();
+      const { models, verifiedModel } = await verifyProviderConnection(
         { provider: providerId, protocol: customStandard, baseUrl: trimmedUrl },
-        trimmedKey
+        trimmedKey,
+        typedModel ? { model: typedModel } : {}
       );
-      if (models.length > 0) {
-        setCustomTest({ phase: 'tested', models, selected: models[0] });
-        return;
-      }
-      if (customModelInput.trim()) {
-        await testProviderModel(
-          { provider: providerId, apiKey: trimmedKey, protocol: customStandard, baseUrl: trimmedUrl },
-          customModelInput.trim()
-        );
-        const m = customModelInput.trim();
-        setCustomTest({ phase: 'tested', models: [m], selected: m });
-        return;
-      }
-      throw new Error('NO_MODELS');
+      setCustomTest({ phase: 'tested', models, selected: verifiedModel });
     } catch (error) {
       setCustomTest({ phase: 'error', message: (error as Error).message });
     }
@@ -225,6 +279,34 @@ export const ApiKeysView: React.FC = () => {
     closeCustomModal();
   };
 
+  const retestConnection = async () => {
+    if (!activeProvider || retest.phase === 'testing') return;
+    setRetest({ phase: 'testing' });
+    try {
+      const response = await fetch('/api/providers/test', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: activeProvider }),
+      });
+      const payload = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        error?: unknown;
+        verifiedModel?: unknown;
+      } | null;
+      if (payload?.ok === true && typeof payload.verifiedModel === 'string') {
+        setRetest({ phase: 'ok', model: payload.verifiedModel });
+        return;
+      }
+      setRetest({
+        phase: 'error',
+        message: typeof payload?.error === 'string' ? payload.error : 'PROVIDER_ERROR',
+      });
+    } catch {
+      setRetest({ phase: 'error', message: 'NETWORK_FAILED' });
+    }
+  };
+
   const disconnect = async () => {
     if (!activeProvider) return;
     await removeApiKey(activeProvider);
@@ -243,14 +325,10 @@ export const ApiKeysView: React.FC = () => {
     }
     setCustomModelState({ phase: 'testing' });
     try {
-      await testProviderModel(
-        {
-          provider: context.provider,
-          apiKey: context.apiKey,
-          protocol: context.protocol,
-          baseUrl: context.baseUrl,
-        },
-        candidate
+      await verifyProviderConnection(
+        { provider: context.provider, protocol: context.protocol, baseUrl: context.baseUrl },
+        context.apiKey,
+        { model: candidate }
       );
       setCustomModelState({ phase: 'verified', modelId: candidate });
     } catch (error) {
@@ -454,6 +532,28 @@ export const ApiKeysView: React.FC = () => {
               </button>
               <button
                 type="button"
+                id="provider-retest-btn"
+                onClick={() => void retestConnection()}
+                disabled={retest.phase === 'testing'}
+                className={
+                  retest.phase === 'error'
+                    ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-600 bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500 disabled:opacity-50'
+                    : retest.phase === 'ok'
+                      ? 'inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-50'
+                      : 'button-secondary min-h-11 justify-center'
+                }
+              >
+                {retest.phase === 'testing' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : retest.phase === 'error' ? (
+                  <AlertCircle className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+                )}
+                {verifyCopy.retest}
+              </button>
+              <button
+                type="button"
                 id="provider-disconnect-btn"
                 onClick={() => void disconnect()}
                 className="button-danger min-h-11 justify-center"
@@ -544,6 +644,24 @@ export const ApiKeysView: React.FC = () => {
 
           {activeItem?.connected ? (
             <>
+              {retest.phase === 'ok' && (
+                <p
+                  role="status"
+                  id="provider-retest-status"
+                  className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium text-emerald-500"
+                >
+                  {verifyCopy.retestOk} ({retest.model})
+                </p>
+              )}
+              {retest.phase === 'error' && (
+                <p
+                  role="alert"
+                  id="provider-retest-status"
+                  className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-sm font-medium text-red-500"
+                >
+                  {describeError(retest.message)}
+                </p>
+              )}
               <label className="field">
                 <span className="field-label">{t.keyModelLabel}</span>
                 <select
@@ -653,7 +771,7 @@ export const ApiKeysView: React.FC = () => {
                 )}
                 {customModelState.phase === 'error' && (
                   <p role="alert" className="text-xs font-medium text-red-500">
-                    {t.providerModelTestFail}
+                    {describeError(customModelState.message, t.providerModelTestFail)}
                   </p>
                 )}
               </div>
@@ -684,7 +802,7 @@ export const ApiKeysView: React.FC = () => {
                   role="alert"
                   className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-sm font-medium text-red-500"
                 >
-                  {errorText(t as unknown as Record<string, string>, test.message)}
+                  {describeError(test.message)}
                 </p>
               )}
 
@@ -787,7 +905,7 @@ export const ApiKeysView: React.FC = () => {
                     )}
                     {customModelState.phase === 'error' && (
                       <p role="alert" className="text-xs font-medium text-red-500">
-                        {t.providerModelTestFail}
+                        {describeError(customModelState.message, t.providerModelTestFail)}
                       </p>
                     )}
                   </div>
@@ -960,7 +1078,7 @@ export const ApiKeysView: React.FC = () => {
               role="alert"
               className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2.5 text-sm font-medium text-red-500"
             >
-              {errorText(t as unknown as Record<string, string>, customTest.message)}
+              {describeError(customTest.message)}
             </p>
           )}
 
@@ -1069,7 +1187,7 @@ export const ApiKeysView: React.FC = () => {
             )}
             {customModelState.phase === 'error' && (
               <p role="alert" className="text-xs font-medium text-red-500">
-                {t.providerModelTestFail}
+                {describeError(customModelState.message, t.providerModelTestFail)}
               </p>
             )}
           </div>

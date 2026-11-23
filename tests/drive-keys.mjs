@@ -141,13 +141,22 @@ try {
   note('enter-workspace', entered);
   await sleep(1800);
 
-  // Navigate to API Keys / Integrations — sidebar link
+  // Dismiss the cookie banner so it never covers the modal buttons.
+  note('cookie-banner', await clickVisible('Only necessary'));
+  await sleep(400);
+
+  // Navigate to API Keys / Integrations. Signed-in users land on /dashboard, where Integrations is
+  // a tab inside "Account settings"; older layouts exposed it directly in the sidebar.
   let toKeys = await clickVisible('API Keys');
-  if (toKeys === 'clicked') { note('nav', 'API Keys'); }
-  else {
+  if (toKeys !== 'clicked') toKeys = await clickVisible('Integrations');
+  if (toKeys !== 'clicked') {
+    note('nav-account-settings', await clickVisible('Account settings'));
+    await sleep(1200);
     toKeys = await clickVisible('Integrations');
-    note('nav', `Integrations fallback: ${toKeys}`);
+    if (toKeys !== 'clicked') toKeys = await clickVisible('Tích hợp');
   }
+  note('nav', `Integrations: ${toKeys}`);
+  check('nav to Integrations', toKeys === 'clicked', toKeys);
   await sleep(1200);
 
   const heading = await evaluate(`
@@ -230,6 +239,12 @@ try {
     window.__origFetch = window.fetch;
     window.fetch = function(url, opts) {
       const u = typeof url === 'string' ? url : (url?.url ?? String(url));
+      // Signed-in users verify through the app server; mock its success verdict for this step.
+      if (u.includes('/api/providers/verify')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          ok:true, models:['claude-sonnet-4-5'], verifiedModel:'claude-sonnet-4-5'
+        }), { status:200, headers:{'Content-Type':'application/json'} }));
+      }
       if (u.includes('/models')) {
         return Promise.resolve(new Response(JSON.stringify({
           object:'list', data:[{id:'claude-sonnet-4-5',object:'model'}]
