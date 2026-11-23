@@ -4,7 +4,9 @@ import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/mockData';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
+import { hasRichContent } from '../chat/content-render';
 import { Avatar, AttachmentGlyph } from './ChatRoomView';
+import { ContentRenderPanel } from './ContentRenderPanel';
 import { ExpandableText } from './ExpandableText';
 
 /**
