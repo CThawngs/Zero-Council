@@ -1,13 +1,19 @@
+'use client';
+
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CouncilOrb } from './CouncilOrb';
 import { Reveal } from './Reveal';
 import { PLANS, planPrice } from '../data/plans';
+import { getFaqItems } from '@/lib/seo-jsonld';
 import {
   ArrowRight,
+  BookOpen,
   CheckCircle2,
+  ChevronDown,
   FileQuestion,
   GitBranch,
+  HelpCircle,
   KeyRound,
   Layers3,
   MessageSquareText,
@@ -23,24 +29,62 @@ import Link from 'next/link';
 import { Modal } from './Modal';
 
 export const OverviewView: React.FC = () => {
-  const { t, language, authUser, authReady, requestCheckout, currentPlanId, cancelPlanToFree } = useApp();
+  const { t, language, authUser, authReady, requestCheckout, currentPlanId, cancelPlanToFree } =
+    useApp();
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
 
   const flow = [
-    { icon: MessageSquareText, title: t.flow1Title, body: t.flow1Body, badge: t.badgeStep1, tint: 'var(--tint-blue)' },
-    { icon: ShieldCheck, title: t.flow2Title, body: t.flow2Body, badge: t.badgeStep2, tint: 'var(--tint-violet)' },
-    { icon: FileQuestion, title: t.flow3Title, body: t.flow3Body, badge: t.badgeStep3, tint: 'var(--tint-green)' },
+    {
+      icon: MessageSquareText,
+      title: t.flow1Title,
+      body: t.flow1Body,
+      badge: t.badgeStep1,
+      tint: 'var(--tint-blue)',
+    },
+    {
+      icon: ShieldCheck,
+      title: t.flow2Title,
+      body: t.flow2Body,
+      badge: t.badgeStep2,
+      tint: 'var(--tint-violet)',
+    },
+    {
+      icon: FileQuestion,
+      title: t.flow3Title,
+      body: t.flow3Body,
+      badge: t.badgeStep3,
+      tint: 'var(--tint-green)',
+    },
   ];
   const frameworks = [
-    { icon: GitBranch, title: t.framework1Title, body: t.framework1Body, tag: t.framework1Tag, tint: 'var(--tint-orange)' },
-    { icon: Layers3, title: t.framework2Title, body: t.framework2Body, tag: t.framework2Tag, tint: 'var(--tint-pink)' },
-    { icon: SlidersHorizontal, title: t.framework3Title, body: t.framework3Body, tag: t.framework3Tag, tint: 'var(--tint-blue)' },
+    {
+      icon: GitBranch,
+      title: t.framework1Title,
+      body: t.framework1Body,
+      tag: t.framework1Tag,
+      tint: 'var(--tint-orange)',
+    },
+    {
+      icon: Layers3,
+      title: t.framework2Title,
+      body: t.framework2Body,
+      tag: t.framework2Tag,
+      tint: 'var(--tint-pink)',
+    },
+    {
+      icon: SlidersHorizontal,
+      title: t.framework3Title,
+      body: t.framework3Body,
+      tag: t.framework3Tag,
+      tint: 'var(--tint-blue)',
+    },
   ];
   const reasons = [
     { icon: Tags, title: t.why1Title, body: t.why1Body, tint: 'var(--tint-yellow)' },
     { icon: KeyRound, title: t.why2Title, body: t.why2Body, tint: 'var(--tint-violet)' },
     { icon: Scale, title: t.why3Title, body: t.why3Body, tint: 'var(--tint-green)' },
   ];
+  const faqItems = getFaqItems(language);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-20 overflow-x-clip py-8 sm:py-12">
@@ -56,10 +100,12 @@ export const OverviewView: React.FC = () => {
             {t.overviewTitle}
           </h1>
 
-          <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-muted sm:text-lg">{t.overviewBody}</p>
+          <p className="mt-6 max-w-2xl text-base leading-relaxed text-ink-muted sm:text-lg">
+            {t.overviewBody}
+          </p>
 
           <div className="mt-8 flex flex-col gap-3.5 sm:flex-row sm:items-center">
-            <Link href='/dashboard' className="button-primary text-base">
+            <Link href="/dashboard" className="button-primary text-base">
               <span>{t.overviewPrimary}</span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
@@ -86,10 +132,9 @@ export const OverviewView: React.FC = () => {
           <div className="blob blob--blue -top-6 -left-6 h-48 w-48" aria-hidden="true" />
           <div className="blob blob--orange -bottom-6 -right-6 h-48 w-48" aria-hidden="true" />
 
-          <div className="relative w-full max-w-[20rem] sm:max-w-[26rem] aspect-square">
+          <div className="relative aspect-square w-full max-w-[20rem] sm:max-w-[26rem]">
             <CouncilOrb className="z-10" />
 
-            {/* Floating pill 1: live state indicator. */}
             <div
               className="float-card lift float-slow absolute -top-4 left-0 flex items-center gap-3 px-4 py-2.5 shadow-xl"
               style={{ '--tilt-x': '-4deg', '--tilt-y': '6deg' } as React.CSSProperties}
@@ -103,7 +148,6 @@ export const OverviewView: React.FC = () => {
               </div>
             </div>
 
-            {/* Floating pill 2: decision framework badge. */}
             <div
               className="float-card lift float-slower absolute bottom-0 right-0 flex items-center gap-3 px-4 py-2.5 shadow-xl"
               style={{ '--tilt-x': '5deg', '--tilt-y': '-6deg' } as React.CSSProperties}
@@ -116,11 +160,11 @@ export const OverviewView: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs font-extrabold text-ink">{t.heroFrameworkBadge}</p>
-                <p className="text-[10px] font-bold text-[var(--tint-green)]">{t.heroFrameworkPrivacy}</p>
+                <p className="text-[10px] font-bold text-[var(--tint-green)]">
+                  {t.heroFrameworkPrivacy}
+                </p>
               </div>
             </div>
-
-            {/* Floating trust card at the bottom-left. */}
           </div>
         </div>
       </section>
@@ -142,10 +186,18 @@ export const OverviewView: React.FC = () => {
 
         <ol className="grid gap-6 md:grid-cols-3">
           {flow.map(({ icon: Icon, title, body, badge, tint }, index) => (
-            <Reveal key={title} as="li" delayMs={index * 100} className="lift persona-card relative flex flex-col justify-between p-6 sm:p-7">
+            <Reveal
+              key={title}
+              as="li"
+              delayMs={index * 100}
+              className="lift persona-card relative flex flex-col justify-between p-6 sm:p-7"
+            >
               <div>
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-accent-ink shadow-md" style={{ background: tint }}>
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl text-accent-ink shadow-md"
+                    style={{ background: tint }}
+                  >
                     <Icon className="h-6 w-6" aria-hidden="true" />
                   </div>
                   <span
@@ -240,7 +292,10 @@ export const OverviewView: React.FC = () => {
             <span className="inline-flex items-center gap-2 rounded-full bg-[var(--tint-pink)]/10 px-3 py-1 text-xs font-extrabold text-[var(--tint-pink)]">
               {t.pricingTeaserEyebrow}
             </span>
-            <h2 id="pricing-teaser-title" className="mt-3 text-3xl font-extrabold text-ink sm:text-4xl">
+            <h2
+              id="pricing-teaser-title"
+              className="mt-3 text-3xl font-extrabold text-ink sm:text-4xl"
+            >
               {t.pricingTitle}
             </h2>
             <p className="mt-3 text-base text-ink-muted">{t.pricingTeaserBody}</p>
@@ -262,7 +317,9 @@ export const OverviewView: React.FC = () => {
                     </span>
                   )}
                   <h3 className="text-lg font-extrabold text-ink">{plan.name}</h3>
-                  <p className="mt-3 text-3xl font-extrabold text-ink">{planPrice(plan, language)}</p>
+                  <p className="mt-3 text-3xl font-extrabold text-ink">
+                    {planPrice(plan, language)}
+                  </p>
                   <p className="mt-3 text-xs leading-relaxed text-ink-muted">
                     {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))}
                   </p>
@@ -295,6 +352,51 @@ export const OverviewView: React.FC = () => {
         </div>
       </section>
 
+      {/* Semantic FAQ section (1:1 parity with FAQPage JSON-LD) */}
+      <section id="faq" className="scroll-mt-28 space-y-8" aria-labelledby="faq-title">
+        <Reveal>
+          <header className="max-w-2xl">
+            <span className="inline-flex items-center gap-2 rounded-full bg-[var(--tint-violet)]/10 px-3 py-1 text-xs font-extrabold text-[var(--tint-violet)]">
+              <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
+              {t.faqEyebrow}
+            </span>
+            <h2 id="faq-title" className="mt-3 text-3xl font-extrabold text-ink sm:text-4xl">
+              {t.faqTitle}
+            </h2>
+            <p className="mt-3 text-base text-ink-muted">{t.faqBody}</p>
+          </header>
+        </Reveal>
+
+        <div className="grid gap-3.5">
+          {faqItems.map((item, idx) => (
+            <details
+              key={item.question}
+              open={idx === 0}
+              className="group rounded-2xl border border-border bg-surface p-5 shadow-sm transition-colors hover:border-brass/50 sm:p-6"
+            >
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 text-left text-base font-extrabold text-ink [&::-webkit-details-marker]:hidden">
+                <span className="min-w-0 flex-1 break-words">{item.question}</span>
+                <ChevronDown
+                  className="h-5 w-5 shrink-0 text-ink-muted transition-transform duration-200 group-open:rotate-180"
+                  aria-hidden="true"
+                />
+              </summary>
+              <p className="mt-3 border-t border-border/70 pt-3 text-sm leading-relaxed text-ink-muted break-words">
+                {item.answer}
+              </p>
+            </details>
+          ))}
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-2xl border border-border bg-surface-2 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <p className="text-sm font-semibold text-ink">{t.faqGuidePrompt}</p>
+          <Link href="/guide" className="button-secondary min-h-11 w-full justify-center sm:w-auto">
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
+            <span>{t.faqGuideCta}</span>
+          </Link>
+        </div>
+      </section>
+
       {/* Cancel-to-free confirmation */}
       <Modal
         isOpen={cancelConfirmOpen}
@@ -313,7 +415,10 @@ export const OverviewView: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => { setCancelConfirmOpen(false); void cancelPlanToFree(); }}
+              onClick={() => {
+                setCancelConfirmOpen(false);
+                void cancelPlanToFree();
+              }}
               className="button-danger min-h-11 justify-center"
             >
               {t.planCancelToFree}
@@ -326,4 +431,3 @@ export const OverviewView: React.FC = () => {
     </div>
   );
 };
-

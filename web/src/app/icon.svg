@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Zero Council">
+  <defs>
+    <linearGradient id="zc-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#141422" />
+      <stop offset="100%" stop-color="#0c0c12" />
+    </linearGradient>
+    <linearGradient id="zc-core" x1="20" y1="18" x2="44" y2="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#b399ff" />
+      <stop offset="55%" stop-color="#6d5efc" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#zc-bg)" stroke="#2a2a3e" stroke-width="2" />
+  <ellipse cx="32" cy="32" rx="22" ry="10" transform="rotate(-24 32 32)" fill="none" stroke="#6d5efc" stroke-opacity="0.55" stroke-width="2" />
+  <ellipse cx="32" cy="32" rx="22" ry="10" transform="rotate(36 32 32)" fill="none" stroke="#f59e0b" stroke-opacity="0.45" stroke-width="1.75" />
+  <circle cx="32" cy="32" r="9.5" fill="url(#zc-core)" />
+  <circle cx="13" cy="24" r="4" fill="#ff80b0" />
+  <circle cx="51" cy="40" r="4" fill="#34d399" />
+  <circle cx="46" cy="17" r="3.8" fill="#fbbf24" />
+  <circle cx="18" cy="47" r="3.8" fill="#7aa2ff" />
+</svg>
