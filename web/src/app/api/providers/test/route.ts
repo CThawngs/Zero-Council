@@ -15,7 +15,10 @@ import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson } from '@/lib/security/request-guard';
-import { listProviderKeys } from '@/lib/store/providerKeys';
+import { listProviderKeys, providerStoreErrorOf } from '@/lib/store/providerKeys';
+
+/** Verification probes several models with a per-request timeout; give the function room. */
+export const maxDuration = 60;
 
 const MAX_BODY_BYTES = 32 * 1024;
 
@@ -43,7 +46,14 @@ export async function POST(request: Request) {
   }
 
   // Look up metadata (protocol, baseUrl, model) without the key.
-  const records = await listProviderKeys(user.email);
+  let records: Awaited<ReturnType<typeof listProviderKeys>>;
+  try {
+    records = await listProviderKeys(user.email);
+  } catch (error) {
+    const { code, status } = providerStoreErrorOf(error);
+    console.error('[providers/test] list failed:', (error as Error).message);
+    return Response.json({ ok: false, error: code }, { status });
+  }
   const record = records.find((r) => r.provider === providerId);
   if (!record) {
     return Response.json({ ok: false, error: 'PROVIDER_NOT_CONNECTED' }, { status: 404 });
@@ -56,7 +66,14 @@ export async function POST(request: Request) {
   }
 
   // Decrypt the key server-side — it never leaves the server.
-  const apiKey = await getKey(user.email, providerId);
+  let apiKey: string | null;
+  try {
+    apiKey = await getKey(user.email, providerId);
+  } catch (error) {
+    const { code, status } = providerStoreErrorOf(error);
+    console.error('[providers/test] key read failed:', (error as Error).message);
+    return Response.json({ ok: false, error: code }, { status });
+  }
   if (!apiKey) {
     return Response.json({ ok: false, error: 'KEY_NOT_FOUND' }, { status: 404 });
   }

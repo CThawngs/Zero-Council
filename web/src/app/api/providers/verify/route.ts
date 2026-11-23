@@ -16,6 +16,9 @@ import { checkKeyShape, httpStatusForVerifyError, verifyProviderKey } from '@/li
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson } from '@/lib/security/request-guard';
 
+/** Verification probes several models with a per-request timeout; give the function room. */
+export const maxDuration = 60;
+
 const MAX_MODEL_ID_LENGTH = 200;
 const MAX_BODY_BYTES = 32 * 1024;
 

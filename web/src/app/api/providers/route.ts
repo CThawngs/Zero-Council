@@ -1,6 +1,11 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
-import { checkKeyShape, httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
+import {
+  checkKeyShape,
+  httpStatusForVerifyError,
+  sanitizeApiKey,
+  verifyProviderKey,
+} from '@/lib/byok/verify';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson } from '@/lib/security/request-guard';
 import { isValidProviderId } from '@/lib/store/botValidation';
@@ -8,12 +13,26 @@ import {
   deleteAllProviderKeys,
   deleteProviderKey,
   listProviderKeysWithSecrets,
+  providerStoreErrorOf,
   saveProviderKey,
 } from '@/lib/store/providerKeys';
+
+/** Verification probes several models with a per-request timeout; give the function room. */
+export const maxDuration = 60;
 
 const MAX_MODEL_ID_LENGTH = 200;
 const MAX_STORED_MODELS = 500;
 const MAX_BODY_BYTES = 32 * 1024;
+
+/** Answers a store / encryption failure with its stable code instead of a generic 500. */
+const storeFailure = (scope: string, error: unknown, fallbackCode: string): Response => {
+  const { code, status } = providerStoreErrorOf(error);
+  console.error(`[providers] ${scope} failed:`, (error as Error).message);
+  return Response.json(
+    { error: code === 'STORE_UNAVAILABLE' ? fallbackCode : code },
+    { status: code === 'STORE_UNAVAILABLE' ? 500 : status }
+  );
+};
 
 /** Keeps only non-empty, bounded model id strings from an untrusted array. */
 const cleanModelList = (value: unknown): string[] =>
@@ -31,8 +50,7 @@ export async function GET() {
     const providers = await listProviderKeysWithSecrets(user.email);
     return Response.json({ providers });
   } catch (error) {
-    console.error('[providers] list failed:', (error as Error).message);
-    return Response.json({ error: 'LIST_FAILED' }, { status: 500 });
+    return storeFailure('list', error, 'LIST_FAILED');
   }
 }
 
@@ -88,7 +106,9 @@ export async function POST(request: Request) {
   }
 
   const selectedModel = model.trim();
-  const verification = await verifyProviderKey(resolved.target, key, { model: selectedModel });
+  // Store exactly what was verified: quotes / "Bearer " / zero-width paste artifacts removed.
+  const cleanKey = sanitizeApiKey(key);
+  const verification = await verifyProviderKey(resolved.target, cleanKey, { model: selectedModel });
   if (!verification.ok) {
     console.warn(`[providers] save refused for ${provider}: ${verification.error}`);
     return Response.json(
@@ -102,16 +122,19 @@ export async function POST(request: Request) {
   ].slice(0, MAX_STORED_MODELS);
 
   try {
-    const saved = await saveProviderKey(user.email, provider, selectedModel, key.trim(), {
+    const saved = await saveProviderKey(user.email, provider, selectedModel, cleanKey, {
       models: modelList,
       label: resolved.label,
       protocol: resolved.target.protocol,
-      baseUrl: resolved.target.baseUrl,
+      // Persist the Base URL the API actually answered on (normalized, `/v1` appended if needed).
+      baseUrl: verification.resolvedBaseUrl ?? resolved.target.baseUrl,
     });
-    return Response.json({ provider: saved }, { status: 201 });
+    return Response.json(
+      { provider: saved, ...(verification.warning ? { warning: verification.warning } : {}) },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error('[providers] save failed:', (error as Error).message);
-    return Response.json({ error: 'SAVE_FAILED' }, { status: 500 });
+    return storeFailure('save', error, 'SAVE_FAILED');
   }
 }
 
@@ -184,8 +207,7 @@ export async function PATCH(request: Request) {
     });
     return Response.json({ provider: saved });
   } catch (error) {
-    console.error('[providers] patch failed:', (error as Error).message);
-    return Response.json({ error: 'SAVE_FAILED' }, { status: 500 });
+    return storeFailure('patch', error, 'SAVE_FAILED');
   }
 }
 
@@ -204,7 +226,6 @@ export async function DELETE(request: Request) {
     }
     return Response.json({ ok: true });
   } catch (error) {
-    console.error('[providers] delete failed:', (error as Error).message);
-    return Response.json({ error: 'DELETE_FAILED' }, { status: 500 });
+    return storeFailure('delete', error, 'DELETE_FAILED');
   }
 }
