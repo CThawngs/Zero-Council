@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { COUNCIL_FIXTURE } from "../src/lib/council-fixture.ts";
+import { COUNCIL_FIXTURE } from "../web/src/lib/council-fixture.ts";
 
 const advisorShape = { name: "string", text: "string" };
 

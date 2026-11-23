@@ -13,7 +13,7 @@ globalThis.window = {
   },
 };
 
-const { writeStoredRoom, readStoredRoom, clearStoredRoom } = await import("../src/prototype/chat/storage.ts");
+const { writeStoredRoom, readStoredRoom, clearStoredRoom } = await import("../web/src/prototype/chat/storage.ts");
 
 // `storage.ts` does not export its key, so it is restated here. This test is about the clearing
 // behaviour, not about the key name; if the key ever changes, `readStoredRoom() === null` below is
