@@ -71,14 +71,25 @@ test('network failure throws NETWORK_FAILED', async () => {
   );
 });
 
-test('200 returns sorted deduped model ids', async () => {
+test('200 returns sorted deduped active text-chat model ids for openai', async () => {
   await withFetch(
-    async () =>
-      jsonResponse(200, {
-        data: [{ id: 'gpt-4o' }, { id: 'claude-x' }, { id: 'gpt-4o' }, { id: 7 }, {}],
-      }),
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'gpt-4o' },
+              { id: 'o3-mini' },
+              { id: 'gpt-3.5-turbo' },
+              { id: 'tts-1' },
+              { id: 'claude-x' },
+              { id: 'gpt-4o' },
+              { id: 7 },
+              {},
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
     async () => {
-      assert.deepEqual(await fetchProviderModels('openai', 'sk-real'), ['claude-x', 'gpt-4o']);
+      assert.deepEqual(await fetchProviderModels('openai', OPENAI_KEY), ['gpt-4o', 'o3-mini']);
     }
   );
 });
@@ -100,18 +111,20 @@ test('google 200 strips models/ prefix and filters generateContent models', asyn
   await withFetch(
     async (url, init) => {
       sawHeader = init.headers['x-goog-api-key'];
-      return jsonResponse(200, {
-        models: [
-          { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/gemini-3.5-flash-lite-preview-tts', supportedGenerationMethods: ['generateContent'] },
-          { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
-          { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
-        ],
-      });
+      return isModelList(url, init)
+        ? jsonResponse(200, {
+            models: [
+              { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-3.5-flash-lite-preview-tts', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+              { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
+            ],
+          })
+        : jsonResponse(200, { candidates: [{ finishReason: 'MAX_TOKENS' }] });
     },
     async () => {
-      assert.deepEqual(await fetchProviderModels('google', 'AIza-real'), [
+      assert.deepEqual(await fetchProviderModels('google', GOOGLE_KEY), [
         'gemini-3.5-flash-lite',
         'gemini-3.8-flash',
       ]);
@@ -131,17 +144,19 @@ test('google 400 invalid API key maps to INVALID_KEY', async () => {
 
 test('anthropic 200 filters retired claude models and keeps active ones', async () => {
   await withFetch(
-    async () =>
-      jsonResponse(200, {
-        data: [
-          { id: 'claude-sonnet-4-5' },
-          { id: 'claude-2.1' },
-          { id: 'claude-instant-1.2' },
-          { id: 'claude-3-5-sonnet-20241022' },
-        ],
-      }),
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'claude-sonnet-4-5' },
+              { id: 'claude-2.1' },
+              { id: 'claude-instant-1.2' },
+              { id: 'claude-3-5-sonnet-20241022' },
+            ],
+          })
+        : jsonResponse(200, { type: 'message', content: [{ type: 'text', text: 'o' }] }),
     async () => {
-      assert.deepEqual(await fetchProviderModels('anthropic', 'sk-ant-real'), [
+      assert.deepEqual(await fetchProviderModels('anthropic', ANTHROPIC_KEY), [
         'claude-3-5-sonnet-20241022',
         'claude-sonnet-4-5',
       ]);
@@ -151,16 +166,18 @@ test('anthropic 200 filters retired claude models and keeps active ones', async 
 
 test('remaining builtin providers filter non-text-chat and unlisted models', async () => {
   await withFetch(
-    async () =>
-      jsonResponse(200, {
-        data: [
-          { id: 'llama-3.3-70b-versatile' },
-          { id: 'whisper-large-v3' },
-          { id: 'playai-tts' },
-        ],
-      }),
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'llama-3.3-70b-versatile' },
+              { id: 'whisper-large-v3' },
+              { id: 'playai-tts' },
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
     async () => {
-      assert.deepEqual(await fetchProviderModels('groq', 'gsk_real'), [
+      assert.deepEqual(await fetchProviderModels('groq', 'gsk_fake_but_long_enough_key'), [
         'llama-3.3-70b-versatile',
       ]);
     }

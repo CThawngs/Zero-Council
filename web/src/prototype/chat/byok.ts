@@ -9,6 +9,7 @@
 
 import { splitDataUrl } from './read-image-web.ts';
 import { buildSystemPrompt as systemPrompt } from './prompts.ts';
+import { visibleModelsForProvider } from './modelAllowList.ts';
 import {
   checkKeyShape,
   normalizeProviderBaseUrl,
@@ -300,7 +301,8 @@ export const verifyProviderConnection = async (
   if (serverCannotJudge) return verifyProviderKeyDirect(target, apiKey, options);
 
   if (payload.ok === true && typeof payload.verifiedModel === 'string' && Array.isArray(payload.models)) {
-    const models = payload.models.filter((m): m is string => typeof m === 'string');
+    const rawModels = payload.models.filter((m): m is string => typeof m === 'string');
+    const models = visibleModelsForProvider(endpoint.provider, rawModels, payload.verifiedModel);
     return {
       models: models.length > 0 ? models : [payload.verifiedModel],
       verifiedModel: payload.verifiedModel,

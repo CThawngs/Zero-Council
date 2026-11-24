@@ -290,7 +290,7 @@ test('valid OpenAI key: /models + 16-token probe (max_completion_tokens) -> veri
   assert.deepEqual(result, {
     ok: true,
     verifiedModel: 'gpt-4o',
-    models: ['gpt-4o', 'gpt-4o-mini', 'text-embedding-3-small'],
+    models: ['gpt-4o', 'gpt-4o-mini'],
   });
   const probe = calls.find((c) => c.method === 'POST');
   assert.equal(probe.body.max_completion_tokens, 16);
@@ -317,6 +317,7 @@ test('valid Google key: generateContent with maxOutputTokens 16 -> verified', as
       endsWith('/models', 'GET'),
       json(200, {
         models: [
+          { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
           { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
           { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
         ],
@@ -325,9 +326,9 @@ test('valid Google key: generateContent with maxOutputTokens 16 -> verified', as
     [endsWith(':generateContent', 'POST'), json(200, { candidates: [{ finishReason: 'MAX_TOKENS' }], usageMetadata: {} })],
   ]);
   const result = await verifyProviderKey(verifyTargetFor('google'), 'AIzaSyValidLookingKey000', { fetchImpl: impl });
-  assert.deepEqual(result, { ok: true, verifiedModel: 'gemini-2.5-flash', models: ['gemini-2.5-flash'] });
+  assert.deepEqual(result, { ok: true, verifiedModel: 'gemini-3.5-flash-lite', models: ['gemini-3.5-flash-lite'] });
   const probe = calls.find((c) => c.method === 'POST');
-  assert.equal(probe.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
+  assert.equal(probe.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent');
   assert.equal(probe.body.generationConfig.maxOutputTokens, 16);
 });
 
@@ -384,7 +385,7 @@ test('NVIDIA quirks: EOL model (410) and non-chat model (plain-text 404) are ski
           { id: 'bigcode/starcoder2-15b' },
           { id: 'meta/llama-3.1-70b-instruct' },
           { id: 'nvidia/nv-embedqa-e5-v5' },
-          { id: 'acme/text-only-model' },
+          { id: 'deepseek-ai/deepseek-r1' },
           { id: 'mistralai/mistral-large-4-1t-a52b' },
         ],
       }),
@@ -395,7 +396,7 @@ test('NVIDIA quirks: EOL model (410) and non-chat model (plain-text 404) are ski
         if (body.model === 'meta/llama-3.1-70b-instruct') {
           return json(410, { status: 410, title: 'Gone', detail: 'This model has reached its end of life' });
         }
-        if (body.model === 'acme/text-only-model') return plainNotFound();
+        if (body.model === 'deepseek-ai/deepseek-r1') return plainNotFound();
         return json(401, { status: 401, title: 'Unauthorized', detail: 'Invalid JWT serialization' });
       },
     ],
@@ -403,7 +404,7 @@ test('NVIDIA quirks: EOL model (410) and non-chat model (plain-text 404) are ski
   const result = await verifyProviderKey(verifyTargetFor('nvidia'), GARBAGE_KEY, { fetchImpl: impl });
   assert.deepEqual(result, { ok: false, error: 'INVALID_KEY' });
   const probed = calls.filter((c) => c.method === 'POST').map((c) => c.body.model);
-  assert.deepEqual(probed, ['acme/text-only-model', 'meta/llama-3.1-70b-instruct', 'mistralai/mistral-large-4-1t-a52b']);
+  assert.deepEqual(probed, ['deepseek-ai/deepseek-r1', 'meta/llama-3.1-70b-instruct', 'mistralai/mistral-large-4-1t-a52b']);
   assert.ok(!probed.some((id) => /starcoder|embed/.test(id)), 'non-chat models are never probed');
 });
 
