@@ -1,6 +1,12 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
-import { checkKeyShape, httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
+import {
+  checkKeyShape,
+  httpStatusForVerifyError,
+  sanitizeApiKey,
+  verifyProviderKey,
+} from '@/lib/byok/verify';
+import { maskProviderKey } from '@/lib/crypto/providerKeys';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson } from '@/lib/security/request-guard';
 import { isValidProviderId } from '@/lib/store/botValidation';
@@ -8,12 +14,26 @@ import {
   deleteAllProviderKeys,
   deleteProviderKey,
   listProviderKeysWithSecrets,
+  providerStoreErrorOf,
   saveProviderKey,
 } from '@/lib/store/providerKeys';
+
+/** Verification probes several models with a per-request timeout; give the function room. */
+export const maxDuration = 60;
 
 const MAX_MODEL_ID_LENGTH = 200;
 const MAX_STORED_MODELS = 500;
 const MAX_BODY_BYTES = 32 * 1024;
+
+/** Answers a store / encryption failure with its stable code instead of a generic 500. */
+const storeFailure = (scope: string, error: unknown, fallbackCode: string): Response => {
+  const { code, status } = providerStoreErrorOf(error);
+  console.error(`[providers] ${scope} failed:`, (error as Error).message);
+  return Response.json(
+    { error: code === 'STORE_UNAVAILABLE' ? fallbackCode : code },
+    { status: code === 'STORE_UNAVAILABLE' ? 500 : status }
+  );
+};
 
 /** Keeps only non-empty, bounded model id strings from an untrusted array. */
 const cleanModelList = (value: unknown): string[] =>
@@ -24,15 +44,24 @@ const cleanModelList = (value: unknown): string[] =>
         .filter((m) => m.length > 0 && m.length <= MAX_MODEL_ID_LENGTH)
     : [];
 
+/**
+ * Lists connected providers for the signed-in user.
+ * Plaintext API keys are NEVER returned to the browser — only `hasKey: true` and a masked
+ * display tail (`••••abcd`) are exposed.
+ */
 export async function GET() {
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
   try {
-    const providers = await listProviderKeysWithSecrets(user.email);
+    const rows = await listProviderKeysWithSecrets(user.email);
+    const providers = rows.map(({ key, ...record }) => ({
+      ...record,
+      hasKey: true,
+      maskedKey: maskProviderKey(key),
+    }));
     return Response.json({ providers });
   } catch (error) {
-    console.error('[providers] list failed:', (error as Error).message);
-    return Response.json({ error: 'LIST_FAILED' }, { status: 500 });
+    return storeFailure('list', error, 'LIST_FAILED');
   }
 }
 
@@ -88,7 +117,9 @@ export async function POST(request: Request) {
   }
 
   const selectedModel = model.trim();
-  const verification = await verifyProviderKey(resolved.target, key, { model: selectedModel });
+  // Store exactly what was verified: quotes / "Bearer " / zero-width paste artifacts removed.
+  const cleanKey = sanitizeApiKey(key);
+  const verification = await verifyProviderKey(resolved.target, cleanKey, { model: selectedModel });
   if (!verification.ok) {
     console.warn(`[providers] save refused for ${provider}: ${verification.error}`);
     return Response.json(
@@ -102,16 +133,26 @@ export async function POST(request: Request) {
   ].slice(0, MAX_STORED_MODELS);
 
   try {
-    const saved = await saveProviderKey(user.email, provider, selectedModel, key.trim(), {
+    const saved = await saveProviderKey(user.email, provider, selectedModel, cleanKey, {
       models: modelList,
       label: resolved.label,
       protocol: resolved.target.protocol,
-      baseUrl: resolved.target.baseUrl,
+      // Persist the Base URL the API actually answered on (normalized, `/v1` appended if needed).
+      baseUrl: verification.resolvedBaseUrl ?? resolved.target.baseUrl,
     });
-    return Response.json({ provider: saved }, { status: 201 });
+    return Response.json(
+      {
+        provider: {
+          ...saved,
+          hasKey: true,
+          maskedKey: maskProviderKey(cleanKey),
+        },
+        ...(verification.warning ? { warning: verification.warning } : {}),
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    console.error('[providers] save failed:', (error as Error).message);
-    return Response.json({ error: 'SAVE_FAILED' }, { status: 500 });
+    return storeFailure('save', error, 'SAVE_FAILED');
   }
 }
 
@@ -182,10 +223,15 @@ export async function PATCH(request: Request) {
       protocol: current.protocol,
       baseUrl: current.baseUrl,
     });
-    return Response.json({ provider: saved });
+    return Response.json({
+      provider: {
+        ...saved,
+        hasKey: true,
+        maskedKey: maskProviderKey(current.key),
+      },
+    });
   } catch (error) {
-    console.error('[providers] patch failed:', (error as Error).message);
-    return Response.json({ error: 'SAVE_FAILED' }, { status: 500 });
+    return storeFailure('patch', error, 'SAVE_FAILED');
   }
 }
 
@@ -204,7 +250,6 @@ export async function DELETE(request: Request) {
     }
     return Response.json({ ok: true });
   } catch (error) {
-    console.error('[providers] delete failed:', (error as Error).message);
-    return Response.json({ error: 'DELETE_FAILED' }, { status: 500 });
+    return storeFailure('delete', error, 'DELETE_FAILED');
   }
 }

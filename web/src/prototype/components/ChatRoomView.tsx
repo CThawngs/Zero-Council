@@ -213,7 +213,11 @@ export const ChatRoomView: React.FC = () => {
 
   // Determine which active bots in this room have a verified connected API key vs preview fallback.
   const anyConnectedKey = useMemo(
-    () => apiKeys.some((item) => item.connected && Boolean(getProviderSecret(item.provider))),
+    () =>
+      apiKeys.some(
+        (item) =>
+          item.connected && (Boolean(item.hasKey) || Boolean(getProviderSecret(item.provider)))
+      ),
     [apiKeys, getProviderSecret]
   );
 
@@ -224,7 +228,7 @@ export const ChatRoomView: React.FC = () => {
         (item) =>
           item.provider === persona.provider &&
           item.connected &&
-          Boolean(getProviderSecret(item.provider))
+          (Boolean(item.hasKey) || Boolean(getProviderSecret(item.provider)))
       );
       const isUserBot = persona.id.startsWith('bot:');
       map.set(persona.id, direct || (!isUserBot && anyConnectedKey));

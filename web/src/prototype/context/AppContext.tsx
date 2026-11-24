@@ -53,6 +53,7 @@ import {
   isStopDirective,
   parseMentions,
   runTurn,
+  type BotTurn,
   type ChatAttachment,
   type ChatBot,
   type ChatMessage,
@@ -61,6 +62,7 @@ import {
   type WhyStop,
 } from '../chat/engine';
 import { byokGenerator, completeByokText } from '../chat/byok';
+import { sanitizeApiKey } from '@/lib/byok/verify';
 import { analyzeChatRoomConclusion, matchPersonaId } from '../chat/conclusion';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
@@ -100,6 +102,9 @@ export interface ConnectProviderMeta {
   baseUrl?: string;
   isCustom?: boolean;
 }
+
+/** Outcome of saving a provider key: the server's stable error code on failure. */
+export type ConnectApiKeyResult = { ok: true; warning?: string } | { ok: false; error: string };
 
 type ToastKey = {
   [K in keyof (typeof copy)['en']]: (typeof copy)['en'][K] extends string ? K : never;
@@ -178,7 +183,7 @@ interface AppContextType {
     key: string,
     model: string,
     meta?: ConnectProviderMeta
-  ) => Promise<boolean>;
+  ) => Promise<ConnectApiKeyResult>;
   updateProviderModels: (
     provider: ModelProvider,
     model: string,
@@ -312,27 +317,70 @@ const botToPersona = (bot: UserBot, index = 0): AdvisorPersona => {
  * Security: keys live only in the in-memory `keys` map (populated from the server
  * on sign-in) and are never stored to localStorage or the DOM.
  */
+const completeByokTextViaServer = async (
+  credentials: {
+    provider: string;
+    model: string;
+    apiKey?: string;
+    protocol?: 'anthropic' | 'openai' | 'google';
+    baseUrl?: string;
+  },
+  options: { system: string; prompt: string; maxTokens?: number; signal?: AbortSignal }
+): Promise<string> => {
+  if (credentials.apiKey) {
+    return completeByokText(
+      { ...credentials, apiKey: credentials.apiKey },
+      options
+    );
+  }
+  const response = await fetch('/api/providers/chat', {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      mode: 'text',
+      provider: credentials.provider,
+      model: credentials.model,
+      system: options.system,
+      prompt: options.prompt,
+      maxTokens: options.maxTokens,
+    }),
+    signal: options.signal,
+  });
+  const payload = (await response.json().catch(() => null)) as {
+    ok?: boolean;
+    text?: unknown;
+    error?: unknown;
+  } | null;
+  if (!response.ok || payload?.ok !== true || typeof payload.text !== 'string') {
+    throw new Error(typeof payload?.error === 'string' ? payload.error : 'PROVIDER_ERROR');
+  }
+  return payload.text;
+};
+
 const buildGenerate = (
   personas: AdvisorPersona[],
   keys: Record<string, string>,
   apiKeys: ApiKeyConfig[]
 ): GenerateFn | undefined => {
+  const isUsable = (item: ApiKeyConfig) =>
+    item.connected && (Boolean(keys[item.provider]) || Boolean(item.hasKey));
   // Pick the first connected key — used as fallback for any advisor whose
   // own provider key isn't connected.
-  const fallbackEntry = apiKeys.find((item) => item.connected && Boolean(keys[item.provider]));
+  const fallbackEntry = apiKeys.find(isUsable);
   if (!fallbackEntry) return undefined; // No keys connected — use fixture.
 
   return async (advisorId, stance, prompt, signal) => {
     const persona = personas.find((p) => p.id === advisorId);
 
     // Resolve which provider + key to use for this advisor.
-    let keyMeta = apiKeys.find((item) => item.provider === persona?.provider && item.connected && Boolean(keys[item.provider]));
+    let keyMeta = apiKeys.find((item) => item.provider === persona?.provider && isUsable(item));
     if (!keyMeta) keyMeta = fallbackEntry; // Fallback to any connected key.
 
-    const resolvedKey = keys[keyMeta.provider];
+    const resolvedKey = keys[keyMeta.provider] ?? '';
     const resolvedModel = keyMeta.modelName;
 
-    return completeByokText(
+    return completeByokTextViaServer(
       {
         provider: keyMeta.provider,
         model: resolvedModel,
@@ -1430,26 +1478,55 @@ export const AppProvider: React.FC<{
           let resolvedProvider: ModelProvider | undefined = persona.provider;
           let resolvedKey = keys[persona.provider];
           let keyMeta = apiKeys.find((item) => item.provider === persona.provider);
+          let hasServerKey = Boolean(keyMeta?.connected && keyMeta?.hasKey);
           let resolvedModel = isUserBot
             ? persona.model
             : keyMeta?.connected
               ? keyMeta.modelName
               : persona.model;
-          if (!resolvedKey && !isUserBot) {
+          if (!resolvedKey && !hasServerKey && !isUserBot) {
             const fallbackConnected = apiKeys.find(
-              (item) => item.connected && Boolean(keys[item.provider])
+              (item) => item.connected && (Boolean(keys[item.provider]) || Boolean(item.hasKey))
             );
             if (fallbackConnected) {
               resolvedProvider = fallbackConnected.provider;
               resolvedKey = keys[fallbackConnected.provider];
+              hasServerKey = Boolean(fallbackConnected.hasKey);
               resolvedModel = fallbackConnected.modelName;
               keyMeta = fallbackConnected;
             }
           }
-          if (!resolvedProvider || !resolvedKey) {
+          if (!resolvedProvider || (!resolvedKey && !hasServerKey)) {
             return scriptedGenerator(activeBots, {
               lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '',
             })(request);
+          }
+          if (!resolvedKey) {
+            const { signal: turnSignal, ...serializableTurn } = request;
+            const botPersona = active.find((p) => p.id === request.bot.id)?.instructions;
+            return fetch('/api/providers/chat', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: 'turn',
+                provider: resolvedProvider,
+                model: resolvedModel,
+                persona: botPersona,
+                turnRequest: serializableTurn,
+              }),
+              signal: turnSignal,
+            }).then(async (response) => {
+              const payload = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                turn?: BotTurn;
+                error?: unknown;
+              } | null;
+              if (!response.ok || payload?.ok !== true || !payload.turn) {
+                throw new Error(typeof payload?.error === 'string' ? payload.error : 'PROVIDER_ERROR');
+              }
+              return payload.turn;
+            });
           }
           return byokGenerator(
             {
@@ -1589,6 +1666,7 @@ export const AppProvider: React.FC<{
           keys,
           language,
           signal: controller.signal,
+          completeFn: completeByokTextViaServer,
         });
 
         const round: Round = {
@@ -1649,17 +1727,14 @@ export const AppProvider: React.FC<{
               label?: string;
               protocol?: 'anthropic' | 'openai' | 'google';
               baseUrl?: string;
-              key?: string;
+              hasKey?: boolean;
+              maskedKey?: string;
             }[];
           } | null
         ) => {
           if (cancelled || !body?.providers) return;
-          const restored: Record<string, string> = {};
           const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
-          for (const entry of body.providers) {
-            if (entry.key) restored[entry.provider] = entry.key;
-          }
-          setKeys(restored);
+          setKeys({});
           setApiKeys(() => {
             const builtinUpdated = initialApiKeys.map((item) => {
               const entry = saved.get(item.provider);
@@ -1667,6 +1742,8 @@ export const AppProvider: React.FC<{
               return {
                 ...item,
                 connected: true,
+                hasKey: entry.hasKey ?? true,
+                ...(entry.maskedKey ? { maskedKey: entry.maskedKey } : {}),
                 modelName: entry.model,
                 models:
                   entry.models && entry.models.length > 0
@@ -1682,6 +1759,8 @@ export const AppProvider: React.FC<{
                 modelName: entry.model,
                 models: entry.models && entry.models.length > 0 ? entry.models : [entry.model],
                 connected: true,
+                hasKey: entry.hasKey ?? true,
+                ...(entry.maskedKey ? { maskedKey: entry.maskedKey } : {}),
                 label: entry.label ?? entry.provider,
                 protocol: entry.protocol ?? (entry.provider.startsWith('custom:anthropic:') ? 'anthropic' : 'openai'),
                 baseUrl: entry.baseUrl ?? '',
@@ -1882,14 +1961,18 @@ export const AppProvider: React.FC<{
 
   const connectApiKey = async (
     provider: ModelProvider,
-    key: string,
+    rawKey: string,
     model: string,
     meta: ConnectProviderMeta = {}
-  ): Promise<boolean> => {
+  ): Promise<ConnectApiKeyResult> => {
+    const key = sanitizeApiKey(rawKey);
     const modelList =
       meta.models && meta.models.length > 0
         ? [...new Set([model, ...meta.models])]
         : [model];
+    let savedBaseUrl = meta.baseUrl;
+    let warning: string | undefined;
+    let serverMaskedKey: string | undefined;
     try {
       const response = await fetch('/api/providers', {
         method: 'POST',
@@ -1904,11 +1987,28 @@ export const AppProvider: React.FC<{
           ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
         }),
       });
-      if (!response.ok) return false;
+      const payload = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        warning?: unknown;
+        provider?: { baseUrl?: unknown; maskedKey?: unknown };
+      } | null;
+      if (!response.ok) {
+        return { ok: false, error: typeof payload?.error === 'string' ? payload.error : 'SAVE_FAILED' };
+      }
+      if (typeof payload?.provider?.baseUrl === 'string') savedBaseUrl = payload.provider.baseUrl;
+      if (typeof payload?.warning === 'string') warning = payload.warning;
+      if (typeof payload?.provider?.maskedKey === 'string') serverMaskedKey = payload.provider.maskedKey;
     } catch {
-      return false;
+      return { ok: false, error: 'NETWORK_FAILED' };
     }
-    setKeys((value) => ({ ...value, [provider]: key }));
+    const finalMeta = { ...meta, ...(savedBaseUrl ? { baseUrl: savedBaseUrl } : {}) };
+    // Never retain plaintext provider keys in browser state once persisted server-side.
+    setKeys((value) => {
+      if (!(provider in value)) return value;
+      const next = { ...value };
+      delete next[provider];
+      return next;
+    });
     setApiKeys((value) => {
       const exists = value.some((item) => item.provider === provider);
       if (exists) {
@@ -1917,10 +2017,12 @@ export const AppProvider: React.FC<{
             ? {
                 ...item,
                 connected: true,
+                hasKey: true,
+                ...(serverMaskedKey ? { maskedKey: serverMaskedKey } : {}),
                 modelName: model,
                 models: modelList,
-                ...(meta.label ? { label: meta.label } : {}),
-                ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
+                ...(finalMeta.label ? { label: finalMeta.label } : {}),
+                ...(finalMeta.baseUrl ? { baseUrl: finalMeta.baseUrl } : {}),
               }
             : item
         );
@@ -1932,15 +2034,17 @@ export const AppProvider: React.FC<{
           modelName: model,
           models: modelList,
           connected: true,
-          label: meta.label ?? provider,
-          protocol: meta.protocol ?? 'openai',
-          baseUrl: meta.baseUrl ?? '',
+          hasKey: true,
+          ...(serverMaskedKey ? { maskedKey: serverMaskedKey } : {}),
+          label: finalMeta.label ?? provider,
+          protocol: finalMeta.protocol ?? 'openai',
+          baseUrl: finalMeta.baseUrl ?? '',
           isCustom: true,
         },
       ];
     });
-    showToast('toastProviderOn', { provider: meta.label ?? provider });
-    return true;
+    showToast('toastProviderOn', { provider: finalMeta.label ?? provider });
+    return warning ? { ok: true, warning } : { ok: true };
   };
 
   const updateProviderModels = async (
@@ -1983,7 +2087,11 @@ export const AppProvider: React.FC<{
     setApiKeys((value) =>
       value
         .filter((item) => !(item.provider === provider && item.isCustom))
-        .map((item) => (item.provider === provider ? { ...item, connected: false } : item))
+        .map((item) =>
+          item.provider === provider
+            ? { ...item, connected: false, hasKey: false, maskedKey: undefined }
+            : item
+        )
     );
     showToast('toastProviderOff', { provider });
   };
@@ -1993,7 +2101,14 @@ export const AppProvider: React.FC<{
       () => undefined
     );
     setKeys({});
-    setApiKeys(initialApiKeys.map((item) => ({ ...item, connected: false })));
+    setApiKeys(
+      initialApiKeys.map((item) => ({
+        ...item,
+        connected: false,
+        hasKey: false,
+        maskedKey: undefined,
+      }))
+    );
     showToast('toastProvidersCleared');
   };
 

@@ -132,6 +132,10 @@ export interface ApiKeyConfig {
   /** Full list of discovered + custom-tested model ids available on this provider. */
   models?: string[];
   connected: boolean;
+  /** True when the server holds an encrypted key for this provider (plaintext never sent to browser). */
+  hasKey?: boolean;
+  /** Masked display tail (e.g. `????abcd`), safe for UI display. */
+  maskedKey?: string;
   label?: string;
   protocol?: 'anthropic' | 'openai' | 'google';
   baseUrl?: string;

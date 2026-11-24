@@ -11,9 +11,12 @@ import { splitDataUrl } from './read-image-web.ts';
 import { buildSystemPrompt as systemPrompt } from './prompts.ts';
 import {
   checkKeyShape,
+  normalizeProviderBaseUrl,
   probeModel,
+  sanitizeApiKey,
   verifyProviderKey,
   type VerifyTarget,
+  type VerifyWarningCode,
 } from '../../lib/byok/verify.ts';
 import {
   RESUME_ALL,
@@ -144,7 +147,11 @@ export const builtinProviderById = (id: string): Provider | undefined =>
 export const providerById = (id: ProviderId): Provider =>
   builtinProviderById(id) ?? PROVIDERS[0];
 
-export const normalizeBaseUrl = (raw: string): string => raw.trim().replace(/\/+$/, '');
+/**
+ * Normalizes a user-typed Base URL: trims, drops trailing slashes and strips pasted endpoint paths
+ * such as `/chat/completions`, `/messages` or `/models` so only the API root remains.
+ */
+export const normalizeBaseUrl = (raw: string): string => normalizeProviderBaseUrl(raw);
 
 export interface ProviderEndpointSpec {
   provider: ProviderId;
@@ -199,6 +206,19 @@ const throwCode = (code: string): never => {
   throw new Error(code);
 };
 
+/** Outcome of a successful connection test, as shown to the user before Save. */
+export interface ProviderConnectionResult {
+  models: string[];
+  verifiedModel: string;
+  /** Base URL the API actually answered on (normalized, `/v1` appended when needed). */
+  resolvedBaseUrl?: string;
+  /** Key is valid but the probed model is temporarily unusable (quota / rate limit). */
+  warning?: VerifyWarningCode;
+}
+
+const isWarning = (value: unknown): value is VerifyWarningCode =>
+  value === 'RATE_LIMITED' || value === 'INSUFFICIENT_CREDITS';
+
 /**
  * Strict client-side verification (direct to the provider). Used by unit tests and as the fallback
  * when the app's own `/api/providers/verify` is unavailable (signed-out demo / static preview).
@@ -209,10 +229,15 @@ export const verifyProviderKeyDirect = async (
   target: ProviderId | ProviderEndpointSpec,
   apiKey: string,
   options: { model?: string } = {}
-): Promise<{ models: string[]; verifiedModel: string }> => {
+): Promise<ProviderConnectionResult> => {
   const result = await verifyProviderKey(verifyTargetFor(target), apiKey, { model: options.model });
   if (!result.ok) return throwCode(result.error);
-  return { models: result.models, verifiedModel: result.verifiedModel };
+  return {
+    models: result.models,
+    verifiedModel: result.verifiedModel,
+    ...(result.resolvedBaseUrl ? { resolvedBaseUrl: result.resolvedBaseUrl } : {}),
+    ...(result.warning ? { warning: result.warning } : {}),
+  };
 };
 
 /**
@@ -235,7 +260,7 @@ export const verifyProviderConnection = async (
   target: ProviderId | ProviderEndpointSpec,
   apiKey: string,
   options: { model?: string } = {}
-): Promise<{ models: string[]; verifiedModel: string }> => {
+): Promise<ProviderConnectionResult> => {
   const shapeError = checkKeyShape(apiKey);
   if (shapeError) return throwCode(shapeError);
   const endpoint = resolveProviderEndpoint(target);
@@ -248,7 +273,7 @@ export const verifyProviderConnection = async (
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: endpoint.provider,
-        key: apiKey.trim(),
+        key: sanitizeApiKey(apiKey),
         ...(options.model ? { model: options.model } : {}),
         ...(endpoint.isBuiltin ? {} : { protocol: endpoint.protocol, baseUrl: endpoint.baseUrl }),
       }),
@@ -259,7 +284,14 @@ export const verifyProviderConnection = async (
 
   const payload = response
     ? ((await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: unknown; models?: unknown; verifiedModel?: unknown }
+        | {
+            ok?: boolean;
+            error?: unknown;
+            models?: unknown;
+            verifiedModel?: unknown;
+            resolvedBaseUrl?: unknown;
+            warning?: unknown;
+          }
         | null)
     : null;
 
@@ -269,7 +301,12 @@ export const verifyProviderConnection = async (
 
   if (payload.ok === true && typeof payload.verifiedModel === 'string' && Array.isArray(payload.models)) {
     const models = payload.models.filter((m): m is string => typeof m === 'string');
-    return { models: models.length > 0 ? models : [payload.verifiedModel], verifiedModel: payload.verifiedModel };
+    return {
+      models: models.length > 0 ? models : [payload.verifiedModel],
+      verifiedModel: payload.verifiedModel,
+      ...(typeof payload.resolvedBaseUrl === 'string' ? { resolvedBaseUrl: payload.resolvedBaseUrl } : {}),
+      ...(isWarning(payload.warning) ? { warning: payload.warning } : {}),
+    };
   }
   return throwCode(typeof payload.error === 'string' ? payload.error : 'PROVIDER_ERROR');
 };
@@ -297,7 +334,7 @@ export const testProviderModel = async (
   if (!model) return throwCode('EMPTY_MODEL');
   const target = verifyTargetFor(credentials);
   if (!/^https?:\/\//i.test(target.baseUrl)) return throwCode('INVALID_BASE_URL');
-  const probe = await probeModel(target, credentials.apiKey.trim(), model);
+  const probe = await probeModel(target, sanitizeApiKey(credentials.apiKey), model);
   if (!probe.ok) return throwCode(probe.error);
   return true;
 };

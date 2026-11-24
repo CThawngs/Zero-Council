@@ -1,7 +1,13 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { decryptProviderKey, encryptProviderKey } from '../crypto/providerKeys.ts';
+import {
+  decryptProviderKey,
+  encryptProviderKey,
+  INVALID_PROVIDER_KEY_SECRET,
+  MISSING_PROVIDER_KEY_SECRET,
+} from '../crypto/providerKeys.ts';
 import { serverEnv } from '../serverEnv.ts';
+import { isBuiltinProviderId } from './botValidation.ts';
 
 export interface ProviderKeyRecord {
   provider: string;
@@ -46,8 +52,49 @@ const request = async (pathAndQuery: string, init: RequestInit = {}): Promise<un
   return response.json();
 };
 
-const EPHEMERAL = process.env.VERCEL === '1';
-const STORE_PATH = serverEnv('ZC_PROVIDER_KEYS_STORE') ?? path.join(process.cwd(), '.zc-provider-keys.json');
+/**
+ * Stable error codes the provider routes return as JSON instead of a generic 500.
+ * `status` is the HTTP status our API answers with.
+ */
+export type ProviderStoreErrorCode =
+  | typeof MISSING_PROVIDER_KEY_SECRET
+  | typeof INVALID_PROVIDER_KEY_SECRET
+  | 'STORE_NOT_CONFIGURED'
+  | 'STORE_SCHEMA_OUTDATED'
+  | 'STORE_UNAVAILABLE';
+
+export const STORE_SCHEMA_OUTDATED = 'STORE_SCHEMA_OUTDATED';
+
+const CONFIGURATION_ERRORS = new Set<string>([MISSING_PROVIDER_KEY_SECRET, INVALID_PROVIDER_KEY_SECRET]);
+
+/** Maps an error thrown by this store (or the crypto layer) to a code that is safe to show. */
+export const providerStoreErrorOf = (
+  error: unknown
+): { code: ProviderStoreErrorCode; status: number } => {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === MISSING_PROVIDER_KEY_SECRET) return { code: MISSING_PROVIDER_KEY_SECRET, status: 503 };
+  if (message === INVALID_PROVIDER_KEY_SECRET) return { code: INVALID_PROVIDER_KEY_SECRET, status: 503 };
+  if (message === 'SUPABASE_NOT_CONFIGURED' || message === 'STORE_NOT_CONFIGURED') {
+    return { code: 'STORE_NOT_CONFIGURED', status: 503 };
+  }
+  if (message === STORE_SCHEMA_OUTDATED) return { code: STORE_SCHEMA_OUTDATED, status: 503 };
+  return { code: 'STORE_UNAVAILABLE', status: 502 };
+};
+
+/** PostgreSQL foreign-key violation on the provider column (migration 0006 constraint). */
+const isProviderForeignKeyViolation = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : '';
+  return /23503/.test(message) && /(fk_zc_provider_keys_provider|zc_provider_keys_provider_fkey|zc_agent_providers)/.test(message);
+};
+
+/** PostgREST / PostgreSQL "column does not exist" (database older than migration 0008). */
+const isMissingColumnError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : '';
+  return /(PGRST204|42703|column)/i.test(message);
+};
+
+const storePath = () =>
+  serverEnv('ZC_PROVIDER_KEYS_STORE') ?? path.join(process.cwd(), '.zc-provider-keys.json');
 
 type FileEntry = {
   provider: string;
@@ -64,18 +111,18 @@ type FileShape = Record<string, FileEntry>;
 
 const readAll = async (): Promise<FileShape> => {
   try {
-    return JSON.parse(await readFile(/* turbopackIgnore: true */ STORE_PATH, 'utf8')) as FileShape;
+    return JSON.parse(await readFile(/* turbopackIgnore: true */ storePath(), 'utf8')) as FileShape;
   } catch {
     return {};
   }
 };
 
 const writeAll = (data: FileShape) =>
-  writeFile(/* turbopackIgnore: true */ STORE_PATH, JSON.stringify(data, null, 2), 'utf8');
+  writeFile(/* turbopackIgnore: true */ storePath(), JSON.stringify(data, null, 2), 'utf8');
 
 const assertStoreAvailable = () => {
   if (supabaseConfig()) return;
-  if (EPHEMERAL) throw new Error('SUPABASE_NOT_CONFIGURED');
+  if (serverEnv('VERCEL') === '1') throw new Error('SUPABASE_NOT_CONFIGURED');
 };
 
 const rowKey = (email: string, provider: string) => `${email}|${provider}`;
@@ -93,7 +140,7 @@ interface Row {
 
 const normalizeModels = (primaryModel: string, rawModels: unknown): string[] => {
   const list = Array.isArray(rawModels)
-    ? rawModels.filter((item): item is string => typeof item === 'string' && item.trim().length > 0).map((item) => item.trim())
+    ? rawModels.filter((m): m is string => typeof m === 'string' && m.trim().length > 0).map((m) => m.trim())
     : [];
   if (primaryModel && !list.includes(primaryModel)) {
     list.unshift(primaryModel);
@@ -159,21 +206,44 @@ export const listProviderKeysWithSecrets = async (
         `zc_provider_keys?user_email=eq.${encodeURIComponent(key)}&select=provider,model,encrypted_key,updated_at&order=provider`
       )) as Row[];
     }
-    return rows.map((row) => ({ ...toRecord(row), key: decryptProviderKey(row.encrypted_key ?? '') }));
+    const results: (ProviderKeyRecord & { key: string })[] = [];
+    for (const row of rows) {
+      try {
+        results.push({ ...toRecord(row), key: decryptProviderKey(row.encrypted_key ?? '') });
+      } catch (error) {
+        // A missing / malformed secret is a server misconfiguration: surface it instead of
+        // pretending the user has no keys.
+        if (CONFIGURATION_ERRORS.has((error as Error).message)) throw error;
+        // One row sealed with a secret that is no longer configured: skip it (re-saving fixes it).
+        console.warn(
+          `[store/providerKeys] skipping unreadable row for ${row.provider}: ${(error as Error).message}`
+        );
+      }
+    }
+    return results;
   }
-  return Object.entries(await readAll())
-    .filter(([k]) => k.startsWith(`${key}|`))
-    .map(([, entry]) => ({
-      provider: entry.provider,
-      model: entry.model,
-      models: normalizeModels(entry.model, entry.models),
-      ...(entry.label ? { label: entry.label } : {}),
-      ...(entry.protocol ? { protocol: entry.protocol } : {}),
-      ...(entry.baseUrl ? { baseUrl: entry.baseUrl } : {}),
-      updatedAt: entry.updatedAt,
-      key: decryptProviderKey(entry.encrypted),
-    }))
-    .sort((a, b) => a.provider.localeCompare(b.provider));
+  const results: (ProviderKeyRecord & { key: string })[] = [];
+  for (const [k, entry] of Object.entries(await readAll())) {
+    if (!k.startsWith(`${key}|`)) continue;
+    try {
+      results.push({
+        provider: entry.provider,
+        model: entry.model,
+        models: normalizeModels(entry.model, entry.models),
+        ...(entry.label ? { label: entry.label } : {}),
+        ...(entry.protocol ? { protocol: entry.protocol } : {}),
+        ...(entry.baseUrl ? { baseUrl: entry.baseUrl } : {}),
+        updatedAt: entry.updatedAt,
+        key: decryptProviderKey(entry.encrypted),
+      });
+    } catch (error) {
+      if (CONFIGURATION_ERRORS.has((error as Error).message)) throw error;
+      console.warn(
+        `[store/providerKeys] skipping unreadable local entry for ${entry.provider}: ${(error as Error).message}`
+      );
+    }
+  }
+  return results.sort((a, b) => a.provider.localeCompare(b.provider));
 };
 
 export const saveProviderKey = async (
@@ -189,8 +259,8 @@ export const saveProviderKey = async (
   const updatedAt = new Date().toISOString();
   const models = normalizeModels(model, meta.models);
   if (supabaseConfig()) {
-    try {
-      const rows = await request('zc_provider_keys?on_conflict=user_email,provider', {
+    const upsertWithMetadata = () =>
+      request('zc_provider_keys?on_conflict=user_email,provider', {
         method: 'POST',
         body: JSON.stringify({
           user_email: key,
@@ -204,10 +274,30 @@ export const saveProviderKey = async (
           updated_at: updatedAt,
         }),
       });
-      const [row] = rows as Row[];
-      if (row) return toRecord(row);
-    } catch {
-      const rows = await request('zc_provider_keys?on_conflict=user_email,provider', {
+
+    let rows: unknown = null;
+    try {
+      rows = await upsertWithMetadata();
+    } catch (error) {
+      if (isProviderForeignKeyViolation(error)) {
+        // Database still carries migration 0006's provider FK (0008 drops it). Built-in ids are
+        // seeded into the public catalog and retried; custom ids are NOT written there because the
+        // catalog is world-readable and would leak user-chosen names.
+        if (!isBuiltinProviderId(provider)) throw new Error(STORE_SCHEMA_OUTDATED);
+        await request('zc_agent_providers?on_conflict=id', {
+          method: 'POST',
+          body: JSON.stringify({ id: provider, name: meta.label ?? provider }),
+        });
+        rows = await upsertWithMetadata();
+      } else if (!isMissingColumnError(error)) {
+        throw error;
+      }
+    }
+    const [savedRow] = (Array.isArray(rows) ? rows : []) as Row[];
+    if (savedRow) return toRecord(savedRow);
+    if (rows === null) {
+      // Pre-0008 schema without the metadata columns: store the essentials only.
+      const legacyRows = await request('zc_provider_keys?on_conflict=user_email,provider', {
         method: 'POST',
         body: JSON.stringify({
           user_email: key,
@@ -217,8 +307,16 @@ export const saveProviderKey = async (
           updated_at: updatedAt,
         }),
       });
-      const [row] = rows as Row[];
-      if (row) return { ...toRecord(row), models, ...(meta.label ? { label: meta.label } : {}), ...(meta.protocol ? { protocol: meta.protocol } : {}), ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}) };
+      const [legacyRow] = legacyRows as Row[];
+      if (legacyRow) {
+        return {
+          ...toRecord(legacyRow),
+          models,
+          ...(meta.label ? { label: meta.label } : {}),
+          ...(meta.protocol ? { protocol: meta.protocol } : {}),
+          ...(meta.baseUrl ? { baseUrl: meta.baseUrl } : {}),
+        };
+      }
     }
     const [existing] = (await request(
       `zc_provider_keys?user_email=eq.${encodeURIComponent(key)}&provider=eq.${encodeURIComponent(provider)}&select=provider,model,updated_at`
