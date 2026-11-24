@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Moon, Sun } from 'lucide-react';
+import { Home, LayoutDashboard, Moon, Sun } from 'lucide-react';
 import { useApp } from '@/prototype/context/AppContext';
 import type { Copy } from '@/prototype/i18n';
 
@@ -317,6 +317,27 @@ export default function AdminPage() {
 
   const headerControls = (
     <div className="flex flex-wrap items-center gap-2">
+      <nav className="flex items-center gap-1 rounded-full border border-border p-1" aria-label={t.workspaceNavigation}>
+        <Link
+          href="/"
+          onClick={() => {
+            try {
+              sessionStorage.setItem('zc:initial-dashboard-redirect', 'true');
+            } catch {}
+          }}
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-ink-muted transition hover:bg-background hover:text-ink"
+        >
+          <Home className="h-4 w-4" aria-hidden="true" />
+          <span>{t.adminBackHome}</span>
+        </Link>
+        <Link
+          href="/dashboard"
+          className="inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-ink-muted transition hover:bg-background hover:text-ink"
+        >
+          <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
+          <span>{t.adminToDashboard}</span>
+        </Link>
+      </nav>
       <div className="flex items-center gap-1 rounded-full border border-border p-1" role="group" aria-label={t.language}>
         {(['en', 'vi'] as const).map((item) => (
           <button
