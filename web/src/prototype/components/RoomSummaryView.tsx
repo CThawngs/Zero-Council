@@ -5,6 +5,7 @@ import { modelLabel, providerLabel } from '../data/mockData';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
 import { Avatar, AttachmentGlyph } from './ChatRoomView';
+import { ExpandableText } from './ExpandableText';
 
 /**
  * What the council said, in one page, after the user ends the meeting.
@@ -117,12 +118,20 @@ export const RoomSummaryView: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-4xl space-y-8 py-4 sm:py-8">
-      <header className="max-w-3xl">
+      <header className="min-w-0 max-w-3xl">
         <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-brass">
           <span className="h-2 w-2 rounded-full bg-brass" aria-hidden="true" />
           {t.summaryEyebrow}
         </p>
-        <h1 className="mt-3 break-words font-serif text-3xl text-ink sm:text-4xl">{currentRoom.title}</h1>
+        <ExpandableText
+          key={currentRoom.title}
+          as="h1"
+          text={currentRoom.title}
+          maxLines={3}
+          className="mt-3 font-serif text-3xl leading-snug text-ink sm:text-4xl sm:leading-snug"
+          showMoreLabel={t.summaryShowMore}
+          showLessLabel={t.summaryShowLess}
+        />
         <p className="mt-3 text-sm leading-relaxed text-ink-muted sm:text-base">{t.summaryIntro}</p>
         <div className="mt-5 flex flex-wrap gap-2">
           <button type="button" onClick={() => setCurrentView('chat-room')} className="button-primary min-h-11 justify-center">
@@ -153,15 +162,30 @@ export const RoomSummaryView: React.FC = () => {
         <h2 id="summary-question" className="font-serif text-xl text-ink">
           {t.summaryQuestion}
         </h2>
-        <div className="rounded-2xl border border-border bg-surface p-5 sm:p-6">
-          <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink sm:text-base">{opening?.body}</p>
+        <div className="min-w-0 rounded-2xl border border-border bg-surface p-5 sm:p-6">
+          {opening?.body && (
+            <ExpandableText
+              key={opening.id}
+              text={opening.body}
+              maxLines={4}
+              className="text-sm leading-relaxed text-ink sm:text-base"
+              showMoreLabel={t.summaryShowMore}
+              showLessLabel={t.summaryShowLess}
+            />
+          )}
           {followUps.length > 0 && (
             <div className="mt-4 border-t border-border pt-4">
               <p className="text-xs font-semibold uppercase tracking-wide text-ink-muted">{t.summaryFollowUps}</p>
               <ul className="mt-2 space-y-1.5">
                 {followUps.map((message) => (
-                  <li key={message.id} className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-muted">
-                    {message.body}
+                  <li key={message.id} className="min-w-0">
+                    <ExpandableText
+                      text={message.body}
+                      maxLines={3}
+                      className="text-sm leading-relaxed text-ink-muted"
+                      showMoreLabel={t.summaryShowMore}
+                      showLessLabel={t.summaryShowLess}
+                    />
                   </li>
                 ))}
               </ul>
@@ -181,7 +205,7 @@ export const RoomSummaryView: React.FC = () => {
             {positions.map(({ persona, turns, last }) => (
               <li
                 key={persona.id}
-                className="rounded-2xl border p-5"
+                className="min-w-0 rounded-2xl border p-5"
                 style={{
                   backgroundColor: `color-mix(in srgb, ${persona.colorHex} 8%, var(--color-surface))`,
                   borderColor: `color-mix(in srgb, ${persona.colorHex} 32%, var(--color-border))`,
@@ -199,7 +223,16 @@ export const RoomSummaryView: React.FC = () => {
                     {turns > 0 ? t.summaryTurns.replace('{count}', String(turns)) : t.summaryNoTurns}
                   </span>
                 </div>
-                {last && <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">{last.body}</p>}
+                {last && (
+                  <ExpandableText
+                    key={last.id}
+                    text={last.body}
+                    maxLines={5}
+                    className="mt-3 text-sm leading-relaxed text-ink"
+                    showMoreLabel={t.summaryShowMore}
+                    showLessLabel={t.summaryShowLess}
+                  />
+                )}
               </li>
             ))}
           </ul>
@@ -213,9 +246,18 @@ export const RoomSummaryView: React.FC = () => {
           </h2>
           <ol className="space-y-2 rounded-2xl border border-border bg-surface p-5 sm:p-6">
             {handoffs.map((line, index) => (
-              <li key={`${line}-${index}`} className="flex gap-3 text-sm text-ink">
+              <li key={`${line}-${index}`} className="flex min-w-0 gap-3 text-sm text-ink">
                 <span className="w-5 shrink-0 text-right text-xs leading-6 text-ink-muted">{index + 1}</span>
-                <span className="break-words">{line}</span>
+                <div className="min-w-0 flex-1">
+                  <ExpandableText
+                    as="span"
+                    text={line}
+                    maxLines={2}
+                    className="block text-sm text-ink"
+                    showMoreLabel={t.summaryShowMore}
+                    showLessLabel={t.summaryShowLess}
+                  />
+                </div>
               </li>
             ))}
           </ol>

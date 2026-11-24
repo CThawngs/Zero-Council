@@ -10,6 +10,7 @@ import {
   UsersRound,
 } from 'lucide-react';
 import FrameworkPanel from './FrameworkPanel';
+import { ExpandableText } from './ExpandableText';
 
 export const SessionConcludedView: React.FC = () => {
   const {
@@ -74,9 +75,15 @@ export const SessionConcludedView: React.FC = () => {
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brass">
               {t.concludedEyebrow}
             </p>
-            <h1 className="mt-3 break-words font-serif text-2xl leading-snug text-ink sm:text-3xl">
-              {currentSession.title}
-            </h1>
+            <ExpandableText
+              key={currentSession.title}
+              as="h1"
+              text={currentSession.title}
+              maxLines={3}
+              className="mt-3 font-serif text-2xl leading-snug text-ink sm:text-3xl sm:leading-snug"
+              showMoreLabel={t.summaryShowMore}
+              showLessLabel={t.summaryShowLess}
+            />
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">{t.concludedBody}</p>
           </div>
         </div>
@@ -117,9 +124,14 @@ export const SessionConcludedView: React.FC = () => {
           <div className="mt-6 space-y-6">
             <div>
               <h3 className="text-sm font-semibold text-ink">{t.chairSummaryLabel}</h3>
-              <p className="mt-2 whitespace-pre-wrap break-words font-serif text-xl leading-relaxed text-ink">
-                {summaryText}
-              </p>
+              <ExpandableText
+                key={summaryText}
+                text={summaryText}
+                maxLines={4}
+                className="mt-2 font-serif text-xl leading-relaxed text-ink"
+                showMoreLabel={t.summaryShowMore}
+                showLessLabel={t.summaryShowLess}
+              />
             </div>
 
             <div>
@@ -131,27 +143,49 @@ export const SessionConcludedView: React.FC = () => {
                 {[round.chair.dissent].map((item) => (
                   <li
                     key={item}
-                    className="flex gap-2 rounded-lg border border-border bg-background/70 px-3 py-2.5 text-sm leading-relaxed text-ink-muted"
+                    className="flex min-w-0 gap-2 rounded-lg border border-border bg-background/70 px-3 py-2.5 text-sm leading-relaxed text-ink-muted"
                   >
                     <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-brass" aria-hidden="true" />
-                    <span className="whitespace-pre-wrap break-words">{item}</span>
+                    <div className="min-w-0 flex-1">
+                      <ExpandableText
+                        text={item}
+                        maxLines={3}
+                        className="text-sm leading-relaxed text-ink-muted"
+                        showMoreLabel={t.summaryShowMore}
+                        showLessLabel={t.summaryShowLess}
+                      />
+                    </div>
                   </li>
                 ))}
               </ul>
             </div>
 
-            <div className="rounded-xl border border-sage/35 bg-sage/10 p-4">
+            <div className="min-w-0 rounded-xl border border-sage/35 bg-sage/10 p-4">
               <h3 className="text-sm font-semibold text-ink">{t.chairRecommendationLabel}</h3>
-              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink-muted">
-                {round.chair.recommendation}
-              </p>
+              <ExpandableText
+                key={round.chair.recommendation}
+                text={round.chair.recommendation}
+                maxLines={4}
+                className="mt-1 text-sm leading-relaxed text-ink-muted"
+                showMoreLabel={t.summaryShowMore}
+                showLessLabel={t.summaryShowLess}
+              />
             </div>
           </div>
 
           <div className="mt-6 flex flex-col gap-4 rounded-xl border border-border bg-background/70 p-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-3">
               <Quote className="mt-0.5 h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
-              <p className="text-sm italic leading-relaxed text-ink-muted">{round.prompt}</p>
+              <div className="min-w-0 flex-1">
+                <ExpandableText
+                  key={round.prompt}
+                  text={round.prompt}
+                  maxLines={3}
+                  className="text-sm italic leading-relaxed text-ink-muted"
+                  showMoreLabel={t.summaryShowMore}
+                  showLessLabel={t.summaryShowLess}
+                />
+              </div>
             </div>
             <button
               type="button"
@@ -189,11 +223,12 @@ export const SessionConcludedView: React.FC = () => {
             return (
               <article
                 key={`${contribution.advisorId}-${index}`}
-                className="rounded-2xl border border-border bg-surface p-5"
+                // `min-w-0` stops long unbroken text from blowing out the 3-column CSS grid track.
+                className="min-w-0 rounded-2xl border border-border bg-surface p-5"
               >
                 <div className="border-b border-border pb-3">
-                  <h3 className="font-medium text-ink">{nameOf(contribution.advisorId)}</h3>
-                  <p className="mt-1 text-[11px] text-ink-muted">
+                  <h3 className="truncate font-medium text-ink">{nameOf(contribution.advisorId)}</h3>
+                  <p className="mt-1 truncate text-[11px] text-ink-muted">
                     {t.modelLabel}:{' '}
                     {advisor
                       ? `${modelLabel(advisor.model)} · ${providerLabel(advisor.provider)}`
@@ -207,12 +242,22 @@ export const SessionConcludedView: React.FC = () => {
                     </p>
                   )}
                 </div>
-                <p className="mt-4 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
-                  {contribution.text}
-                </p>
-                <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-                  {advisor?.instructions ?? ''}
-                </p>
+                <ExpandableText
+                  text={contribution.text}
+                  maxLines={5}
+                  className="mt-4 text-sm leading-relaxed text-ink"
+                  showMoreLabel={t.summaryShowMore}
+                  showLessLabel={t.summaryShowLess}
+                />
+                {advisor?.instructions && (
+                  <ExpandableText
+                    text={advisor.instructions}
+                    maxLines={3}
+                    className="mt-3 text-xs leading-relaxed text-ink-muted"
+                    showMoreLabel={t.summaryShowMore}
+                    showLessLabel={t.summaryShowLess}
+                  />
+                )}
               </article>
             );
           })}
