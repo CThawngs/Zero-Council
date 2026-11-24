@@ -8,7 +8,7 @@
  */
 
 import { splitDataUrl } from './read-image-web.ts';
-import { filterBuiltinModels } from './modelAllowList.ts';
+import { visibleModelsForProvider } from './modelAllowList.ts';
 import {
   checkKeyShape,
   probeModel,
@@ -227,32 +227,36 @@ export const verifyProviderKeyDirect = async (
 export const fetchProviderModels = async (
   target: ProviderId | ProviderEndpointSpec,
   apiKey: string
-): Promise<string[]> => {
-  const key = apiKey.trim();
-  if (!key) throw new Error('EMPTY_KEY');
-  const providerId = typeof target === 'string' ? target : target.provider;
-  const { protocol, baseUrl, isBuiltin } = resolveProviderEndpoint(target);
-  if (!baseUrl || !/^https?:\/\//i.test(baseUrl)) throw new Error('INVALID_BASE_URL');
+): Promise<string[]> => (await verifyProviderKeyDirect(target, apiKey)).models;
 
-  let response: Response;
+/**
+ * Verifies a key through the app server (`POST /api/providers/verify`) — no browser CORS issues and
+ * the same strict rules the save route enforces. Falls back to `verifyProviderKeyDirect` ONLY when
+ * the server cannot judge (signed out, route missing, app server unreachable); a server verdict
+ * such as `INVALID_KEY` is always final.
+ */
+export const verifyProviderConnection = async (
+  target: ProviderId | ProviderEndpointSpec,
+  apiKey: string,
+  options: { model?: string } = {}
+): Promise<{ models: string[]; verifiedModel: string }> => {
+  const shapeError = checkKeyShape(apiKey);
+  if (shapeError) return throwCode(shapeError);
+  const endpoint = resolveProviderEndpoint(target);
+
+  let response: Response | null = null;
   try {
-    if (protocol === 'anthropic') {
-      response = await fetch(`${baseUrl}/models`, {
-        headers: {
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-      });
-    } else if (protocol === 'google') {
-      response = await fetch(`${baseUrl}/models`, {
-        headers: { 'x-goog-api-key': key },
-      });
-    } else {
-      response = await fetch(`${baseUrl}/models`, {
-        headers: { Authorization: `Bearer ${key}` },
-      });
-    }
+    response = await fetch('/api/providers/verify', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider: endpoint.provider,
+        key: apiKey.trim(),
+        ...(options.model ? { model: options.model } : {}),
+        ...(endpoint.isBuiltin ? {} : { protocol: endpoint.protocol, baseUrl: endpoint.baseUrl }),
+      }),
+    });
   } catch {
     response = null;
   }
@@ -267,42 +271,12 @@ export const fetchProviderModels = async (
     !response || !payload || response.status === 404 || payload.error === 'NEED_LOGIN';
   if (serverCannotJudge) return verifyProviderKeyDirect(target, apiKey, options);
 
-  if (protocol === 'google') {
-    const body = (await response.json().catch(() => null)) as {
-      models?: { name?: unknown; supportedGenerationMethods?: unknown }[];
-    } | null;
-    const ids = (body?.models ?? [])
-      .filter(
-        (entry) =>
-          !Array.isArray(entry?.supportedGenerationMethods) ||
-          entry.supportedGenerationMethods.includes('generateContent')
-      )
-      .map((entry) => (typeof entry?.name === 'string' ? entry.name.replace(/^models\//, '') : null))
-      .filter((id): id is string => Boolean(id));
-    const uniqueIds = [...new Set(ids)].sort();
-    return isBuiltin ? filterBuiltinModels(providerId as BuiltinProviderId, uniqueIds) : uniqueIds;
+  if (payload.ok === true && typeof payload.verifiedModel === 'string' && Array.isArray(payload.models)) {
+    const rawModels = payload.models.filter((m): m is string => typeof m === 'string');
+    const models = visibleModelsForProvider(endpoint.provider, rawModels, payload.verifiedModel);
+    return { models: models.length > 0 ? models : [payload.verifiedModel], verifiedModel: payload.verifiedModel };
   }
-
-  const body = (await response.json().catch(() => null)) as
-    | { data?: { id?: unknown }[]; models?: { id?: unknown; name?: unknown }[] }
-    | { id?: unknown }[]
-    | null;
-  const rawList = Array.isArray(body)
-    ? body
-    : Array.isArray(body?.data)
-      ? body.data
-      : Array.isArray(body?.models)
-        ? body.models
-        : [];
-  const ids = rawList
-    .map((entry) => {
-      if (typeof entry?.id === 'string') return entry.id;
-      if (entry && 'name' in entry && typeof entry.name === 'string') return entry.name;
-      return null;
-    })
-    .filter((id): id is string => Boolean(id));
-  const uniqueIds = [...new Set(ids)].sort();
-  return isBuiltin ? filterBuiltinModels(providerId as BuiltinProviderId, uniqueIds) : uniqueIds;
+  return throwCode(typeof payload.error === 'string' ? payload.error : 'PROVIDER_ERROR');
 };
 
 export interface Credentials {

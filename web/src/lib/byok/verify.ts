@@ -15,6 +15,8 @@
  * by `node --test` directly (type stripping) as well as by Next.js.
  */
 
+import { visibleModelsForProvider } from '../../prototype/chat/modelAllowList.ts';
+
 export type VerifyProtocol = 'openai' | 'anthropic' | 'google';
 
 export type VerifyErrorCode =
@@ -347,7 +349,7 @@ const fetchModelList = async (
     }
     return {
       ok: true,
-      models: parseModelList(target.protocol, body.value),
+      models: visibleModelsForProvider(target.providerId, parseModelList(target.protocol, body.value)),
       authProven: AUTHENTICATED_MODEL_LIST_PROVIDERS.has(target.providerId),
       apiReachable: true,
       looksLikeWebsite: false,
