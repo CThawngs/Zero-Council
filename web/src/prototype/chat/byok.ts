@@ -552,6 +552,9 @@ const toGoogleContents = (request: ChatTurnRequest) => {
   return merged;
 };
 
+/** Reasoning/thinking models (Gemini 2.5/3, OpenAI o-series) share this budget between internal thoughts and visible output, so 1024 truncates replies mid-sentence. */
+const CHAT_TURN_MAX_TOKENS = 4096;
+
 /** Gửi request sinh phản hồi qua Anthropic Messages API và trích xuất text/handoff. */
 const requestAnthropic = async (
   credentials: Credentials,
@@ -570,7 +573,7 @@ const requestAnthropic = async (
     },
     body: JSON.stringify({
       model: credentials.model,
-      max_tokens: 1024,
+      max_tokens: CHAT_TURN_MAX_TOKENS,
       system: systemPrompt(request, persona),
       messages: toAnthropicMessages(request),
       ...(useTools ? { tools: [HANDOFF_TOOL] } : {}),
@@ -605,7 +608,10 @@ const requestOpenAi = async (
   persona: string | undefined
 ) => {
   const useTools = !request.soloMode;
-  const tokenField = credentials.provider === 'openai' ? { max_completion_tokens: 1024 } : { max_tokens: 1024 };
+  const tokenField =
+    credentials.provider === 'openai'
+      ? { max_completion_tokens: CHAT_TURN_MAX_TOKENS }
+      : { max_tokens: CHAT_TURN_MAX_TOKENS };
   const baseBody = {
     model: credentials.model,
     ...tokenField,
@@ -725,7 +731,7 @@ const requestGoogle = async (
               ],
             }
           : {}),
-        generationConfig: { maxOutputTokens: 1024 },
+        generationConfig: { maxOutputTokens: CHAT_TURN_MAX_TOKENS },
       }),
       signal: request.signal,
     }
@@ -737,6 +743,7 @@ const requestGoogle = async (
       content?: {
         parts?: {
           text?: string;
+          thought?: boolean;
           functionCall?: { name?: string; args?: Record<string, unknown> };
         }[];
       };
@@ -748,7 +755,7 @@ const requestGoogle = async (
   const rawTarget = call?.functionCall?.args?.target;
   const target = typeof rawTarget === 'string' ? rawTarget : '';
   const text = parts
-    .filter((part) => typeof part.text === 'string')
+    .filter((part) => !part.thought && typeof part.text === 'string')
     .map((part) => part.text ?? '')
     .join('\n')
     .trim();
@@ -764,7 +771,7 @@ export const completeByokText = async (
   credentials: Credentials,
   options: { system: string; prompt: string; maxTokens?: number; signal?: AbortSignal }
 ): Promise<string> => {
-  const maxTokens = options.maxTokens ?? 1200;
+  const maxTokens = options.maxTokens ?? CHAT_TURN_MAX_TOKENS;
   const { provider, protocol, baseUrl } = resolveProviderEndpoint(credentials);
 
   if (protocol === 'anthropic') {
@@ -813,10 +820,10 @@ export const completeByokText = async (
     );
     if (!response.ok) throw new Error(`google ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = (await response.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
     };
     return (payload.candidates?.[0]?.content?.parts ?? [])
-      .filter((part) => typeof part.text === 'string')
+      .filter((part) => !part.thought && typeof part.text === 'string')
       .map((part) => part.text ?? '')
       .join('\n')
       .trim();

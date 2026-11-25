@@ -26,8 +26,8 @@ export const DEFAULT_BASE_URL: Record<WireProtocol, string> = {
   google: 'https://generativelanguage.googleapis.com/v1beta',
 };
 
-/** Max tokens we ask for in a single deliberation turn (keeps cost/latency bounded). */
-const MAX_TOKENS = 1200;
+/** Max tokens we ask for in a single deliberation turn (4096 gives reasoning/thinking models room for both thoughts and output). */
+const MAX_TOKENS = 4096;
 
 export interface CallOptions {
   baseUrl: string;
@@ -143,10 +143,10 @@ export const callGoogle = async (opts: CallOptions): Promise<string> => {
   }
 
   const payload = (await response.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
   };
   return (payload.candidates?.[0]?.content?.parts ?? [])
-    .filter((part) => typeof part.text === 'string')
+    .filter((part) => !part.thought && typeof part.text === 'string')
     .map((part) => part.text ?? '')
     .join('\n')
     .trim();
