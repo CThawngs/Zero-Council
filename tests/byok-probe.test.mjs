@@ -115,6 +115,8 @@ test('google 200 strips models/ prefix and filters generateContent models', asyn
         ? jsonResponse(200, {
             models: [
               { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-4-hydrogen', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-4-argon', supportedGenerationMethods: ['generateContent'] },
               { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
               { name: 'models/gemini-3.5-flash-lite-preview-tts', supportedGenerationMethods: ['generateContent'] },
               { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
@@ -127,6 +129,8 @@ test('google 200 strips models/ prefix and filters generateContent models', asyn
       assert.deepEqual(await fetchProviderModels('google', GOOGLE_KEY), [
         'gemini-3.5-flash-lite',
         'gemini-3.8-flash',
+        'gemini-4-argon',
+        'gemini-4-hydrogen',
       ]);
     }
   );

@@ -40,8 +40,8 @@ export const NON_TEXT_CHAT_PATTERNS: readonly RegExp[] = [
  * at least one prefix listed for its provider.
  */
 export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string[]>> = {
-  // Google Gemini: keep active Gemini 3.x+ and Gemma 3+ text models; exclude deprecated 1.5/2.0/2.5.
-  google: ['gemini-3.', 'gemini-3-', 'gemma-3'],
+  // Google Gemini: keep active Gemini 3.x/4.x (e.g. Hydrogen, Argon) and Gemma 3/4 text models; exclude deprecated 1.5/2.0/2.5.
+  google: ['gemini-3.', 'gemini-3-', 'gemini-4', 'gemma-3', 'gemma-4'],
   // OpenAI: keep active GPT-4o+, GPT-5/6, o-series, and ChatGPT text models; exclude retired gpt-3.5 and audio/tts/image.
   openai: ['gpt-4o', 'gpt-4.1', 'gpt-4.5', 'gpt-5', 'gpt-6', 'o1', 'o3', 'o4', 'chatgpt-4o'],
   // Anthropic (Claude): keep active Claude 3.5+ and Claude 4/5 text models; exclude retired claude-2/instant/3.0.
