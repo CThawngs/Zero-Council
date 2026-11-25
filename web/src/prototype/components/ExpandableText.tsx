@@ -12,23 +12,32 @@ const CLAMP_CLASS: Record<ClampLines, string> = {
 };
 
 interface ExpandableTextProps {
-  text: string;
+  text?: string;
+  /** Optional custom content (e.g. @mention-highlighted nodes or ContentRenderPanel) rendered instead of raw `text`. */
+  children?: React.ReactNode;
   maxLines?: ClampLines;
-  as?: 'p' | 'h1' | 'span';
+  /** Clamp by pixel height instead of line-clamp (for rich/block content like panels). */
+  maxHeight?: number;
+  as?: 'p' | 'h1' | 'span' | 'div';
   className?: string;
+  /** Override toggle button color/styles (e.g. `text-current` on accent-colored user bubbles). */
+  buttonClassName?: string;
   showMoreLabel: string;
   showLessLabel: string;
 }
 
 /**
- * Wraps long or unbroken lines cleanly and clamps overflow beyond `maxLines` behind an
- * expand/collapse toggle. Only shows the toggle when the rendered text actually overflows.
+ * Wraps long or unbroken lines cleanly and clamps overflow beyond `maxLines` (or `maxHeight` for
+ * block content) behind an expand/collapse toggle. Only shows the toggle when content overflows.
  */
 export const ExpandableText: React.FC<ExpandableTextProps> = ({
-  text,
+  text = '',
+  children,
   maxLines = 4,
+  maxHeight,
   as = 'p',
   className = '',
+  buttonClassName = 'text-brass',
   showMoreLabel,
   showLessLabel,
 }) => {
@@ -41,6 +50,11 @@ export const ExpandableText: React.FC<ExpandableTextProps> = ({
     if (!el || expanded) return;
 
     const measure = () => {
+      // Block/panel content uses pixel height clamping instead of line-clamp, so detect overflow directly.
+      if (maxHeight !== undefined) {
+        setIsTruncated(el.scrollHeight - el.clientHeight > 8);
+        return;
+      }
       // Serif headings (e.g. Literata) can overhang line-height by a few px without being clamped;
       // requiring > 40% of a line's height avoids false "Show more" buttons on 1-line titles.
       const lineHeight = Number.parseFloat(getComputedStyle(el).lineHeight) || 20;
@@ -56,10 +70,15 @@ export const ExpandableText: React.FC<ExpandableTextProps> = ({
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [text, expanded, maxLines]);
+  }, [text, children, expanded, maxLines, maxHeight]);
 
+  const useHeightClamp = maxHeight !== undefined;
   // `[overflow-wrap:anywhere]` lets unbroken tokens (URLs, hashes) wrap inside flex/grid cells.
-  const sharedClassName = `whitespace-pre-wrap [overflow-wrap:anywhere] ${!expanded ? CLAMP_CLASS[maxLines] : ''} ${className}`.trim();
+  const sharedClassName = `${
+    useHeightClamp ? 'min-w-0' : `whitespace-pre-wrap [overflow-wrap:anywhere] ${!expanded ? CLAMP_CLASS[maxLines] : ''}`
+  } ${className}`.trim();
+  const heightStyle = useHeightClamp && !expanded ? { maxHeight: `${maxHeight}px`, overflow: 'hidden' as const } : undefined;
+  const content = children ?? text;
   const assignRef = (node: HTMLElement | null) => {
     textRef.current = node;
   };
@@ -67,16 +86,20 @@ export const ExpandableText: React.FC<ExpandableTextProps> = ({
   return (
     <div className="min-w-0">
       {as === 'h1' ? (
-        <h1 ref={assignRef} className={sharedClassName}>
-          {text}
+        <h1 ref={assignRef} className={sharedClassName} style={heightStyle}>
+          {content}
         </h1>
       ) : as === 'span' ? (
-        <span ref={assignRef} className={sharedClassName}>
-          {text}
+        <span ref={assignRef} className={sharedClassName} style={heightStyle}>
+          {content}
         </span>
+      ) : as === 'div' ? (
+        <div ref={assignRef} className={sharedClassName} style={heightStyle}>
+          {content}
+        </div>
       ) : (
-        <p ref={assignRef} className={sharedClassName}>
-          {text}
+        <p ref={assignRef} className={sharedClassName} style={heightStyle}>
+          {content}
         </p>
       )}
       {(isTruncated || expanded) && (
@@ -84,7 +107,7 @@ export const ExpandableText: React.FC<ExpandableTextProps> = ({
           type="button"
           onClick={() => setExpanded((prev) => !prev)}
           aria-expanded={expanded}
-          className="mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium text-brass hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass/60"
+          className={`mt-1.5 inline-flex items-center gap-1 rounded text-xs font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brass/60 ${buttonClassName}`.trim()}
         >
           {expanded ? (
             <>

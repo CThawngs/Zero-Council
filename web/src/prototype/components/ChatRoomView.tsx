@@ -48,6 +48,11 @@ import {
 import { useBotSettingsPanel } from './BotSettingsPanel';
 import { CouncilOrb } from './CouncilOrb';
 import { MentionAutocomplete } from './MentionAutocomplete';
+import { hasRichContent } from '../chat/content-render';
+import { ContentRenderPanel } from './ContentRenderPanel';
+import { ExpandableText } from './ExpandableText';
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const renderBody = (body: string, names: string[] = [], onAccent = false) =>
   tokenizeMentions(body, names).map((segment, index) => {
@@ -152,6 +157,7 @@ export const ChatRoomView: React.FC = () => {
     botCap,
     goToPricing,
     setCurrentView,
+    openContentPanel,
     currentPlanId,
     language,
     t,
@@ -969,9 +975,18 @@ export const ChatRoomView: React.FC = () => {
                       color: 'var(--color-accent-ink)',
                     }}
                   >
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                    {/* Clamp long user prompts while keeping @mention pills and readable contrast on accent background */}
+                    <ExpandableText
+                      key={message.id}
+                      text={message.body}
+                      maxLines={5}
+                      className="text-sm leading-relaxed"
+                      buttonClassName="text-current opacity-85 hover:opacity-100"
+                      showMoreLabel={t.summaryShowMore}
+                      showLessLabel={t.summaryShowLess}
+                    >
                       {renderBody(message.body, rosterNames, true)}
-                    </p>
+                    </ExpandableText>
                     {attachments}
                   </div>
                 </article>
@@ -979,6 +994,7 @@ export const ChatRoomView: React.FC = () => {
             }
 
             const color = persona?.colorHex ?? 'var(--color-ink-muted)';
+            const rich = hasRichContent(message.body);
             return (
               <article key={message.id} className="chat-pop flex items-start gap-2.5 sm:gap-3">
                 <Avatar name={persona?.name ?? '?'} color={color} />
@@ -1000,9 +1016,52 @@ export const ChatRoomView: React.FC = () => {
                       borderColor: `color-mix(in srgb, ${color} 34%, var(--color-border))`,
                     }}
                   >
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
-                      {renderBody(message.body, rosterNames)}
-                    </p>
+                    {/* Support both inline expand/collapse and full panel modal for rich advisor replies */}
+                    {rich ? (
+                      <ExpandableText
+                        key={message.id}
+                        as="div"
+                        text={message.body}
+                        maxHeight={280}
+                        showMoreLabel={t.summaryShowMore}
+                        showLessLabel={t.summaryShowLess}
+                      >
+                        <ContentRenderPanel
+                          content={message.body}
+                          compact
+                          showHeader={false}
+                          renderMentionText={(plain) => renderBody(plain, rosterNames)}
+                        />
+                      </ExpandableText>
+                    ) : (
+                      <ExpandableText
+                        key={message.id}
+                        text={message.body}
+                        maxLines={5}
+                        className="text-sm leading-relaxed text-ink"
+                        showMoreLabel={t.summaryShowMore}
+                        showLessLabel={t.summaryShowLess}
+                      >
+                        {renderBody(message.body, rosterNames)}
+                      </ExpandableText>
+                    )}
+                    {rich && (
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            openContentPanel({
+                              title: persona?.name ?? t.contentPanelTitle,
+                              content: message.body,
+                            })
+                          }
+                          className="inline-flex items-center gap-1 rounded-md border border-border bg-background/70 px-2 py-0.5 text-[11px] font-medium text-ink-muted transition hover:border-brass/60 hover:text-ink"
+                        >
+                          <Maximize2 className="h-3 w-3" aria-hidden="true" />
+                          <span>{t.contentPanelOpen}</span>
+                        </button>
+                      </div>
+                    )}
                     {attachments}
                   </div>
                 </div>

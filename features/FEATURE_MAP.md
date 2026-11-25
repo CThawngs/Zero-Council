@@ -239,3 +239,11 @@ walk(document.body); // 0 = không hydrate
 - **Ảnh không được lưu vào sessionStorage** (một ảnh vài trăm KB, vượt hạn mức sẽ làm mất cả phòng). Tải lại trang: ảnh đã gửi mất bản xem trước; ảnh chưa gửi bị đánh dấu "cần gắn lại".
 - Cần model có vision. Hai provider hiện có (Claude Sonnet 4.5, GPT-4o / 4o mini) đều có; thêm provider mới phải kiểm tra điều này.
 - HEIC chỉ đọc được ở trình duyệt tự giải mã được (Safari); không có OCR riêng — model tự nhìn ảnh.
+
+## Content Render Panel (Code / Markdown / Tree Graph)
+
+| Thành phần | Trạng thái | Ghi chú |
+|---|---|---|
+| Parser zero-dep (`web/src/prototype/chat/content-render.ts`) | ✅ | 8 unit test (`tests/content-render.test.mjs`) |
+| `ContentRenderPanel` + `ContentPanelModal` (`web/src/prototype/components/ContentRenderPanel.tsx`) | ⚠️ | Chưa chạy `tsc`/`next build`/CDP vì `web/node_modules` chưa cài trong worktree |
+| Tích hợp `ChatRoomView`, `RoundThread`, `RoomSummaryView`, `AppContext` | ⚠️ | Giữ nguyên `@mention` highlight (`renderBody`) và plain-text fallback |
