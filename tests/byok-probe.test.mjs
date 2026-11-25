@@ -153,6 +153,7 @@ test('anthropic 200 filters retired claude models and keeps active ones', async 
         ? jsonResponse(200, {
             data: [
               { id: 'claude-sonnet-4-5' },
+              { id: 'claude-fable-5-2' },
               { id: 'claude-2.1' },
               { id: 'claude-instant-1.2' },
               { id: 'claude-3-5-sonnet-20241022' },
@@ -162,6 +163,7 @@ test('anthropic 200 filters retired claude models and keeps active ones', async 
     async () => {
       assert.deepEqual(await fetchProviderModels('anthropic', ANTHROPIC_KEY), [
         'claude-3-5-sonnet-20241022',
+        'claude-fable-5-2',
         'claude-sonnet-4-5',
       ]);
     }
@@ -183,6 +185,25 @@ test('remaining builtin providers filter non-text-chat and unlisted models', asy
     async () => {
       assert.deepEqual(await fetchProviderModels('groq', 'gsk_fake_but_long_enough_key'), [
         'llama-3.3-70b-versatile',
+      ]);
+    }
+  );
+  await withFetch(
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'deepseek-v4-pro' },
+              { id: 'deepseek-flash' },
+              { id: 'deepseek-chat' },
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
+    async () => {
+      assert.deepEqual(await fetchProviderModels('deepseek', 'sk-deepseek-fake-long-enough'), [
+        'deepseek-chat',
+        'deepseek-flash',
+        'deepseek-v4-pro',
       ]);
     }
   );

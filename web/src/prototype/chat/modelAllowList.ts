@@ -55,6 +55,7 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
     'claude-sonnet-5',
     'claude-opus-5',
     'claude-haiku-5',
+    'claude-fable-',
     'claude-5-',
   ],
   // Groq: active Llama, Qwen, DeepSeek, Gemma, Mistral/Mixtral, and GPT-OSS text models; excludes whisper/tts.
@@ -96,8 +97,8 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
     'nvidia/llama',
     'nvidia/nemotron',
   ],
-  // DeepSeek: active text-chat and reasoning models.
-  deepseek: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder'],
+  // DeepSeek: active text-chat and reasoning models (including V4 / Flash).
+  deepseek: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder', 'deepseek-v4', 'deepseek-flash'],
 };
 
 /**
