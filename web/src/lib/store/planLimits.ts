@@ -25,7 +25,7 @@ export const disabledBotIdsForPlan = (
   return new Set(ordered.slice(cap).map((bot) => bot.id));
 };
 
-export const rawBotIdFromPersonaId = (personaId: string): string | null =>
+const rawBotIdFromPersonaId = (personaId: string): string | null =>
   personaId.startsWith('bot:') ? personaId.slice('bot:'.length) : null;
 
 /**

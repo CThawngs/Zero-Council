@@ -130,7 +130,7 @@ export const SessionsListView: React.FC = () => {
                         {t.groupBadge.replace('{count}', String(group.roster.length))}
                       </span>
                       <span className="rounded-md border border-border bg-background px-2 py-1 text-[11px] text-ink-muted">
-                        {group.mode === 'panel' ? t.modePanel : t.modeRoundRobin}
+                        {group.mode === 'panel' ? t.modeIndependentTitle : t.modeDebateTitle}
                       </span>
                     </div>
 

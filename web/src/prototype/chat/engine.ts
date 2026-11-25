@@ -166,6 +166,8 @@ export interface ChatTurnRequest {
   signal?: AbortSignal;
   /** True when chatting 1-on-1 with a single solo bot (no cross-bot handoff tools). */
   soloMode?: boolean;
+  /** Room chat mode: `panel` (Independent) vs `round-robin` (Debate). */
+  mode?: ChatMode;
 }
 
 export type BotGenerator = (request: ChatTurnRequest) => Promise<BotTurn> | BotTurn;
@@ -480,22 +482,29 @@ export const runTurn = async ({
     }
 
     const bot = queue.shift() as ChatBot;
+    // `panel` maps to Independent mode (everyone answers once, isolated from peers in this round).
+    // `round-robin` maps to Debate mode (advisors see prior turns and can hand off).
+    const isIndependent = !soloMode && mode === 'panel';
     const isClosing = (mode === 'panel' && queue.length === 0) || (effectiveRounds > 1 && spoken.length + 1 >= turnBudget);
     // Everyone after this advisor in join order who still has a turn, so the floor goes round the table
-    // rather than always back to the first seat.
+    // rather than always back to the first seat. Independent advisors never hand off to each other.
     const fromHere = roster.findIndex((other) => other.id === bot.id);
-    const handoffTargets = isClosing
-      ? []
-      : effectiveRounds > 1
-        ? [...roster.slice(fromHere + 1), ...roster.slice(0, fromHere)].filter(
-            (other) => other.id !== bot.id && (turnsBy.get(other.id) ?? 0) < effectiveRounds
-          )
-        : [...queue].filter((other) => other.id !== bot.id);
+    const handoffTargets =
+      isClosing || isIndependent
+        ? []
+        : effectiveRounds > 1
+          ? [...roster.slice(fromHere + 1), ...roster.slice(0, fromHere)].filter(
+              (other) => other.id !== bot.id && (turnsBy.get(other.id) ?? 0) < effectiveRounds
+            )
+          : [...queue].filter((other) => other.id !== bot.id);
+    // In independent mode, freeze context at `[...history, userMessage]` so advisors answering the
+    // same user prompt never see each other's in-round replies (prior completed rounds remain visible).
+    const visibleHistory = isIndependent ? [...history, userMessage] : messages;
     const request: ChatTurnRequest = {
       bot,
       roster: [...roster],
-      history: buildContext(messages),
-      waiting: [...queue],
+      history: buildContext(visibleHistory),
+      waiting: isIndependent ? [] : [...queue],
       handoffTargets,
       isClosing,
       prompt: userMessage.body,
@@ -503,6 +512,7 @@ export const runTurn = async ({
       attachments: userMessage.attachments ?? [],
       signal,
       soloMode,
+      mode: soloMode ? undefined : mode,
     };
 
     let turn: BotTurn | null = null;
@@ -547,35 +557,49 @@ export const runTurn = async ({
       break;
     }
 
-    if (turn.silent || turn.text.trim() === SILENT_TOKEN || !turn.text.trim()) {
+    const isSilentTurn = turn.silent || turn.text.trim() === SILENT_TOKEN || !turn.text.trim();
+    if (isSilentTurn) {
       // A pass is a decision: it consumes a turn and adds nobody to the transcript, but the
       // scheduled advisor still gave up their place. The round is not judged until the queue
       // drains, so one silent advisor does not cut off the advisors behind them.
       spoken.push(bot.id);
       countTurn(bot.id);
-      continue;
+    } else {
+      const message: ChatMessage = {
+        id: `${messages.length}`,
+        authorId: bot.id,
+        body: turn.text.trim(),
+        mentioned: [],
+      };
+      messages.push(message);
+      onTurn?.(message);
+      spoken.push(bot.id);
+      countTurn(bot.id);
+      produced += 1;
     }
-    const message: ChatMessage = {
-      id: `${messages.length}`,
-      authorId: bot.id,
-      body: turn.text.trim(),
-      mentioned: [],
-    };
-    messages.push(message);
-    onTurn?.(message);
-    spoken.push(bot.id);
-    countTurn(bot.id);
-    produced += 1;
 
+    let hasPeerHandoff = false;
     for (const id of dedupe(turn.handoffs)) {
       if (id === bot.id || id === USER_HANDLE || (turnsBy.get(id) ?? 0) >= effectiveRounds) continue;
       const target = roster.find((other) => other.id === id);
-      if (target && !queue.some((waiting) => waiting.id === id)) queue.push(target);
+      if (!target) continue;
+      hasPeerHandoff = true;
+      if (!queue.some((waiting) => waiting.id === id)) queue.push(target);
     }
 
-    if (parseMentions(turn.text, roster).includes(USER_HANDLE)) {
-      stoppedBy = 'user';
-      break;
+    if (isSilentTurn) continue;
+
+    // Independent (`panel`) mode lets every seated advisor finish once regardless of `@user` tags.
+    // In Debate (`round-robin`), a structured peer handoff takes precedence over prose `@user`,
+    // while an explicit `USER_HANDLE` handoff (or prose `@user` with no handoffs) yields to the user.
+    if (!isIndependent && !hasPeerHandoff) {
+      const explicitUserHandoff = turn.handoffs.includes(USER_HANDLE);
+      const proseUserFallback =
+        turn.handoffs.length === 0 && parseMentions(turn.text, roster).includes(USER_HANDLE);
+      if (explicitUserHandoff || proseUserFallback) {
+        stoppedBy = 'user';
+        break;
+      }
     }
   }
 

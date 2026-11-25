@@ -464,11 +464,13 @@ const toMessages = (request: ChatTurnRequest) => {
     normalized.unshift({ role: 'user', content: 'Continue the conversation.', images: [] });
   }
   if (normalized.length === 0 || normalized[normalized.length - 1]?.role === 'assistant') {
+    const modeCue =
+      request.mode === 'panel'
+        ? `Now it is your turn, ${request.bot.name}. Give your independent answer to the human.`
+        : `Now it is your turn, ${request.bot.name}. Critique and respond to the previous points.`;
     normalized.push({
       role: 'user',
-      content: request.soloMode
-        ? 'Continue.'
-        : `Now it is your turn, ${request.bot.name}. Respond to the group.`,
+      content: request.soloMode ? 'Continue.' : modeCue,
       images: [],
     });
   }
@@ -550,6 +552,9 @@ const toGoogleContents = (request: ChatTurnRequest) => {
   return merged;
 };
 
+/** Reasoning/thinking models (Gemini 2.5/3, OpenAI o-series) share this budget between internal thoughts and visible output, so 1024 truncates replies mid-sentence. */
+const CHAT_TURN_MAX_TOKENS = 4096;
+
 /** Gửi request sinh phản hồi qua Anthropic Messages API và trích xuất text/handoff. */
 const requestAnthropic = async (
   credentials: Credentials,
@@ -568,7 +573,7 @@ const requestAnthropic = async (
     },
     body: JSON.stringify({
       model: credentials.model,
-      max_tokens: 1024,
+      max_tokens: CHAT_TURN_MAX_TOKENS,
       system: systemPrompt(request, persona),
       messages: toAnthropicMessages(request),
       ...(useTools ? { tools: [HANDOFF_TOOL] } : {}),
@@ -603,7 +608,10 @@ const requestOpenAi = async (
   persona: string | undefined
 ) => {
   const useTools = !request.soloMode;
-  const tokenField = credentials.provider === 'openai' ? { max_completion_tokens: 1024 } : { max_tokens: 1024 };
+  const tokenField =
+    credentials.provider === 'openai'
+      ? { max_completion_tokens: CHAT_TURN_MAX_TOKENS }
+      : { max_tokens: CHAT_TURN_MAX_TOKENS };
   const baseBody = {
     model: credentials.model,
     ...tokenField,
@@ -723,7 +731,7 @@ const requestGoogle = async (
               ],
             }
           : {}),
-        generationConfig: { maxOutputTokens: 1024 },
+        generationConfig: { maxOutputTokens: CHAT_TURN_MAX_TOKENS },
       }),
       signal: request.signal,
     }
@@ -735,6 +743,7 @@ const requestGoogle = async (
       content?: {
         parts?: {
           text?: string;
+          thought?: boolean;
           functionCall?: { name?: string; args?: Record<string, unknown> };
         }[];
       };
@@ -746,7 +755,7 @@ const requestGoogle = async (
   const rawTarget = call?.functionCall?.args?.target;
   const target = typeof rawTarget === 'string' ? rawTarget : '';
   const text = parts
-    .filter((part) => typeof part.text === 'string')
+    .filter((part) => !part.thought && typeof part.text === 'string')
     .map((part) => part.text ?? '')
     .join('\n')
     .trim();
@@ -762,7 +771,7 @@ export const completeByokText = async (
   credentials: Credentials,
   options: { system: string; prompt: string; maxTokens?: number; signal?: AbortSignal }
 ): Promise<string> => {
-  const maxTokens = options.maxTokens ?? 1200;
+  const maxTokens = options.maxTokens ?? CHAT_TURN_MAX_TOKENS;
   const { provider, protocol, baseUrl } = resolveProviderEndpoint(credentials);
 
   if (protocol === 'anthropic') {
@@ -811,10 +820,10 @@ export const completeByokText = async (
     );
     if (!response.ok) throw new Error(`google ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = (await response.json()) as {
-      candidates?: { content?: { parts?: { text?: string }[] } }[];
+      candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
     };
     return (payload.candidates?.[0]?.content?.parts ?? [])
-      .filter((part) => typeof part.text === 'string')
+      .filter((part) => !part.thought && typeof part.text === 'string')
       .map((part) => part.text ?? '')
       .join('\n')
       .trim();
@@ -867,9 +876,8 @@ export const byokGenerator =
           : requestOpenAi;
     const { text, target, attempted } = await call(credentials, baseUrl, request, persona);
 
-    if (!text || text === SILENT_TOKEN) return { text: '', handoffs: [], silent: true };
-
     if (request.soloMode) {
+      if (!text || text === SILENT_TOKEN) return { text: '', handoffs: [], silent: true };
       return { text, handoffs: [USER_HANDLE] };
     }
 
@@ -878,6 +886,11 @@ export const byokGenerator =
       : (request.handoffTargets ?? request.waiting).filter((bot) => bot.id !== request.bot.id);
     const handoffs = target ? resolveTarget(target, candidates) : [];
     if (attempted && handoffs.length === 0) handoffs.push(USER_HANDLE);
+
+    // Preserve structured handoffs on tool-only turns (empty text), while explicit [SILENT] drops them.
+    if (!text || text === SILENT_TOKEN) {
+      return { text: '', handoffs: text === SILENT_TOKEN ? [] : handoffs, silent: true };
+    }
 
     return { text, handoffs };
   };

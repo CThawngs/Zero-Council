@@ -32,10 +32,11 @@ export const formatPinnedAttachments = (request: ChatTurnRequest): string =>
     })
     .join('\n');
 
+/** Enforces that bots always reply in the active page language (EN or VI) unless explicitly asked to translate. */
 const languageDirective = (language: 'en' | 'vi'): string =>
   language === 'vi'
-    ? 'Active app/room language: Vietnamese (Tiếng Việt). Reply in natural Vietnamese unless the user explicitly writes in another language.'
-    : 'Active app/room language: English. Reply in natural English unless the user explicitly writes in another language.';
+    ? 'Active app/room language: Vietnamese (Tiếng Việt). Always reply in natural Vietnamese to match the current page language, even if your persona or technical terms are in English (unless the user explicitly asks you to reply in another language).'
+    : 'Active app/room language: English. Always reply in natural English to match the current page language, even if your persona or terms in the prompt are in another language (unless the user explicitly asks you to reply in another language).';
 
 /** Dựng system prompt hoàn chỉnh cho bot từ persona và ngữ cảnh phòng chat. */
 export const buildSystemPrompt = (
@@ -65,25 +66,42 @@ export const buildSystemPrompt = (
       .join('\n');
   }
 
-  const eligibleTargets = request.isClosing
+  // Shape routing targets and behavioral instructions around the 2 group modes:
+  // - `panel` (Independent): no peer handoffs; each model answers the human directly on its own
+  // - `round-robin` (Debate): engage and critique previous advisors' arguments
+  const isIndependent = request.mode === 'panel';
+  const eligibleTargets =
+    request.isClosing || isIndependent
+      ? []
+      : (request.handoffTargets ?? request.waiting).filter((bot) => bot.id !== request.bot.id);
+  const peerRoster = isIndependent
     ? []
-    : (request.handoffTargets ?? request.waiting).filter((bot) => bot.id !== request.bot.id);
-  const peerRoster = (request.roster ?? eligibleTargets).filter((bot) => bot.id !== request.bot.id);
+    : (request.roster ?? eligibleTargets).filter((bot) => bot.id !== request.bot.id);
   const rosterLines = (eligibleTargets.length > 0 ? eligibleTargets : peerRoster)
     .map((bot) => `- ${bot.name}`)
     .join('\n');
 
-  const closing =
-    request.isClosing || eligibleTargets.length === 0
+  const modeInstruction = isIndependent
+    ? 'Conversation mode: INDEPENDENT. Answer the human’s question independently from your own perspective and expertise. Do not wait for, reference, or try to coordinate with other advisors.'
+    : 'Conversation mode: DEBATE (Critique). Read what previous advisors have said in the transcript. Directly engage with their arguments: challenge weak assumptions, point out blind spots or risks, offer a sharp counter-perspective where you disagree, and explain why from your own stance. Avoid simply agreeing or repeating.';
+
+  const closing = isIndependent
+    ? 'Answer the human directly from your own perspective, then call message_agent with target "user".'
+    : request.isClosing || eligibleTargets.length === 0
       ? 'You have the floor last in this round. Synthesize or answer directly, tag @user when handing the decision or a clarifying question back to the human, and call message_agent with target "user".'
-      : 'When you finish your point, call message_agent with the exact name of the teammate who should speak next (if you want their take or challenged them), or with "user" if the human should decide next.';
+      : 'When you finish your point, call message_agent with the exact name of the teammate who should speak next so the debate continues; only call message_agent with "user" (and tag @user) if the council truly cannot proceed without human clarification.';
 
   return [
     persona,
     '',
     `You are "${request.bot.name}", collaborating live in a multi-bot group chat alongside real AI teammates and the user.`,
+    modeInstruction,
     'Collaborate concisely like sharp teammates in a real war-room: read what others already said, do not repeat points, take a clear stance, and keep replies tight and high-signal.',
-    'When building on, questioning, or challenging a peer in the room, address them directly as @BotName in your reply. When asking the user a clarifying question or handing back a decision, tag @user.',
+    ...(isIndependent
+      ? []
+      : [
+          'When building on, questioning, or challenging a peer in the room, address them directly as @BotName in your reply. Only tag @user when closing the round back to the human or asking them a blocking question.',
+        ]),
     langLine,
     '',
     ...(pinned

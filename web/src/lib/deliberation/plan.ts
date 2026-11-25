@@ -111,7 +111,7 @@ export const clampScale = (value: number, max: number = MAX_SCORE): number => {
 
 export const MODES: readonly CommunicationMode[] = ['independent', 'debate', 'chain'];
 
-export const LANGUAGES: readonly string[] = ['en', 'vi'];
+const LANGUAGES: readonly string[] = ['en', 'vi'];
 
 /** DeliberationRequest minus the types it would drag in — kept loose so this stays testable. */
 export interface RequestShape {

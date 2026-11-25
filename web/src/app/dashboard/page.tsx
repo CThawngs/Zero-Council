@@ -8,12 +8,10 @@ import { ChatRoomView } from '@/prototype/components/ChatRoomView';
 import { CheckoutDrawer } from '@/prototype/components/CheckoutDrawer';
 import { ContentPanelModal } from '@/prototype/components/ContentRenderPanel';
 import { AnalyticsLoader, CookieNotice } from '@/prototype/components/CookieNotice';
-import { EmptyChamberView } from '@/prototype/components/EmptyChamberView';
 import { FrameworkModal } from '@/prototype/components/FrameworkModal';
 import { GuideView } from '@/prototype/components/GuideView';
 import { Header } from '@/prototype/components/Header';
 import { JoinRoomModal } from '@/prototype/components/JoinRoomModal';
-import { NewAdvisorView } from '@/prototype/components/NewAdvisorView';
 import { PersonasView } from '@/prototype/components/PersonasView';
 import { RoomSummaryView } from '@/prototype/components/RoomSummaryView';
 import { SessionConcludedView } from '@/prototype/components/SessionConcludedView';
@@ -28,12 +26,10 @@ import { useEffect, useRef, useState } from 'react';
 import MainContentLoading from './mainContentLoading';
 
 const WORKSPACE_VIEWS = new Set<ViewType>([
-  'empty-chamber',
   'guide',
   'session-concluded',
   'sessions',
   'personas',
-  'new-advisor',
   'api-keys',
   'bot-wizard',
   'settings',
@@ -134,12 +130,10 @@ export default function Dashboard() {
           <MainContentLoading />
         ) : (
           <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
-            {currentView === 'empty-chamber' && <EmptyChamberView />}
             {currentView === 'guide' && <GuideView />}
             {currentView === 'session-concluded' && <SessionConcludedView />}
             {currentView === 'sessions' && <SessionsListView />}
             {currentView === 'personas' && <PersonasView />}
-            {currentView === 'new-advisor' && <NewAdvisorView />}
             {currentView === 'api-keys' && <ApiKeysView />}
             {currentView === 'bot-wizard' && <BotWizardView />}
             {currentView === 'settings' && <SettingsView />}

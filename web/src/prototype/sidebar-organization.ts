@@ -54,49 +54,6 @@ export const EMPTY_SIDEBAR_ORG: SidebarOrgState = {
   collapsedDepartmentIds: [],
 };
 
-export const GROUP_CHAT_TEMPLATES: readonly GroupChatTemplate[] = [
-  {
-    id: 'product-council',
-    mode: 'round-robin',
-    title: { en: 'Product Council', vi: 'Hội đồng Sản phẩm' },
-    description: {
-      en: 'Debate roadmap priorities, user value, and launch trade-offs across your bots.',
-      vi: 'Tranh luận ưu tiên roadmap, giá trị người dùng và đánh đổi khi ra mắt sản phẩm.',
-    },
-    suggestedDepartment: { en: 'Product', vi: 'Sản phẩm' },
-  },
-  {
-    id: 'tech-architecture',
-    mode: 'round-robin',
-    title: { en: 'Architecture Review', vi: 'Đánh giá Kiến trúc' },
-    description: {
-      en: 'Stress-test system design, edge cases, scalability, and maintenance cost.',
-      vi: 'Soi thiết kế hệ thống, trường hợp biên, khả năng mở rộng và chi phí bảo trì.',
-    },
-    suggestedDepartment: { en: 'Tech', vi: 'Kỹ thuật' },
-  },
-  {
-    id: 'red-team',
-    mode: 'round-robin',
-    title: { en: 'Red Team Critique', vi: 'Phản biện Ý tưởng' },
-    description: {
-      en: 'Challenge assumptions and expose hidden failure modes before committing.',
-      vi: 'Phản biện giả định và tìm điểm gãy tiềm ẩn trước khi xuống tiền hoặc triển khai.',
-    },
-    suggestedDepartment: { en: 'Strategy', vi: 'Chiến lược' },
-  },
-  {
-    id: 'independent-panel',
-    mode: 'panel',
-    title: { en: 'Independent Panel', vi: 'Hội đồng Độc lập' },
-    description: {
-      en: 'Every bot answers independently first without seeing each other to avoid groupthink.',
-      vi: 'Mỗi bot trả lời độc lập trước khi xem ý kiến nhau để tránh tâm lý bầy đàn.',
-    },
-    suggestedDepartment: { en: 'Research', vi: 'Nghiên cứu' },
-  },
-] as const;
-
 export const sidebarOrgStorageKey = (userId?: string | null): string =>
   `zc:sidebar-org:v1:${userId && userId.trim() ? userId.trim() : 'anon'}`;
 

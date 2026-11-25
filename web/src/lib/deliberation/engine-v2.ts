@@ -135,7 +135,7 @@ export class DeliberationError extends Error {
 }
 
 /** ponytail: generous enough for a slow provider, short enough that a hang is visible. */
-export const ENGINE_TIMEOUT_MS = 30_000;
+const ENGINE_TIMEOUT_MS = 30_000;
 
 /**
  * Resolves after `ms`, or rejects with the signal's reason if it aborts first.

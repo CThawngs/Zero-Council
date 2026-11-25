@@ -2,10 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   CreditCard,
   KeyRound,
-  MessageSquareText,
-  MessagesSquare,
   Settings,
-  UsersRound,
 } from 'lucide-react';
 import type { ViewType } from './types';
 
