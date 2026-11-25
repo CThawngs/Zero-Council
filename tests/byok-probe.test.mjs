@@ -71,33 +71,25 @@ test('network failure throws NETWORK_FAILED', async () => {
   );
 });
 
-test('200 list + passing probe returns sorted deduped model ids', async () => {
-  const probed = [];
-  await withFetch(
-    async (url, init) => {
-      if (isModelList(url, init)) {
-        return jsonResponse(200, {
-          data: [{ id: 'gpt-4o' }, { id: 'claude-x' }, { id: 'gpt-4o' }, { id: 7 }, {}],
-        });
-      }
-      probed.push(JSON.parse(init.body).model);
-      return jsonResponse(200, { choices: [{ message: { content: 'o' } }] });
-    },
-    async () => {
-      assert.deepEqual(await fetchProviderModels('openai', OPENAI_KEY), ['claude-x', 'gpt-4o']);
-    }
-  );
-  assert.deepEqual(probed, ['gpt-4o'], 'the default model is probed once');
-});
-
-test('200 list but the probe is rejected -> INVALID_KEY (public /models never counts)', async () => {
+test('200 returns sorted deduped active text-chat model ids for openai', async () => {
   await withFetch(
     async (url, init) =>
       isModelList(url, init)
-        ? jsonResponse(200, { data: [{ id: 'nvidia/nemotron-3.5-super-vl-120b-a12b' }] })
-        : jsonResponse(401, { error: { message: 'Authentication failed' } }),
+        ? jsonResponse(200, {
+            data: [
+              { id: 'gpt-4o' },
+              { id: 'o3-mini' },
+              { id: 'gpt-3.5-turbo' },
+              { id: 'tts-1' },
+              { id: 'claude-x' },
+              { id: 'gpt-4o' },
+              { id: 7 },
+              {},
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
     async () => {
-      await assert.rejects(() => fetchProviderModels('nvidia', 'nvapi-fake-long-enough-key'), /INVALID_KEY/);
+      assert.deepEqual(await fetchProviderModels('openai', OPENAI_KEY), ['gpt-4o', 'o3-mini']);
     }
   );
 });
@@ -119,21 +111,26 @@ test('google 200 strips models/ prefix and filters generateContent models', asyn
   await withFetch(
     async (url, init) => {
       sawHeader = init.headers['x-goog-api-key'];
-      if (isModelList(url, init)) {
-        return jsonResponse(200, {
-          models: [
-            { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
-            { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
-            { name: 'models/gemini-2.5-pro', supportedGenerationMethods: ['generateContent'] },
-          ],
-        });
-      }
-      return jsonResponse(200, { candidates: [{ content: { parts: [{ text: 'o' }] } }] });
+      return isModelList(url, init)
+        ? jsonResponse(200, {
+            models: [
+              { name: 'models/gemini-3.8-flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-4-hydrogen', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-4-argon', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-2.5-flash', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/gemini-3.5-flash-lite-preview-tts', supportedGenerationMethods: ['generateContent'] },
+              { name: 'models/text-embedding-004', supportedGenerationMethods: ['embedContent'] },
+              { name: 'models/gemini-3.5-flash-lite', supportedGenerationMethods: ['generateContent'] },
+            ],
+          })
+        : jsonResponse(200, { candidates: [{ finishReason: 'MAX_TOKENS' }] });
     },
     async () => {
       assert.deepEqual(await fetchProviderModels('google', GOOGLE_KEY), [
-        'gemini-2.5-flash',
-        'gemini-2.5-pro',
+        'gemini-3.5-flash-lite',
+        'gemini-3.8-flash',
+        'gemini-4-argon',
+        'gemini-4-hydrogen',
       ]);
     }
   );
@@ -145,6 +142,69 @@ test('google 400 invalid API key maps to INVALID_KEY', async () => {
     async () => jsonResponse(400, { error: { message: 'API key not valid' } }),
     async () => {
       await assert.rejects(() => fetchProviderModels('google', GOOGLE_KEY), /INVALID_KEY/);
+    }
+  );
+});
+
+test('anthropic 200 filters retired claude models and keeps active ones', async () => {
+  await withFetch(
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'claude-sonnet-4-5' },
+              { id: 'claude-fable-5-2' },
+              { id: 'claude-2.1' },
+              { id: 'claude-instant-1.2' },
+              { id: 'claude-3-5-sonnet-20241022' },
+            ],
+          })
+        : jsonResponse(200, { type: 'message', content: [{ type: 'text', text: 'o' }] }),
+    async () => {
+      assert.deepEqual(await fetchProviderModels('anthropic', ANTHROPIC_KEY), [
+        'claude-3-5-sonnet-20241022',
+        'claude-fable-5-2',
+        'claude-sonnet-4-5',
+      ]);
+    }
+  );
+});
+
+test('remaining builtin providers filter non-text-chat and unlisted models', async () => {
+  await withFetch(
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'llama-3.3-70b-versatile' },
+              { id: 'whisper-large-v3' },
+              { id: 'playai-tts' },
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
+    async () => {
+      assert.deepEqual(await fetchProviderModels('groq', 'gsk_fake_but_long_enough_key'), [
+        'llama-3.3-70b-versatile',
+      ]);
+    }
+  );
+  await withFetch(
+    async (url, init) =>
+      isModelList(url, init)
+        ? jsonResponse(200, {
+            data: [
+              { id: 'deepseek-v4-pro' },
+              { id: 'deepseek-flash' },
+              { id: 'deepseek-chat' },
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
+    async () => {
+      assert.deepEqual(await fetchProviderModels('deepseek', 'sk-deepseek-fake-long-enough'), [
+        'deepseek-chat',
+        'deepseek-flash',
+        'deepseek-v4-pro',
+      ]);
     }
   );
 });
