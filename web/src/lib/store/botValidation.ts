@@ -12,8 +12,6 @@ export const BUILTIN_BOT_PROVIDERS = [
   'deepseek',
 ] as const;
 
-export const BOT_PROVIDERS = BUILTIN_BOT_PROVIDERS;
-
 export type BuiltinBotProvider = (typeof BUILTIN_BOT_PROVIDERS)[number];
 export type CustomProviderProtocol = 'openai' | 'anthropic';
 

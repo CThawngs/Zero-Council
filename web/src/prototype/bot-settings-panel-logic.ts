@@ -216,13 +216,6 @@ export const validateDraft = (draft: BotDraft): DraftError | null => {
   return null;
 };
 
-export const DRAFT_ERROR_COPY_KEY: Record<DraftError, WorkspaceCopyKey> = {
-  name: 'errorName',
-  instruction: 'errorInstruction',
-  provider: 'errorProvider',
-  model: 'errorModel',
-};
-
 /* ------------------------------------------------------------------ */
 /* Provider / model options                                            */
 /* ------------------------------------------------------------------ */

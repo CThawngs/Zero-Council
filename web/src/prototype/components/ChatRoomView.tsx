@@ -52,8 +52,6 @@ import { hasRichContent } from '../chat/content-render';
 import { ContentRenderPanel } from './ContentRenderPanel';
 import { ExpandableText } from './ExpandableText';
 
-const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
 const renderBody = (body: string, names: string[] = [], onAccent = false) =>
   tokenizeMentions(body, names).map((segment, index) => {
     if (segment.kind === 'text') {

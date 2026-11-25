@@ -340,7 +340,7 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
         }
       }
     },
-    [couponReasonMessage, language, onClose, refreshPlan, showToast, t]
+    [couponReasonMessage, onClose, refreshPlan, showToast, t]
   );
 
   const startPayment = async () => {

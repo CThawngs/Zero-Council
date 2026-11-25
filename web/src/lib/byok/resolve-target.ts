@@ -15,11 +15,7 @@ export type ResolveTargetResult =
   | { ok: true; target: VerifyTarget; label: string }
   | { ok: false; error: 'UNKNOWN_PROVIDER' | 'INVALID_PROTOCOL' | 'INVALID_BASE_URL' };
 
-/**
- * Private / loopback custom Base URLs are allowed only outside production, or when the operator
- * opts in explicitly (self-hosted gateway on the same network).
- */
-export const allowPrivateProviderNetwork = (): boolean =>
+const allowPrivateProviderNetwork = (): boolean =>
   process.env.NODE_ENV !== 'production' || process.env.ZC_ALLOW_PRIVATE_PROVIDER_URLS === '1';
 
 export const resolveVerifyTarget = (input: {

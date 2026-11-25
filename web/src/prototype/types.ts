@@ -3,12 +3,10 @@ import type { ChatMessage, ChatMode, TurnFailure, WhyStop } from './chat/engine'
 
 export type ViewType =
   | 'overview'
-  | 'empty-chamber'
   | 'guide'
   | 'session-concluded'
   | 'sessions'
   | 'personas'
-  | 'new-advisor'
   | 'api-keys'
   | 'settings'
   | 'account'
@@ -35,8 +33,6 @@ export type LegalDocument = (typeof LEGAL_DOCUMENTS)[number];
 
 export type LegalView = `legal-${LegalDocument}`;
 
-export const legalViewOf = (document: LegalDocument): LegalView => `legal-${document}`;
-
 /** The document a view renders, or null when the view is not a legal page. */
 export const legalDocumentOf = (view: ViewType): LegalDocument | null =>
   view.startsWith('legal-') ? (view.slice('legal-'.length) as LegalDocument) : null;
@@ -53,12 +49,6 @@ export const frameworkIdOf = (framework: DecisionFramework): FrameworkId => {
   if (framework === 'Six Thinking Hats') return 'hats';
   if (framework === 'Decision Matrix') return 'matrix';
   return 'scenarios';
-};
-
-export const decisionFrameworkOf = (id: FrameworkId): DecisionFramework => {
-  if (id === 'hats') return 'Six Thinking Hats';
-  if (id === 'matrix') return 'Decision Matrix';
-  return 'Good / Normal / Bad Scenarios';
 };
 
 /** Built-in provider slugs + custom:(openai|anthropic):<slug> IDs. */
@@ -175,4 +165,3 @@ export interface SavedConversation {
 }
 
 export const cookieLanguage = 'zc-lang';
-export const cookieTheme = 'zc-theme';

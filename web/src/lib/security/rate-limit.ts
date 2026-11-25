@@ -1,6 +1,6 @@
 import { serverEnv } from '../serverEnv.ts';
 
-export const DEFAULT_MAX_RATE_LIMIT_BUCKETS = 4096;
+const DEFAULT_MAX_RATE_LIMIT_BUCKETS = 4096;
 
 export interface RateLimitCheckOptions {
   scope: string;
@@ -124,7 +124,7 @@ export const checkRateLimit = (
   };
 };
 
-export const rateLimitHeaders = (result: RateLimitResult): Record<string, string> => {
+const rateLimitHeaders = (result: RateLimitResult): Record<string, string> => {
   const headers: Record<string, string> = {
     'X-RateLimit-Limit': String(result.limit),
     'X-RateLimit-Remaining': String(result.remaining),

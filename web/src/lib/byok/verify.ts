@@ -90,7 +90,7 @@ const MIN_KEY_LENGTH = 8;
 /** Output budget of the probe. Large enough for reasoning models, still negligible in cost. */
 export const PROBE_MAX_TOKENS = 16;
 /** Raised budget for models that enforce a minimum output size. */
-export const PROBE_RAISED_MAX_TOKENS = 64;
+const PROBE_RAISED_MAX_TOKENS = 64;
 
 /** Providers whose `GET /models` rejects unauthenticated calls, so a 200 there proves the key. */
 const AUTHENTICATED_MODEL_LIST_PROVIDERS = new Set([
@@ -117,7 +117,7 @@ const ALL_ERROR_CODES: readonly VerifyErrorCode[] = [
 ];
 
 /** Model ids that cannot answer a chat completion (embeddings, audio, images, moderation, legacy completions …). */
-export const NON_CHAT_MODEL_PATTERN =
+const NON_CHAT_MODEL_PATTERN =
   /(embed|whisper|tts|audio|speech|transcri|dall-e|imagen|image-|-image\b|gpt-image|chatgpt-image|moderation|rerank|realtime|search-preview|guard|aqa|veo|lyria|clip|ocr|starcoder|retriev|detector|safety|reward|pii|calibrat|translat|babbage|davinci|gpt-[^/]*-instruct|turbo-instruct|codex|computer-use|sora|robotics)/i;
 
 const LIGHT_MODEL_PATTERN = /(mini|nano|flash|lite|small|tiny|haiku|instant|lightning|[^0-9]([1-9]b)\b|turbo)/i;
