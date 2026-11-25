@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Check,
   ChevronDown,
@@ -448,12 +448,10 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
   renderMentionText,
   className = '',
 }) => {
-  const [mode, setMode] = useState<ContentMode>(initialMode);
+  // Store user-selected mode keyed to `initialMode` so prop changes reset mode without a setState-in-effect.
+  const [modeOverride, setModeOverride] = useState<{ forInitial: ContentMode; value: ContentMode } | null>(null);
+  const mode = modeOverride && modeOverride.forInitial === initialMode ? modeOverride.value : initialMode;
   const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    setMode(initialMode);
-  }, [initialMode]);
 
   const detectedKind = useMemo(
     () => detectContentKind(content, language),
@@ -544,7 +542,7 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
                   key={opt.id}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => setMode(opt.id)}
+                  onClick={() => setModeOverride({ forInitial: initialMode, value: opt.id })}
                   className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
                     active
                       ? 'bg-brass text-[var(--color-accent-ink)]'
