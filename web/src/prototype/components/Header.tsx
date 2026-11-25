@@ -18,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
     language,
     setLanguage,
     setCurrentView,
+    openFirstBotOrWizard,
     theme,
     toggleTheme,
     t,
@@ -209,7 +210,11 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
           {!isWorkspace && authUser && (
             <button
               type="button"
-              onClick={() => navigate('empty-chamber')}
+              onClick={() => {
+                setMenuOpen(false);
+                openFirstBotOrWizard();
+                window.scrollTo(0, 0);
+              }}
               className="button-primary header-cta"
             >
               {labels.nav.newDeliberation}
@@ -293,7 +298,11 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             {authUser && (
               <button
                 type="button"
-                onClick={() => navigate('empty-chamber')}
+                onClick={() => {
+                  setMenuOpen(false);
+                  openFirstBotOrWizard();
+                  window.scrollTo(0, 0);
+                }}
                 className="nav-link justify-between"
               >
                 {labels.nav.newDeliberation}

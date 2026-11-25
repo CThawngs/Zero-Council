@@ -650,7 +650,7 @@ const PanelBody: React.FC<{ room: ChatRoomState; onClose: () => void; closeRef?:
   onClose,
   closeRef,
 }) => {
-  const { bots, personas, language, setCurrentView, t } = useApp();
+  const { bots, personas, language, openFirstBotOrWizard, t } = useApp();
   const isSolo = room.kind === 'solo' || room.roster.length === 1;
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -673,7 +673,7 @@ const PanelBody: React.FC<{ room: ChatRoomState; onClose: () => void; closeRef?:
 
   const handleDeleted = (botId: string) => {
     if (isSolo) {
-      setCurrentView('empty-chamber');
+      openFirstBotOrWizard(botId);
       return;
     }
     if (selectedId === botId) setSelectedId(null);

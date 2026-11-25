@@ -161,6 +161,7 @@ interface AppContextType {
   ) => Promise<UserBot | null>;
   deleteBot: (id: string) => Promise<void>;
   openBotChat: (botId: string, conversationId?: string) => void;
+  openFirstBotOrWizard: (excludeBotId?: string) => void;
   createSoloThread: (botId: string, title?: string) => Promise<void>;
   conversations: SavedConversation[];
   createGroupChat: (
@@ -1224,7 +1225,7 @@ export const AppProvider: React.FC<{
         loadConversationIntoRoom(sameBotNext);
       } else {
         setCurrentRoom(null);
-        setCurrentView('empty-chamber');
+        openFirstBotOrWizard();
       }
     }
   };
@@ -1242,7 +1243,7 @@ export const AppProvider: React.FC<{
     roomAbortRef.current?.abort();
     clearStoredRoom();
     setCurrentRoom(null);
-    setCurrentView('empty-chamber');
+    openFirstBotOrWizard();
   };
 
   const attachLink = async (url: string) => {
@@ -1964,6 +1965,16 @@ export const AppProvider: React.FC<{
     void createSoloThread(botId, bot?.name ?? copy[language].soloNewThread);
   };
 
+  /** Redirects to the first available bot chat, or falls back to bot-wizard when no bots exist. */
+  const openFirstBotOrWizard = (excludeBotId?: string) => {
+    const firstBot = bots.find((item) => item.id !== excludeBotId);
+    if (firstBot) {
+      openBotChat(firstBot.id);
+      return;
+    }
+    setCurrentView('bot-wizard');
+  };
+
   const connectApiKey = async (
     provider: ModelProvider,
     rawKey: string,
@@ -2161,6 +2172,7 @@ export const AppProvider: React.FC<{
         updateBot,
         deleteBot,
         openBotChat,
+        openFirstBotOrWizard,
         createSoloThread,
         conversations,
         createGroupChat,

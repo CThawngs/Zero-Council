@@ -8,7 +8,7 @@ import { CouncilOrb } from './CouncilOrb';
 import { LEGAL_DOCUMENTS } from '../types';
 
 export const Footer: React.FC = () => {
-  const { setCurrentView, language, t } = useApp();
+  const { setCurrentView, openFirstBotOrWizard, language, t } = useApp();
   const labels = translations[language];
 
   const go = (view: Parameters<typeof setCurrentView>[0]) => {
@@ -54,7 +54,14 @@ export const Footer: React.FC = () => {
                   </Link>
                 </li>
                 <li>
-                  <button type="button" onClick={() => go('empty-chamber')} className="footer-link">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openFirstBotOrWizard();
+                      window.scrollTo(0, 0);
+                    }}
+                    className="footer-link"
+                  >
                     {labels.nav.newDeliberation}
                   </button>
                 </li>

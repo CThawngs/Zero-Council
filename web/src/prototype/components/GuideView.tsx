@@ -15,7 +15,7 @@ interface GuideViewProps {
 }
 
 export const GuideView: React.FC<GuideViewProps> = ({ standalone = false }) => {
-  const { setCurrentView, language, t } = useApp();
+  const { openFirstBotOrWizard, language, t } = useApp();
   const sections = GUIDE[language];
 
   useEffect(() => {
@@ -32,7 +32,7 @@ export const GuideView: React.FC<GuideViewProps> = ({ standalone = false }) => {
   }, [standalone, language, t.guideTitle, t.guideIntro]);
 
   const back = () => {
-    setCurrentView('empty-chamber');
+    openFirstBotOrWizard();
     window.scrollTo(0, 0);
   };
 

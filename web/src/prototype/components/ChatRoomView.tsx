@@ -157,6 +157,7 @@ export const ChatRoomView: React.FC = () => {
     botCap,
     goToPricing,
     setCurrentView,
+    openFirstBotOrWizard,
     openContentPanel,
     currentPlanId,
     language,
@@ -366,7 +367,7 @@ export const ChatRoomView: React.FC = () => {
         <h1 className="font-serif text-3xl text-ink">{t.chatTitle}</h1>
         <button
           type="button"
-          onClick={() => setCurrentView('empty-chamber')}
+          onClick={() => openFirstBotOrWizard()}
           className="button-primary min-h-11"
         >
           {t.chatStartFirst}

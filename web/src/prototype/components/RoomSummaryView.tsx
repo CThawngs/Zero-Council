@@ -17,14 +17,14 @@ import { ExpandableText } from './ExpandableText';
  * put words in an advisor's mouth, and in the scripted preview there is no model to ask at all.
  */
 export const RoomSummaryView: React.FC = () => {
-  const { currentRoom, personas, setCurrentView, showToast, openRoomConclusion, isDeliberating, t } = useApp();
+  const { currentRoom, personas, setCurrentView, openFirstBotOrWizard, showToast, openRoomConclusion, isDeliberating, t } = useApp();
 
   if (!currentRoom) {
     return (
       <div className="mx-auto w-full max-w-3xl space-y-5 py-4 sm:py-8">
         <h1 className="font-serif text-3xl text-ink">{t.summaryEyebrow}</h1>
         <p className="text-sm text-ink-muted">{t.summaryNoRoom}</p>
-        <button type="button" onClick={() => setCurrentView('empty-chamber')} className="button-primary min-h-11">
+        <button type="button" onClick={() => openFirstBotOrWizard()} className="button-primary min-h-11">
           {t.summaryNew}
         </button>
       </div>
@@ -144,7 +144,7 @@ export const RoomSummaryView: React.FC = () => {
             <Copy className="h-4 w-4" aria-hidden="true" />
             {t.summaryCopy}
           </button>
-          <button type="button" onClick={() => setCurrentView('empty-chamber')} className="button-quiet min-h-11 justify-center">
+          <button type="button" onClick={() => openFirstBotOrWizard()} className="button-quiet min-h-11 justify-center">
             <Plus className="h-4 w-4" aria-hidden="true" />
             {t.summaryNew}
           </button>
