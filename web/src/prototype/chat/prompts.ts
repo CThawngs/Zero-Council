@@ -7,6 +7,7 @@
 
 import { SILENT_TOKEN, type ChatTurnRequest } from './engine.ts';
 
+/** Format các tài liệu/file được ghim trong request thành đoạn text ngữ cảnh. */
 export const formatPinnedAttachments = (request: ChatTurnRequest): string =>
   (request.attachments ?? [])
     .map((attachment) => {
@@ -36,6 +37,7 @@ const languageDirective = (language: 'en' | 'vi'): string =>
     ? 'Active app/room language: Vietnamese (Tiếng Việt). Reply in natural Vietnamese unless the user explicitly writes in another language.'
     : 'Active app/room language: English. Reply in natural English unless the user explicitly writes in another language.';
 
+/** Dựng system prompt hoàn chỉnh cho bot từ persona và ngữ cảnh phòng chat. */
 export const buildSystemPrompt = (
   request: ChatTurnRequest,
   persona: string | undefined

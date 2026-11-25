@@ -72,6 +72,7 @@ test('network failure throws NETWORK_FAILED', async () => {
 });
 
 test('200 returns sorted deduped active text-chat model ids for openai', async () => {
+test('200 returns sorted deduped active text-chat model ids for openai', async () => {
   await withFetch(
     async (url, init) =>
       isModelList(url, init)
@@ -88,7 +89,21 @@ test('200 returns sorted deduped active text-chat model ids for openai', async (
             ],
           })
         : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
+        ? jsonResponse(200, {
+            data: [
+              { id: 'gpt-4o' },
+              { id: 'o3-mini' },
+              { id: 'gpt-3.5-turbo' },
+              { id: 'tts-1' },
+              { id: 'claude-x' },
+              { id: 'gpt-4o' },
+              { id: 7 },
+              {},
+            ],
+          })
+        : jsonResponse(200, { choices: [{ message: { content: 'o' } }] }),
     async () => {
+      assert.deepEqual(await fetchProviderModels('openai', OPENAI_KEY), ['gpt-4o', 'o3-mini']);
       assert.deepEqual(await fetchProviderModels('openai', OPENAI_KEY), ['gpt-4o', 'o3-mini']);
     }
   );

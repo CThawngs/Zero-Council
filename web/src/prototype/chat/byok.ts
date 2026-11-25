@@ -142,9 +142,11 @@ export const PROVIDERS: Provider[] = [
   },
 ];
 
+/** Tìm cấu hình built-in provider theo ID. */
 export const builtinProviderById = (id: string): Provider | undefined =>
   PROVIDERS.find((p) => p.id === id);
 
+/** Lấy cấu hình provider theo ID, fallback về provider đầu tiên nếu không tìm thấy. */
 export const providerById = (id: ProviderId): Provider =>
   builtinProviderById(id) ?? PROVIDERS[0];
 
@@ -160,6 +162,7 @@ export interface ProviderEndpointSpec {
   baseUrl?: string;
 }
 
+/** Xác định protocol và baseUrl cuối cùng cho built-in (khóa cứng) hoặc custom provider. */
 export const resolveProviderEndpoint = (
   target: ProviderId | ProviderEndpointSpec
 ): { provider: ProviderId; protocol: ProviderProtocol; baseUrl: string; isBuiltin: boolean } => {
@@ -359,6 +362,7 @@ const HANDOFF_TOOL = {
   },
 } as const;
 
+/** Phân giải chuỗi mục tiêu handoff từ model thành danh sách ID bot hợp lệ trong roster. */
 export const resolveTarget = (raw: string, roster: ChatBot[]): string[] => {
   const wanted = raw.replace(/^@/, '').trim();
   if (!wanted) return [];
@@ -372,6 +376,7 @@ export const resolveTarget = (raw: string, roster: ChatBot[]): string[] => {
   return hit ? [hit.id] : [];
 };
 
+/** Trích xuất danh sách ảnh (data URL) từ tin nhắn trong request. */
 const imagesOf = (request: ChatTurnRequest) => {
   const rawUrls: string[] = [];
   for (const attachment of request.attachments ?? []) {
@@ -391,6 +396,7 @@ const imagesOf = (request: ChatTurnRequest) => {
     .filter((parts): parts is NonNullable<typeof parts> => parts !== null);
 };
 
+/** Lấy tên hiển thị của người gửi dựa theo authorId. */
 const speakerNameOf = (request: ChatTurnRequest, authorId: string): string => {
   const known = [
     request.bot,
@@ -409,6 +415,7 @@ const speakerNameOf = (request: ChatTurnRequest, authorId: string): string => {
  * - Consecutive same-role turns are merged, and the sequence always starts and ends with `user`,
  *   avoiding HTTP 400 errors on Anthropic, Gemini, and strict OpenAI-compatible providers.
  */
+/** Chuyển đổi lịch sử hội thoại trong request sang danh sách message trung gian. */
 const toMessages = (request: ChatTurnRequest) => {
   const images = imagesOf(request);
   const lastUser = images.length
@@ -469,6 +476,7 @@ const toMessages = (request: ChatTurnRequest) => {
   return normalized;
 };
 
+/** Chuyển đổi lịch sử hội thoại sang định dạng messages của Anthropic API. */
 const toAnthropicMessages = (request: ChatTurnRequest) => {
   const merged: {
     role: 'user' | 'assistant';
@@ -499,6 +507,7 @@ const toAnthropicMessages = (request: ChatTurnRequest) => {
   return merged;
 };
 
+/** Chuyển đổi lịch sử hội thoại sang định dạng messages của OpenAI-compatible API. */
 const toOpenAiMessages = (request: ChatTurnRequest) =>
   toMessages(request).map(({ role, content, images }) => ({
     role,
@@ -520,6 +529,7 @@ type GooglePart =
 /**
  * Gemini v1beta requires multi-turn contents to alternate between `user` and `model`.
  */
+/** Chuyển đổi lịch sử hội thoại sang định dạng contents của Google Gemini API. */
 const toGoogleContents = (request: ChatTurnRequest) => {
   const merged: { role: 'user' | 'model'; parts: GooglePart[] }[] = [];
   for (const { role, content, images } of toMessages(request)) {
@@ -540,6 +550,7 @@ const toGoogleContents = (request: ChatTurnRequest) => {
   return merged;
 };
 
+/** Gửi request sinh phản hồi qua Anthropic Messages API và trích xuất text/handoff. */
 const requestAnthropic = async (
   credentials: Credentials,
   baseUrl: string,
@@ -584,6 +595,7 @@ const requestAnthropic = async (
   };
 };
 
+/** Gửi request sinh phản hồi qua OpenAI-compatible Chat Completions API và trích xuất text/handoff. */
 const requestOpenAi = async (
   credentials: Credentials,
   baseUrl: string,
@@ -665,6 +677,7 @@ const requestOpenAi = async (
   return { text: (message?.content ?? '').trim(), target, attempted: Boolean(call) };
 };
 
+/** Gửi request sinh phản hồi qua Google Gemini generateContent API và trích xuất text/handoff. */
 const requestGoogle = async (
   credentials: Credentials,
   baseUrl: string,
@@ -838,6 +851,7 @@ export interface ByokOptions {
   onStart?: (bot: ChatBot) => void;
 }
 
+/** Tạo BotGenerator cho chat engine, điều phối gọi BYOK API và xử lý handoff/silent. */
 export const byokGenerator =
   (credentials: Credentials, options: ByokOptions = {}): BotGenerator =>
   async (request: ChatTurnRequest): Promise<BotTurn> => {
