@@ -511,7 +511,7 @@ export const ChatRoomView: React.FC = () => {
       >
         {/* Compact Room Header — complements BotSettingsPanel right-bar with zero clutter */}
         <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface/95 px-3 py-2.5 sm:px-5 sm:py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <div className="flex min-w-[13rem] flex-1 items-center gap-2.5 overflow-hidden sm:min-w-[16rem]">
             <div className="flex shrink-0 -space-x-2" aria-hidden="true">
               {visibleAvatars.map((persona) => (
                 <span
@@ -568,7 +568,7 @@ export const ChatRoomView: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
             {isRunning && (
               <button
                 type="button"
