@@ -77,11 +77,13 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # --- Gates. Rẻ, chạy trước, fail sớm ---
-      # Tạo evidence/ ngay từ đầu: bước upload có `if-no-files-found: error`, nên
-      # nếu build chết trước bước "Bật app" mà thư mục chưa có, upload đỏ thêm
-      # một lỗi giả không liên quan gì tới nguyên nhân thật.
+      # Tạo evidence/ kèm file mốc ngay từ đầu: bước upload có `if-no-files-found: error`,
+      # nếu chỉ tạo thư mục rỗng và build/lint chết trước bước "Bật app", upload-artifact v4
+      # sẽ báo đỏ thêm lỗi giả "No files were found with the provided path: evidence/".
       - name: Chuẩn bị thư mục bằng chứng
-        run: mkdir -p evidence
+        run: |
+          mkdir -p evidence
+          date -u +"started %Y-%m-%dT%H:%M:%SZ" > evidence/run-started.txt
 
       # --test-timeout vì một test treo âm thầm đã ăn trọn 20 phút của job.
       # Giờ nó báo đỏ sau 60s thay vì bắt cả runner đứng yên.
