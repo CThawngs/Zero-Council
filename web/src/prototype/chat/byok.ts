@@ -869,9 +869,8 @@ export const byokGenerator =
           : requestOpenAi;
     const { text, target, attempted } = await call(credentials, baseUrl, request, persona);
 
-    if (!text || text === SILENT_TOKEN) return { text: '', handoffs: [], silent: true };
-
     if (request.soloMode) {
+      if (!text || text === SILENT_TOKEN) return { text: '', handoffs: [], silent: true };
       return { text, handoffs: [USER_HANDLE] };
     }
 
@@ -880,6 +879,11 @@ export const byokGenerator =
       : (request.handoffTargets ?? request.waiting).filter((bot) => bot.id !== request.bot.id);
     const handoffs = target ? resolveTarget(target, candidates) : [];
     if (attempted && handoffs.length === 0) handoffs.push(USER_HANDLE);
+
+    // Preserve structured handoffs on tool-only turns (empty text), while explicit [SILENT] drops them.
+    if (!text || text === SILENT_TOKEN) {
+      return { text: '', handoffs: text === SILENT_TOKEN ? [] : handoffs, silent: true };
+    }
 
     return { text, handoffs };
   };

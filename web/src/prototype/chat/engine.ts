@@ -557,35 +557,49 @@ export const runTurn = async ({
       break;
     }
 
-    if (turn.silent || turn.text.trim() === SILENT_TOKEN || !turn.text.trim()) {
+    const isSilentTurn = turn.silent || turn.text.trim() === SILENT_TOKEN || !turn.text.trim();
+    if (isSilentTurn) {
       // A pass is a decision: it consumes a turn and adds nobody to the transcript, but the
       // scheduled advisor still gave up their place. The round is not judged until the queue
       // drains, so one silent advisor does not cut off the advisors behind them.
       spoken.push(bot.id);
       countTurn(bot.id);
-      continue;
+    } else {
+      const message: ChatMessage = {
+        id: `${messages.length}`,
+        authorId: bot.id,
+        body: turn.text.trim(),
+        mentioned: [],
+      };
+      messages.push(message);
+      onTurn?.(message);
+      spoken.push(bot.id);
+      countTurn(bot.id);
+      produced += 1;
     }
-    const message: ChatMessage = {
-      id: `${messages.length}`,
-      authorId: bot.id,
-      body: turn.text.trim(),
-      mentioned: [],
-    };
-    messages.push(message);
-    onTurn?.(message);
-    spoken.push(bot.id);
-    countTurn(bot.id);
-    produced += 1;
 
+    let hasPeerHandoff = false;
     for (const id of dedupe(turn.handoffs)) {
       if (id === bot.id || id === USER_HANDLE || (turnsBy.get(id) ?? 0) >= effectiveRounds) continue;
       const target = roster.find((other) => other.id === id);
-      if (target && !queue.some((waiting) => waiting.id === id)) queue.push(target);
+      if (!target) continue;
+      hasPeerHandoff = true;
+      if (!queue.some((waiting) => waiting.id === id)) queue.push(target);
     }
 
-    if (parseMentions(turn.text, roster).includes(USER_HANDLE)) {
-      stoppedBy = 'user';
-      break;
+    if (isSilentTurn) continue;
+
+    // Independent (`panel`) mode lets every seated advisor finish once regardless of `@user` tags.
+    // In Debate (`round-robin`), a structured peer handoff takes precedence over prose `@user`,
+    // while an explicit `USER_HANDLE` handoff (or prose `@user` with no handoffs) yields to the user.
+    if (!isIndependent && !hasPeerHandoff) {
+      const explicitUserHandoff = turn.handoffs.includes(USER_HANDLE);
+      const proseUserFallback =
+        turn.handoffs.length === 0 && parseMentions(turn.text, roster).includes(USER_HANDLE);
+      if (explicitUserHandoff || proseUserFallback) {
+        stoppedBy = 'user';
+        break;
+      }
     }
   }
 

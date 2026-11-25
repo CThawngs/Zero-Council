@@ -117,3 +117,84 @@ test('byokGenerator injects distinct system prompts for panel (independent) vs r
     globalThis.fetch = originalFetch;
   }
 });
+
+test('panel mode does not stop early when a bot tags @user or hands off to user', async () => {
+  const result = await runTurn({
+    roster: ROSTER,
+    mode: 'panel',
+    history: [],
+    userMessage: USER_MSG,
+    language: 'en',
+    generate: ({ bot }) => ({
+      text: `${bot.name} answer @user`,
+      handoffs: [USER_HANDLE],
+    }),
+  });
+
+  assert.deepEqual(result.speakers, ['adv-1', 'adv-2', 'adv-3']);
+  assert.equal(result.stoppedBy, 'user');
+});
+
+test('round-robin continues consecutive bot turns when structured peer handoff coexists with @user prose', async () => {
+  const result = await runTurn({
+    roster: ROSTER,
+    mode: 'round-robin',
+    history: [],
+    userMessage: USER_MSG,
+    language: 'en',
+    rounds: 1,
+    generate: ({ bot, waiting }) => {
+      const next = waiting[0];
+      return next
+        ? { text: `${bot.name} to @user and @${next.name}`, handoffs: [next.id] }
+        : { text: `${bot.name} final @user`, handoffs: [USER_HANDLE] };
+    },
+  });
+
+  assert.deepEqual(result.speakers, ['adv-1', 'adv-2', 'adv-3']);
+  assert.equal(result.stoppedBy, 'user');
+});
+
+test('byokGenerator preserves peer handoff when model returns tool call with empty content', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: '',
+              tool_calls: [{ function: { name: 'message_agent', arguments: '{"target":"Skeptic"}' } }],
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
+
+  try {
+    const gen = byokGenerator({
+      provider: 'openai',
+      model: 'gpt-4o-mini',
+      apiKey: 'sk-test-key',
+    });
+
+    const turn = await gen({
+      bot: ROSTER[0],
+      roster: ROSTER,
+      history: [USER_MSG],
+      waiting: [ROSTER[1], ROSTER[2]],
+      handoffTargets: [ROSTER[1], ROSTER[2]],
+      isClosing: false,
+      prompt: USER_MSG.body,
+      language: 'en',
+      attachments: [],
+      mode: 'round-robin',
+    });
+
+    assert.equal(turn.silent, true);
+    assert.deepEqual(turn.handoffs, ['adv-2']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

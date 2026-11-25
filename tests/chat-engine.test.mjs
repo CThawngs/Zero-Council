@@ -267,6 +267,7 @@ test('one oversized message is excerpted instead of blowing the window', () => {
 });
 
 test('every advisor is handed the same trimmed context, and it ends with the newest', async () => {
+  // End prior history with skeptic in round-robin so pragmatist opens and dreamer sees pragmatist's in-round reply.
   const history = Array.from({ length: 30 }, (_, i) => msg('skeptic', `old ${i}`));
   const seen = new Map();
   await runTurn({

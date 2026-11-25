@@ -85,10 +85,10 @@ export const buildSystemPrompt = (
     : 'Conversation mode: DEBATE (Critique). Read what previous advisors have said in the transcript. Directly engage with their arguments: challenge weak assumptions, point out blind spots or risks, offer a sharp counter-perspective where you disagree, and explain why from your own stance. Avoid simply agreeing or repeating.';
 
   const closing = isIndependent
-    ? 'Answer the human directly from your own perspective, tag @user if handing a decision or clarifying question back, and call message_agent with target "user".'
+    ? 'Answer the human directly from your own perspective, then call message_agent with target "user".'
     : request.isClosing || eligibleTargets.length === 0
       ? 'You have the floor last in this round. Synthesize or answer directly, tag @user when handing the decision or a clarifying question back to the human, and call message_agent with target "user".'
-      : 'When you finish your point, call message_agent with the exact name of the teammate who should speak next (if you want their take or challenged them), or with "user" if the human should decide next.';
+      : 'When you finish your point, call message_agent with the exact name of the teammate who should speak next so the debate continues; only call message_agent with "user" (and tag @user) if the council truly cannot proceed without human clarification.';
 
   return [
     persona,
@@ -99,7 +99,7 @@ export const buildSystemPrompt = (
     ...(isIndependent
       ? []
       : [
-          'When building on, questioning, or challenging a peer in the room, address them directly as @BotName in your reply. When asking the user a clarifying question or handing back a decision, tag @user.',
+          'When building on, questioning, or challenging a peer in the room, address them directly as @BotName in your reply. Only tag @user when closing the round back to the human or asking them a blocking question.',
         ]),
     langLine,
     '',
