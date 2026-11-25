@@ -32,10 +32,11 @@ export const formatPinnedAttachments = (request: ChatTurnRequest): string =>
     })
     .join('\n');
 
+/** Enforces that bots always reply in the active page language (EN or VI) unless explicitly asked to translate. */
 const languageDirective = (language: 'en' | 'vi'): string =>
   language === 'vi'
-    ? 'Active app/room language: Vietnamese (Tiếng Việt). Reply in natural Vietnamese unless the user explicitly writes in another language.'
-    : 'Active app/room language: English. Reply in natural English unless the user explicitly writes in another language.';
+    ? 'Active app/room language: Vietnamese (Tiếng Việt). Always reply in natural Vietnamese to match the current page language, even if your persona or technical terms are in English (unless the user explicitly asks you to reply in another language).'
+    : 'Active app/room language: English. Always reply in natural English to match the current page language, even if your persona or terms in the prompt are in another language (unless the user explicitly asks you to reply in another language).';
 
 /** Dựng system prompt hoàn chỉnh cho bot từ persona và ngữ cảnh phòng chat. */
 export const buildSystemPrompt = (
