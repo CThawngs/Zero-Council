@@ -48,9 +48,9 @@ import {
 import { useBotSettingsPanel } from './BotSettingsPanel';
 import { CouncilOrb } from './CouncilOrb';
 import { MentionAutocomplete } from './MentionAutocomplete';
-import { USER_HANDLE } from '../chat/engine';
 import { hasRichContent } from '../chat/content-render';
 import { ContentRenderPanel } from './ContentRenderPanel';
+import { ExpandableText } from './ExpandableText';
 
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -975,9 +975,18 @@ export const ChatRoomView: React.FC = () => {
                       color: 'var(--color-accent-ink)',
                     }}
                   >
-                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                    {/* Clamp long user prompts while keeping @mention pills and readable contrast on accent background */}
+                    <ExpandableText
+                      key={message.id}
+                      text={message.body}
+                      maxLines={5}
+                      className="text-sm leading-relaxed"
+                      buttonClassName="text-current opacity-85 hover:opacity-100"
+                      showMoreLabel={t.summaryShowMore}
+                      showLessLabel={t.summaryShowLess}
+                    >
                       {renderBody(message.body, rosterNames, true)}
-                    </p>
+                    </ExpandableText>
                     {attachments}
                   </div>
                 </article>
@@ -1007,17 +1016,34 @@ export const ChatRoomView: React.FC = () => {
                       borderColor: `color-mix(in srgb, ${color} 34%, var(--color-border))`,
                     }}
                   >
+                    {/* Support both inline expand/collapse and full panel modal for rich advisor replies */}
                     {rich ? (
-                      <ContentRenderPanel
-                        content={message.body}
-                        compact
-                        showHeader={false}
-                        renderMentionText={(plain) => renderBody(plain, rosterNames)}
-                      />
+                      <ExpandableText
+                        key={message.id}
+                        as="div"
+                        text={message.body}
+                        maxHeight={280}
+                        showMoreLabel={t.summaryShowMore}
+                        showLessLabel={t.summaryShowLess}
+                      >
+                        <ContentRenderPanel
+                          content={message.body}
+                          compact
+                          showHeader={false}
+                          renderMentionText={(plain) => renderBody(plain, rosterNames)}
+                        />
+                      </ExpandableText>
                     ) : (
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
+                      <ExpandableText
+                        key={message.id}
+                        text={message.body}
+                        maxLines={5}
+                        className="text-sm leading-relaxed text-ink"
+                        showMoreLabel={t.summaryShowMore}
+                        showLessLabel={t.summaryShowLess}
+                      >
                         {renderBody(message.body, rosterNames)}
-                      </p>
+                      </ExpandableText>
                     )}
                     {rich && (
                       <div className="mt-2 flex justify-end">

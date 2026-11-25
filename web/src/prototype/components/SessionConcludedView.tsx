@@ -5,16 +5,20 @@ import { extractReadableSummary, matchPersonaId } from '../chat/conclusion';
 import {
   Copy,
   ListChecks,
+  Maximize2,
   Quote,
   ShieldAlert,
   UsersRound,
 } from 'lucide-react';
 import FrameworkPanel from './FrameworkPanel';
 import { ExpandableText } from './ExpandableText';
+import { hasRichContent } from '../chat/content-render';
+import { ContentRenderPanel } from './ContentRenderPanel';
 
 export const SessionConcludedView: React.FC = () => {
   const {
     currentSession,
+    openContentPanel,
     showToast,
     t,
     language,
@@ -220,6 +224,7 @@ export const SessionConcludedView: React.FC = () => {
               matchPersonaId(item, contribution.advisorId)
             );
             const crossReference = contribution.rebuts ?? contribution.buildsOn;
+            const rich = hasRichContent(contribution.text);
             return (
               <article
                 key={`${contribution.advisorId}-${index}`}
@@ -242,13 +247,49 @@ export const SessionConcludedView: React.FC = () => {
                     </p>
                   )}
                 </div>
-                <ExpandableText
-                  text={contribution.text}
-                  maxLines={5}
-                  className="mt-4 text-sm leading-relaxed text-ink"
-                  showMoreLabel={t.summaryShowMore}
-                  showLessLabel={t.summaryShowLess}
-                />
+                {/* Allow both inline expand/collapse and full panel modal for rich advisor testimonies */}
+                {rich ? (
+                  <>
+                    <ExpandableText
+                      key={`${contribution.advisorId}-${index}-rich`}
+                      as="div"
+                      text={contribution.text}
+                      maxHeight={260}
+                      className="mt-4"
+                      showMoreLabel={t.summaryShowMore}
+                      showLessLabel={t.summaryShowLess}
+                    >
+                      <ContentRenderPanel
+                        content={contribution.text}
+                        compact
+                        showHeader={false}
+                      />
+                    </ExpandableText>
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          openContentPanel({
+                            title: nameOf(contribution.advisorId),
+                            content: contribution.text,
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded-md border border-border bg-background/70 px-2 py-0.5 text-[11px] font-medium text-ink-muted transition hover:border-brass/60 hover:text-ink"
+                      >
+                        <Maximize2 className="h-3 w-3" aria-hidden="true" />
+                        <span>{t.contentPanelOpen}</span>
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <ExpandableText
+                    text={contribution.text}
+                    maxLines={5}
+                    className="mt-4 text-sm leading-relaxed text-ink"
+                    showMoreLabel={t.summaryShowMore}
+                    showLessLabel={t.summaryShowLess}
+                  />
+                )}
                 {advisor?.instructions && (
                   <ExpandableText
                     text={advisor.instructions}
