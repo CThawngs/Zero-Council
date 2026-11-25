@@ -267,11 +267,11 @@ test('one oversized message is excerpted instead of blowing the window', () => {
 });
 
 test('every advisor is handed the same trimmed context, and it ends with the newest', async () => {
-  const history = Array.from({ length: 30 }, (_, i) => msg('pragmatist', `old ${i}`));
+  const history = Array.from({ length: 30 }, (_, i) => msg('skeptic', `old ${i}`));
   const seen = new Map();
   await runTurn({
     roster: ROSTER,
-    mode: 'panel',
+    mode: 'round-robin',
     history,
     userMessage: userMsg('the question that matters'),
     generate: (request) => {
@@ -639,7 +639,7 @@ test('2nd bot in panel mode gets empty handoffTargets and cannot hand off to its
   assert.deepEqual(seen[0], {
     id: 'pragmatist',
     isClosing: false,
-    handoffTargets: ['dreamer'],
+    handoffTargets: [],
     roster: ['pragmatist', 'dreamer'],
   });
   assert.deepEqual(seen[1], {

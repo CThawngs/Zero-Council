@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runTurn, USER_HANDLE } from '../src/prototype/chat/engine.ts';
-import { scriptedGenerator } from '../src/prototype/chat/scripted.ts';
-import { byokGenerator } from '../src/prototype/chat/byok.ts';
+import { runTurn, USER_HANDLE } from '../web/src/prototype/chat/engine.ts';
+import { scriptedGenerator } from '../web/src/prototype/chat/scripted.ts';
+import { byokGenerator } from '../web/src/prototype/chat/byok.ts';
 
 const ROSTER = [
   { id: 'adv-1', name: 'Strategist' },

@@ -52,13 +52,16 @@ export const scriptedGenerator =
   (request: ChatTurnRequest): BotTurn => {
     if (alwaysSilent?.(request)) return { text: SILENT_TOKEN, handoffs: [], silent: true };
 
-    const { bot, history, waiting, handoffTargets, isClosing, language, mode } = request;
-    const opener = OPENERS[language](lensOf(bot));
+    const { bot, history, waiting, handoffTargets, isClosing, mode } = request;
+    const lang = request.language === 'vi' ? 'vi' : 'en';
+    const rawLens = lensOf?.(bot)?.trim() ?? '';
+    const resolvedLens = rawLens || DEFAULT_LENS[lang];
+    const opener = OPENERS[lang](resolvedLens);
     // Scope peer lookup to the current round (messages after the latest user turn) so debate
     // prefixes reference the advisor who just spoke rather than someone from an earlier round.
     const lastUserIndex = history.map((message) => message.authorId).lastIndexOf(USER_HANDLE);
     const lastUser = lastUserIndex >= 0 ? history[lastUserIndex] : undefined;
-    const echo = lastUser ? `On "${lastUser.body.slice(0, 120)}" — ` : '';
+    const echo = lastUser ? ECHO_PREFIX[lang](lastUser.body.slice(0, 120)) : '';
     const lastBotInRound =
       lastUserIndex >= 0
         ? [...history.slice(lastUserIndex + 1)].reverse().find((message) => message.authorId !== USER_HANDLE)
@@ -70,13 +73,13 @@ export const scriptedGenerator =
     if (mode === 'panel') {
       const body = `${echo}${opener}`;
       return {
-        text: isClosing ? `${body} ${CLOSERS[language]} @${USER_HANDLE}` : body,
+        text: isClosing ? `${body} ${CLOSERS[lang]} @${USER_HANDLE}` : body,
         handoffs: [],
       };
     }
 
     const debatePrefix = prevName
-      ? language === 'vi'
+      ? lang === 'vi'
         ? `Phản biện lại góc nhìn của ${prevName}, `
         : `Countering ${prevName}'s angle, `
       : '';
@@ -88,11 +91,11 @@ export const scriptedGenerator =
 
     // Closing hands back to the user: no handoff, and the prose names them so the UI can mark it.
     if (isClosing || !nextName) {
-      return { text: `${echo}${debatePrefix}${opener} ${CLOSERS[language]} @${USER_HANDLE}`, handoffs: [] };
+      return { text: `${echo}${debatePrefix}${opener} ${CLOSERS[lang]} @${USER_HANDLE}`, handoffs: [] };
     }
     // A STRUCTURED handoff. The `@name` in the prose is display only — the engine routes on the id.
     return {
-      text: `${echo}${debatePrefix}${opener} @${nextName}, this is your side of it.`,
+      text: `${echo}${debatePrefix}${opener} ${HANDOFF_LINES[lang](nextName)}`,
       handoffs: [next.id],
     };
   };
