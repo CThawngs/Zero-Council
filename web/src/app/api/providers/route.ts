@@ -9,7 +9,8 @@ import {
 import { maskProviderKey } from '@/lib/crypto/providerKeys';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson } from '@/lib/security/request-guard';
-import { isValidProviderId } from '@/lib/store/botValidation';
+import { isBuiltinProviderId, isValidProviderId } from '@/lib/store/botValidation';
+import { isAllowedBuiltinModel, visibleModelsForProvider } from '@/prototype/chat/modelAllowList';
 import {
   deleteAllProviderKeys,
   deleteProviderKey,
@@ -56,6 +57,7 @@ export async function GET() {
     const rows = await listProviderKeysWithSecrets(user.email);
     const providers = rows.map(({ key, ...record }) => ({
       ...record,
+      models: visibleModelsForProvider(record.provider, record.models, record.model),
       hasKey: true,
       maskedKey: maskProviderKey(key),
     }));
@@ -117,6 +119,9 @@ export async function POST(request: Request) {
   }
 
   const selectedModel = model.trim();
+  if (isBuiltinProviderId(provider) && !isAllowedBuiltinModel(provider, selectedModel)) {
+    return Response.json({ error: 'UNSUPPORTED_MODEL' }, { status: 400 });
+  }
   // Store exactly what was verified: quotes / "Bearer " / zero-width paste artifacts removed.
   const cleanKey = sanitizeApiKey(key);
   const verification = await verifyProviderKey(resolved.target, cleanKey, { model: selectedModel });
@@ -128,9 +133,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const modelList = [
-    ...new Set([selectedModel, ...cleanModelList(models), ...verification.models]),
-  ].slice(0, MAX_STORED_MODELS);
+  const modelList = visibleModelsForProvider(
+    provider,
+    [selectedModel, ...cleanModelList(models), ...verification.models],
+    selectedModel
+  ).slice(0, MAX_STORED_MODELS);
 
   try {
     const saved = await saveProviderKey(user.email, provider, selectedModel, cleanKey, {
@@ -190,6 +197,9 @@ export async function PATCH(request: Request) {
     return Response.json({ error: 'MODEL_REQUIRED' }, { status: 400 });
   }
   const selectedModel = model.trim();
+  if (isBuiltinProviderId(provider) && !isAllowedBuiltinModel(provider, selectedModel)) {
+    return Response.json({ error: 'UNSUPPORTED_MODEL' }, { status: 400 });
+  }
   try {
     const existingList = await listProviderKeysWithSecrets(user.email);
     const current = existingList.find((item) => item.provider === provider);
@@ -214,9 +224,11 @@ export async function PATCH(request: Request) {
     }
 
     const requested = cleanModelList(models);
-    const mergedModels = [
-      ...new Set([selectedModel, ...(requested.length > 0 ? requested : current.models ?? [])]),
-    ].slice(0, MAX_STORED_MODELS);
+    const mergedModels = visibleModelsForProvider(
+      provider,
+      [selectedModel, ...(requested.length > 0 ? requested : current.models ?? [])],
+      selectedModel
+    ).slice(0, MAX_STORED_MODELS);
     const saved = await saveProviderKey(user.email, provider, selectedModel, current.key, {
       models: mergedModels,
       label: current.label,
