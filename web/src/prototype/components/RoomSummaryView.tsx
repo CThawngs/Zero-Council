@@ -225,16 +225,16 @@ export const RoomSummaryView: React.FC = () => {
                     {turns > 0 ? t.summaryTurns.replace('{count}', String(turns)) : t.summaryNoTurns}
                   </span>
                 </div>
-                {last && (
-                  <ExpandableText
-                    key={last.id}
-                    text={last.body}
-                    maxLines={5}
-                    className="mt-3 text-sm leading-relaxed text-ink"
-                    showMoreLabel={t.summaryShowMore}
-                    showLessLabel={t.summaryShowLess}
-                  />
-                )}
+                {last &&
+                  (hasRichContent(last.body) ? (
+                    <div className="mt-3">
+                      <ContentRenderPanel content={last.body} compact showHeader={false} />
+                    </div>
+                  ) : (
+                    <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-ink">
+                      {last.body}
+                    </p>
+                  ))}
               </li>
             ))}
           </ul>
