@@ -59,12 +59,18 @@ import {
   type ChatBot,
   type ChatMessage,
   type ChatMode,
+  type TurnError,
   type TurnFailure,
+  type TurnFailureReason,
   type WhyStop,
 } from '../chat/engine';
 import { byokGenerator, completeByokText } from '../chat/byok';
 import { sanitizeApiKey } from '@/lib/byok/verify';
-import { analyzeChatRoomConclusion, matchPersonaId } from '../chat/conclusion';
+import {
+  ConclusionAnalysisError,
+  analyzeChatRoomConclusion,
+  matchPersonaId,
+} from '../chat/conclusion';
 import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
 import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
 import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
@@ -93,6 +99,8 @@ export interface ChatRoom {
   turns: number;
   stoppedBy: WhyStop | null;
   failures: TurnFailure[];
+  failureReason?: TurnFailureReason;
+  turnError?: TurnError | null;
   held: string[];
 }
 
@@ -222,6 +230,8 @@ interface AppContextType {
   startCouncilChat: (question: string, advisors?: AdvisorPersona[], mode?: ChatMode) => void;
   wrapUpRoom: () => void;
   openRoomConclusion: () => void;
+  conclusionError: { reason: TurnFailureReason; message: string } | null;
+  clearConclusionError: () => void;
   currentRoom: ChatRoom | null;
   roomRosterPartition: { activeIds: string[]; disabledIds: string[] };
   sendMessage: (body: string) => Promise<void>;
@@ -582,6 +592,11 @@ export const AppProvider: React.FC<{
   const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
   const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
   const [isDeliberating, setIsDeliberating] = useState(false);
+  const [conclusionError, setConclusionError] = useState<{
+    reason: TurnFailureReason;
+    message: string;
+  } | null>(null);
+  const clearConclusionError = useCallback(() => setConclusionError(null), []);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
   const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
@@ -1569,6 +1584,8 @@ export const AppProvider: React.FC<{
         turns: currentRoom.turns + result.speakers.length,
         stoppedBy: result.stoppedBy,
         failures: result.failures,
+        failureReason: result.failureReason,
+        turnError: result.turnError ?? null,
       };
       setCurrentRoom(finalSnapshot);
       void persistRoomSnapshot(finalSnapshot);
@@ -1664,6 +1681,7 @@ export const AppProvider: React.FC<{
     void (async () => {
       const controller = new AbortController();
       abortRef.current = controller;
+      setConclusionError(null);
       setIsDeliberating(true);
       try {
         const { analysis, contributions } = await analyzeChatRoomConclusion({
@@ -1711,7 +1729,19 @@ export const AppProvider: React.FC<{
         setSelectedRoundIndex(1);
         setCurrentView('session-concluded');
       } catch (err) {
-        if (err instanceof DeliberationCancelled) return;
+        if (
+          err instanceof DeliberationCancelled ||
+          controller.signal.aborted ||
+          (err as { name?: string } | null)?.name === 'AbortError'
+        ) {
+          return;
+        }
+        if (err instanceof ConclusionAnalysisError) {
+          setConclusionError({ reason: err.reason, message: err.message });
+        } else {
+          const message = err instanceof Error ? err.message : 'PROVIDER_ERROR';
+          setConclusionError({ reason: 'provider-error', message });
+        }
         console.error('[conclusion] failed to open room conclusion:', err);
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
@@ -2228,6 +2258,8 @@ export const AppProvider: React.FC<{
         startCouncilChat,
         wrapUpRoom,
         openRoomConclusion,
+        conclusionError,
+        clearConclusionError,
         currentRoom,
         roomRosterPartition,
         sendMessage,

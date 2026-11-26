@@ -143,7 +143,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    const signal = AbortSignal.timeout(55_000);
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(55_000)]);
     if (mode === 'text') {
       if (typeof prompt !== 'string' || !prompt.trim()) {
         return Response.json({ ok: false, error: 'PROMPT_REQUIRED' }, { status: 400 });
@@ -175,6 +175,9 @@ export async function POST(request: Request) {
     });
     return Response.json({ ok: true, turn });
   } catch (error) {
+    if (request.signal.aborted) {
+      return Response.json({ ok: false, error: 'CLIENT_ABORTED' }, { status: 499 });
+    }
     const message = error instanceof Error ? error.message : 'PROVIDER_ERROR';
     console.error(`[providers/chat] ${provider} completion failed:`, message.slice(0, 200));
     return Response.json({ ok: false, error: 'PROVIDER_ERROR' }, { status: 502 });

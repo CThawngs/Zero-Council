@@ -32,7 +32,7 @@ import {
   validateRemoteUrlLiteral,
   type DnsLookupFn,
 } from '../security/ssrf.ts';
-import { visibleModelsForProvider } from '../../prototype/chat/modelAllowList.ts';
+import { isNonChatModel, visibleModelsForProvider } from '../../prototype/chat/modelAllowList.ts';
 
 const NATIVE_FETCH: typeof fetch | undefined = typeof fetch === 'function' ? fetch : undefined;
 
@@ -127,10 +127,6 @@ const ALL_ERROR_CODES: readonly VerifyErrorCode[] = [
   'INSUFFICIENT_CREDITS',
   'PROVIDER_ERROR',
 ];
-
-/** Model ids that cannot answer a chat completion (embeddings, audio, images, moderation, legacy completions …). */
-const NON_CHAT_MODEL_PATTERN =
-  /(embed|whisper|tts|audio|speech|transcri|dall-e|imagen|image-|-image\b|gpt-image|chatgpt-image|moderation|rerank|realtime|search-preview|guard|aqa|veo|lyria|clip|ocr|starcoder|retriev|detector|safety|reward|pii|calibrat|translat|babbage|davinci|gpt-[^/]*-instruct|turbo-instruct|codex|computer-use|sora|robotics)/i;
 
 const LIGHT_MODEL_PATTERN = /(mini|nano|flash|lite|small|tiny|haiku|instant|lightning|[^0-9]([1-9]b)\b|turbo)/i;
 const HEAVY_MODEL_PATTERN =
@@ -805,7 +801,7 @@ const preferredModelsFor = (providerId: string, chatModels: string[]): string[] 
  */
 export const probeCandidates = (target: VerifyTarget, models: string[], explicitModel?: string): string[] => {
   if (explicitModel) return [explicitModel];
-  const chatModels = models.filter((id) => !NON_CHAT_MODEL_PATTERN.test(id));
+  const chatModels = models.filter((id) => !isNonChatModel(id));
   const ordered: string[] = [];
   if (target.defaultModel && (models.length === 0 || models.includes(target.defaultModel))) {
     ordered.push(target.defaultModel);

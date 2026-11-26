@@ -69,7 +69,10 @@ export const DEFAULT_ROOM_BUDGET = 200;
  * upstream ever timed out, so the only way out was reloading — and the transcript went with it.
  * Generous enough for a slow provider, short enough that a hang is a sentence, not a mystery.
  */
-export const DEFAULT_TURN_TIMEOUT_MS = 30_000;
+export const DEFAULT_TURN_TIMEOUT_MS = 55_000;
+
+/** Base backoff (ms) before the single retry on transient HTTP 429/502/503/504 or network reset. */
+export const DEFAULT_RETRY_DELAY_MS = 800;
 
 export type ChatMode = 'round-robin' | 'panel';
 
@@ -141,6 +144,53 @@ export type TurnFailure =
   | { kind: 'transient'; detail: string }
   | { kind: 'fatal'; detail: string };
 
+/** Actionable failure category so the UI can show Retry vs Connect Key without guessing from raw text. */
+export type TurnFailureReason =
+  | 'missing-key'
+  | 'provider-auth'
+  | 'rate-limit'
+  | 'timeout'
+  | 'provider-error';
+
+export interface TurnError {
+  reason: TurnFailureReason;
+  botId: string;
+  detail: string;
+  retryable: boolean;
+}
+
+export const classifyTurnFailureReason = (
+  detail: string,
+  isTimeout = false
+): TurnFailureReason => {
+  if (isTimeout) return 'timeout';
+  if (!/\b504\b/.test(detail) && /\b(timed?\s*out|timeout|ETIMEDOUT|TimeoutError)\b/i.test(detail)) {
+    return 'timeout';
+  }
+  if (
+    /\b(PROVIDER_NOT_CONNECTED|KEY_NOT_FOUND|EMPTY_KEY|missing[_ -]?api[_ -]?key|no[_ -]?api[_ -]?key)\b/i.test(
+      detail
+    )
+  ) {
+    return 'missing-key';
+  }
+  if (
+    /\b(401|403|INVALID_KEY|API_KEY_INVALID|invalid[_ -]?api[_ -]?key|incorrect[_ -]?api[_ -]?key|unauthori[sz]ed|unauthenticated|authentication[_ -]?failed)\b/i.test(
+      detail
+    )
+  ) {
+    return 'provider-auth';
+  }
+  if (
+    /\b(429|RATE_LIMITED|rate[_ -]?limit|too many requests|INSUFFICIENT_CREDITS|quota)\b/i.test(
+      detail
+    )
+  ) {
+    return 'rate-limit';
+  }
+  return 'provider-error';
+};
+
 export interface ChatTurnRequest {
   bot: ChatBot;
   /** Full active room roster so adapters can resolve speaker names in history. */
@@ -196,6 +246,8 @@ export interface RunTurnInput {
   /** Called as each advisor's message is committed, so the room fills in as it happens. */
   onTurn?: (message: ChatMessage) => void;
   turnTimeoutMs?: number;
+  /** Base retry backoff in ms for transient failures (default 800ms with jitter). */
+  retryDelayMs?: number;
   soloMode?: boolean;
 }
 
@@ -206,6 +258,10 @@ export interface RunTurnResult {
   speakers: string[];
   /** Surfaced to the room instead of being swallowed, so a dead advisor is visibly dead. */
   failures: TurnFailure[];
+  /** Actionable failure category when `stoppedBy === 'failed'`. */
+  failureReason?: TurnFailureReason;
+  /** Structured error payload for Retry / Connect Key UI cards. */
+  turnError?: TurnError;
 }
 
 /**
@@ -376,28 +432,85 @@ export const planSpeakers = ({
   };
 };
 
-const isTransient = (error: unknown): boolean => {
-  const detail = error instanceof Error ? error.message : String(error);
-  return /\b(429|5\d\d|timeout|timed out|overloaded|rate limit|ECONNRESET|EAI_AGAIN)\b/i.test(detail);
+const isClientTimeoutError = (error: unknown, detail: string): boolean => {
+  const name = (error as { name?: string } | null)?.name;
+  if (name === 'TimeoutError') return true;
+  if (/\b504\b/.test(detail)) return false;
+  return /\b(timed?\s*out|timeout|ETIMEDOUT|UND_ERR_HEADERS_TIMEOUT|UND_ERR_BODY_TIMEOUT)\b/i.test(
+    detail
+  );
 };
 
 /**
- * Rejects a promise that outlives `ms`.
- *
- * Resolves to `'timeout'` rather than throwing so the caller can record the one failure kind the
- * room already knows how to show. The losing promise is left running on purpose: there is nothing
- * to cancel here that the caller has not already aborted itself, and the caller checks `signal`
- * before committing whatever eventually arrives.
+ * True ONLY for fast-failing transient upstream blips (HTTP 429/502/503/504 or TCP/DNS reset).
+ * Client/turn timeouts NEVER auto-retry because re-sending a 55s reasoning prompt doubles token
+ * spend while the upstream model is already congested.
  */
-const raceDeadline = async <T>(work: Promise<T>, ms: number): Promise<{ value: T } | { timedOut: true }> => {
+export const isTransient = (error: unknown): boolean => {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (isClientTimeoutError(error, detail)) return false;
+  return /\b(429|502|503|504|overloaded|rate[_ -]?limit|RATE_LIMITED|ECONNRESET|EAI_AGAIN|ECONNABORTED|socket hang up)\b/i.test(
+    detail
+  );
+};
+
+const createChildTurnAbort = (
+  parentSignal?: AbortSignal
+): { controller: AbortController; dispose: () => void } => {
+  const controller = new AbortController();
+  if (!parentSignal) return { controller, dispose: () => {} };
+  if (parentSignal.aborted) {
+    controller.abort(parentSignal.reason);
+    return { controller, dispose: () => {} };
+  }
+  const forwardAbort = () => controller.abort(parentSignal.reason);
+  parentSignal.addEventListener('abort', forwardAbort, { once: true });
+  return {
+    controller,
+    dispose: () => parentSignal.removeEventListener('abort', forwardAbort),
+  };
+};
+
+const sleepWithJitterAndAbort = (baseMs: number, signal?: AbortSignal): Promise<void> => {
+  if (baseMs <= 0 || signal?.aborted) return Promise.resolve();
+  const jittered = Math.max(1, Math.round(baseMs * (0.8 + Math.random() * 0.4)));
+  return new Promise<void>((resolve) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, jittered);
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+};
+
+const executeBoundedAttempt = async <T>(
+  parentSignal: AbortSignal | undefined,
+  timeoutMs: number,
+  runAttempt: (attemptSignal: AbortSignal) => Promise<T> | T
+): Promise<{ value: T } | { timedOut: true }> => {
+  const { controller, dispose } = createChildTurnAbort(parentSignal);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const expiry = new Promise<{ timedOut: true }>((resolve) => {
-    timer = setTimeout(() => resolve({ timedOut: true }), ms);
+    timer = setTimeout(() => {
+      controller.abort(new DOMException('Turn timed out', 'TimeoutError'));
+      resolve({ timedOut: true });
+    }, timeoutMs);
   });
   try {
-    return await Promise.race([work.then((value) => ({ value })), expiry]);
+    const work = Promise.resolve().then(() => runAttempt(controller.signal));
+    const raced = await Promise.race([work.then((value) => ({ value })), expiry]);
+    if ('timedOut' in raced) {
+      work.catch(() => undefined);
+    }
+    return raced;
   } finally {
     clearTimeout(timer);
+    controller.abort();
+    dispose();
   }
 };
 
@@ -430,6 +543,7 @@ export const runTurn = async ({
   signal,
   onTurn,
   turnTimeoutMs = DEFAULT_TURN_TIMEOUT_MS,
+  retryDelayMs = DEFAULT_RETRY_DELAY_MS,
   soloMode = false,
 }: RunTurnInput): Promise<RunTurnResult> => {
   const messages = [...history, userMessage];
@@ -466,6 +580,18 @@ export const runTurn = async ({
   const spoken: string[] = [];
   let produced = 0;
   let stoppedBy: WhyStop = 'max-turns';
+  let failureReason: TurnFailureReason | undefined;
+  let turnError: TurnError | undefined;
+  const recordTurnError = (botId: string, detail: string, isTimeout = false) => {
+    const reason = classifyTurnFailureReason(detail, isTimeout);
+    failureReason = reason;
+    turnError = {
+      reason,
+      botId,
+      detail,
+      retryable: reason === 'rate-limit' || reason === 'provider-error' || reason === 'timeout',
+    };
+  };
 
   while (queue.length > 0) {
     if (signal?.aborted) {
@@ -517,31 +643,67 @@ export const runTurn = async ({
 
     let turn: BotTurn | null = null;
     try {
-      const raced = await raceDeadline(Promise.resolve(generate(request)), turnTimeoutMs);
+      const raced = await executeBoundedAttempt(signal, turnTimeoutMs, (attemptSignal) =>
+        generate({ ...request, signal: attemptSignal })
+      );
       if ('timedOut' in raced) {
+        if (signal?.aborted) {
+          stoppedBy = 'cancelled';
+          break;
+        }
         failures.push({ kind: 'timeout', after: turnTimeoutMs });
+        recordTurnError(bot.id, `Turn timed out after ${turnTimeoutMs}ms`, true);
         stoppedBy = 'failed';
         break;
       }
       turn = raced.value;
     } catch (error) {
+      if (signal?.aborted) {
+        stoppedBy = 'cancelled';
+        break;
+      }
       const detail = error instanceof Error ? error.message : String(error);
       if (isTransient(error)) {
+        await sleepWithJitterAndAbort(retryDelayMs, signal);
+        if (signal?.aborted) {
+          stoppedBy = 'cancelled';
+          break;
+        }
         try {
-          const retried = await raceDeadline(Promise.resolve(generate(request)), turnTimeoutMs);
+          const retried = await executeBoundedAttempt(signal, turnTimeoutMs, (attemptSignal) =>
+            generate({ ...request, signal: attemptSignal })
+          );
           if ('timedOut' in retried) {
+            if (signal?.aborted) {
+              stoppedBy = 'cancelled';
+              break;
+            }
             failures.push({ kind: 'timeout', after: turnTimeoutMs });
+            recordTurnError(bot.id, `Turn timed out after ${turnTimeoutMs}ms`, true);
             stoppedBy = 'failed';
             break;
           }
           turn = retried.value;
         } catch (retry) {
-          failures.push({ kind: 'transient', detail: retry instanceof Error ? retry.message : String(retry) });
+          if (signal?.aborted) {
+            stoppedBy = 'cancelled';
+            break;
+          }
+          const retryDetail = retry instanceof Error ? retry.message : String(retry);
+          failures.push({ kind: 'transient', detail: retryDetail });
+          recordTurnError(bot.id, retryDetail, false);
           stoppedBy = 'failed';
           break;
         }
       } else {
-        failures.push({ kind: 'fatal', detail });
+        const isTimeout = isClientTimeoutError(error, detail);
+        if (isTimeout) {
+          failures.push({ kind: 'timeout', after: turnTimeoutMs });
+          recordTurnError(bot.id, detail, true);
+        } else {
+          failures.push({ kind: 'fatal', detail });
+          recordTurnError(bot.id, detail, false);
+        }
         stoppedBy = 'failed';
         break;
       }
@@ -606,7 +768,14 @@ export const runTurn = async ({
   // A drained queue with nothing in it means the whole round passed. That is a distinct outcome
   // from "answered the user", and the UI must be able to tell the user that nobody replied.
   if (queue.length === 0 && stoppedBy === 'max-turns') stoppedBy = produced === 0 ? 'silent' : 'user';
-  return { messages, stoppedBy, speakers: spoken, failures };
+  return {
+    messages,
+    stoppedBy,
+    speakers: spoken,
+    failures,
+    ...(failureReason ? { failureReason } : {}),
+    ...(turnError ? { turnError } : {}),
+  };
 };
 
 export { aliasTable, findMentions };

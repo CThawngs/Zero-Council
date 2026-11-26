@@ -1,4 +1,9 @@
-import { USER_HANDLE, type ChatMessage } from './engine.ts';
+import {
+  USER_HANDLE,
+  classifyTurnFailureReason,
+  type ChatMessage,
+  type TurnFailureReason,
+} from './engine.ts';
 import { completeByokText } from './byok.ts';
 import { copy } from '../i18n.ts';
 import type {
@@ -8,6 +13,25 @@ import type {
   ScenarioBranch,
 } from '../types.ts';
 import type { Contribution } from '../../lib/deliberation/engine.ts';
+
+/** Structured error thrown when live AI conclusion synthesis cannot complete. */
+export class ConclusionAnalysisError extends Error {
+  readonly reason: TurnFailureReason;
+  readonly provider?: string;
+  readonly model?: string;
+
+  constructor(
+    reason: TurnFailureReason,
+    message: string,
+    meta?: { provider?: string; model?: string }
+  ) {
+    super(message);
+    this.name = 'ConclusionAnalysisError';
+    this.reason = reason;
+    this.provider = meta?.provider;
+    this.model = meta?.model;
+  }
+}
 
 export interface ConclusionAnalysis {
   analyst: AdvisorPersona;
@@ -807,32 +831,53 @@ export const analyzeChatRoomConclusion = async (params: {
   );
   const fallback = buildFallbackConclusion(topic, messages, seated, analyst, language);
 
-  let analysis = fallback;
-
-  if (keyMeta && (apiKey || (keyMeta.hasKey && completeFn !== completeByokText))) {
-    try {
-      const { system, prompt } = buildConclusionPrompt(topic, transcript, analyst, language);
-      const rawText = await completeFn(
-        {
-          provider: keyMeta.provider,
-          model,
-          apiKey: apiKey ?? '',
-          protocol: keyMeta.protocol,
-          baseUrl: keyMeta.baseUrl,
-        },
-        {
-          system,
-          prompt,
-          maxTokens: 3000,
-          signal,
-        }
-      );
-      analysis = parseConclusionResponse(rawText, fallback, analyst, language);
-    } catch (err) {
-      console.warn('[conclusion] single-AI chat analysis failed, using transcript fallback:', err);
-      analysis = fallback;
-    }
+  const hasConnectedKey =
+    Boolean(keyMeta) && (Boolean(apiKey) || (Boolean(keyMeta?.hasKey) && completeFn !== completeByokText));
+  if (!keyMeta || !hasConnectedKey) {
+    throw new ConclusionAnalysisError(
+      'missing-key',
+      'PROVIDER_NOT_CONNECTED',
+      { provider: analyst.provider, model }
+    );
   }
+
+  let rawText: string;
+  try {
+    const { system, prompt } = buildConclusionPrompt(topic, transcript, analyst, language);
+    rawText = await completeFn(
+      {
+        provider: keyMeta.provider,
+        model,
+        apiKey: apiKey ?? '',
+        protocol: keyMeta.protocol,
+        baseUrl: keyMeta.baseUrl,
+      },
+      {
+        system,
+        prompt,
+        maxTokens: 3000,
+        signal,
+      }
+    );
+  } catch (err) {
+    if (signal?.aborted || (err as { name?: string } | null)?.name === 'DeliberationCancelled') {
+      throw err;
+    }
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new ConclusionAnalysisError(classifyTurnFailureReason(detail), detail, {
+      provider: keyMeta.provider,
+      model,
+    });
+  }
+
+  if (!rawText || !rawText.trim()) {
+    throw new ConclusionAnalysisError('provider-error', 'EMPTY_CONCLUSION_RESPONSE', {
+      provider: keyMeta.provider,
+      model,
+    });
+  }
+
+  const analysis = parseConclusionResponse(rawText, fallback, analyst, language);
 
   const finalContributions: Contribution[] =
     contributions.length > 0
