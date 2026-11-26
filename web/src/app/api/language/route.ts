@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     request.nextUrl.protocol === 'https:' || process.env.VERCEL === '1';
 
   response.cookies.set('zc-lang', language, {
-    httpOnly: true,
+    httpOnly: false,
     secure: isSecureTransport,
     sameSite: 'lax',
     path: '/',

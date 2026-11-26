@@ -24,16 +24,16 @@ const check = (name, ok, detail) => {
 };
 
 /** One fetch that never throws: a failing route is a failing check, not a crash. */
-async function fetchAs(url) {
+async function fetchAs(url, init = {}) {
   // An explicit controller, not `AbortSignal.timeout`: that one leaves a live
   // timer handle behind and the process dies with a libuv assertion on the way
   // out, so every check passes and the job still goes red.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const response = await fetch(url, { ...init, signal: controller.signal });
     const headers = Object.fromEntries(response.headers.entries());
-    return { status: response.status, headers, body: await response.text(), error: null };
+    return { status: response.status, headers, body: await response.text(), url: response.url, error: null };
   } catch (error) {
     return { status: 0, headers: {}, body: null, error: String(error?.message ?? error) };
   } finally {
@@ -79,6 +79,43 @@ check(
   'health endpoint reports ok',
   health.status === 200 && healthPayload?.status === 'ok',
   health.error ?? `HTTP ${health.status}, status=${healthPayload?.status ?? 'invalid-json'}`
+);
+
+// --- Publicly missing fixture routes must not be redirected to authentication ---
+
+for (const pathname of ['/fixture', '/council-fixture', '/api/council']) {
+  const response = await fetchAs(`${BASE}${pathname}`, { redirect: 'manual' });
+  check(
+    `${pathname} stays not found`,
+    response.status === 404,
+    response.error ?? `HTTP ${response.status}${response.headers.location ? ` -> ${response.headers.location}` : ''}`
+  );
+}
+
+// --- Same-origin language preference can be changed and remains client-readable ---
+
+const languageOrigin = new URL(BASE).origin;
+const language = await fetchAs(`${BASE}/api/language`, {
+  method: 'POST',
+  headers: { Origin: languageOrigin, 'Content-Type': 'application/json' },
+  body: JSON.stringify({ language: 'vi' }),
+});
+const languageCookie = language.headers['set-cookie'] ?? '';
+check(
+  'same-origin language preference can be saved',
+  language.status === 200 && /(?:^|,\s*)zc-lang=vi(?:;|,|$)/i.test(languageCookie) && !/HttpOnly/i.test(languageCookie),
+  language.error ?? `HTTP ${language.status}, readable cookie=${Boolean(languageCookie) && !/HttpOnly/i.test(languageCookie)}`
+);
+
+const crossSiteLanguage = await fetchAs(`${BASE}/api/language`, {
+  method: 'POST',
+  headers: { Origin: 'https://evil.example', 'Content-Type': 'application/json' },
+  body: JSON.stringify({ language: 'en' }),
+});
+check(
+  'cross-site language preference is rejected',
+  crossSiteLanguage.status === 403,
+  crossSiteLanguage.error ?? `HTTP ${crossSiteLanguage.status}`
 );
 
 // --- The build produced real client output ---

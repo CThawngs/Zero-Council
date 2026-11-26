@@ -12,6 +12,6 @@ export const config = {
    * opengraph-image, twitter-image, icon, apple-icon) from auth session redirects.
    */
   matcher: [
-    '/((?!_next|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|llms\\.txt|opengraph-image|twitter-image|icon|apple-icon|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2|woff|txt|xml|webmanifest)$).*)',
+    '/((?!_next|fixture(?:/|$)|council-fixture(?:/|$)|favicon\\.ico|robots\\.txt|sitemap\\.xml|manifest\\.webmanifest|llms\\.txt|opengraph-image|twitter-image|icon|apple-icon|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2|woff|txt|xml|webmanifest)$).*)',
   ],
 };

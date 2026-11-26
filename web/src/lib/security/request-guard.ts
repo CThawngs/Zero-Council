@@ -79,7 +79,7 @@ export const sanitizeRelativeNextPath = (
 /**
  * Enforces same-origin CSRF protection for cookie-authenticated state-changing routes
  * (`POST`, `PUT`, `PATCH`, `DELETE`). Rejects cross-site Fetch metadata, missing origin
- * provenance, or `Origin` / `Referer` mismatches against the request origin / `NEXT_PUBLIC_SITE_URL`.
+ * provenance, or `Origin` / `Referer` mismatches against the request, host, or configured site origin.
  */
 export const verifySameOrigin = (request: Request): Response | null => {
   const secFetchSite = request.headers.get('sec-fetch-site')?.trim().toLowerCase();
@@ -88,8 +88,28 @@ export const verifySameOrigin = (request: Request): Response | null => {
   }
 
   const allowedOrigins = new Set<string>();
-  const requestOrigin = parseHttpOrigin(request.url);
+  const requestUrl = new URL(request.url);
+  const requestOrigin = parseHttpOrigin(requestUrl.origin);
   if (requestOrigin) allowedOrigins.add(requestOrigin);
+
+  const protocol =
+    process.env.VERCEL === '1' && request.headers.get('x-forwarded-proto') === 'https'
+      ? 'https:'
+      : requestUrl.protocol;
+  const hostOrigin = parseHttpOrigin(`${protocol}//${request.headers.get('host') ?? ''}`);
+  if (hostOrigin) allowedOrigins.add(hostOrigin);
+
+  if (process.env.VERCEL === '1') {
+    const forwardedHost = request.headers.get('x-forwarded-host');
+    const forwardedProto = request.headers.get('x-forwarded-proto');
+    if (forwardedHost && (!forwardedProto || forwardedProto === 'http' || forwardedProto === 'https')) {
+      const forwardedOrigin = parseHttpOrigin(
+        `${forwardedProto === 'https' ? 'https:' : protocol}//${forwardedHost}`
+      );
+      if (forwardedOrigin) allowedOrigins.add(forwardedOrigin);
+    }
+  }
+
   const configuredOrigin = parseHttpOrigin(serverEnv('NEXT_PUBLIC_SITE_URL'));
   if (configuredOrigin) allowedOrigins.add(configuredOrigin);
 

@@ -150,9 +150,9 @@ export const OverviewView: React.FC = () => {
               <CouncilOrb className="z-10" />
             </div>
 
-            <div className="mt-3 grid gap-2.5 sm:mt-0 sm:block">
+            <div className="mt-3 grid grid-cols-1 gap-2.5 sm:mt-0 sm:block">
               <div
-                className="float-card lift float-slow flex items-center gap-3 px-4 py-2.5 shadow-xl sm:absolute sm:-top-4 sm:left-0"
+                className="float-card lift float-slow flex min-w-0 max-w-full items-center gap-3 px-4 py-2.5 shadow-xl sm:absolute sm:-top-4 sm:left-0"
                 style={{ '--tilt-x': '-4deg', '--tilt-y': '6deg' } as React.CSSProperties}
               >
                 <div className="toggle-pill shrink-0" data-on="true">
@@ -165,7 +165,7 @@ export const OverviewView: React.FC = () => {
               </div>
 
               <div
-                className="float-card lift float-slower flex items-center gap-3 px-4 py-2.5 shadow-xl sm:absolute sm:bottom-0 sm:right-0"
+                className="float-card lift float-slower flex min-w-0 max-w-full items-center gap-3 px-4 py-2.5 shadow-xl sm:absolute sm:bottom-0 sm:right-0"
                 style={{ '--tilt-x': '5deg', '--tilt-y': '-6deg' } as React.CSSProperties}
               >
                 <div

@@ -370,6 +370,41 @@ test('request-guard: verifySameOrigin blocks cross-site, null, or missing Origin
   });
 });
 
+test('request-guard: accepts the public Host origin behind local and Vercel proxies', async () => {
+  await withEnv({ NEXT_PUBLIC_SITE_URL: 'https://zerocouncil.app', VERCEL: undefined }, async () => {
+    const localRequest = new Request('http://localhost:8804/api/language', {
+      method: 'POST',
+      headers: { Host: '127.0.0.1:8804', Origin: 'http://127.0.0.1:8804' },
+    });
+    assert.equal(verifySameOrigin(localRequest), null);
+
+    await withEnv({ VERCEL: '1' }, async () => {
+      const previewRequest = new Request('http://internal-pod/api/language', {
+        method: 'POST',
+        headers: {
+          Host: 'internal-pod',
+          Origin: 'https://zero-council-git-feature-preview.vercel.app',
+          'x-forwarded-host': 'zero-council-git-feature-preview.vercel.app',
+          'x-forwarded-proto': 'https',
+        },
+      });
+      assert.equal(verifySameOrigin(previewRequest), null);
+
+      const crossSiteRequest = new Request('http://internal-pod/api/language', {
+        method: 'POST',
+        headers: {
+          Host: 'internal-pod',
+          Origin: 'https://evil.example',
+          'x-forwarded-host': 'zero-council-git-feature-preview.vercel.app',
+          'x-forwarded-proto': 'https',
+          'sec-fetch-site': 'cross-site',
+        },
+      });
+      assert.equal(verifySameOrigin(crossSiteRequest)?.status, 403);
+    });
+  });
+});
+
 test('request-guard: resolveCanonicalOrigin ignores spoofed x-forwarded-host and sanitizeRelativeNextPath blocks open redirects', () => {
   const spoofedReq = new Request('https://internal-pod.local/auth/callback?code=abc', {
     headers: {
