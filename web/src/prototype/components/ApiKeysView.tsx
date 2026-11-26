@@ -14,6 +14,7 @@ import { isVerifyErrorCode, sanitizeApiKey } from '@/lib/byok/verify';
 import { visibleModelsForProvider } from '../chat/modelAllowList';
 import {
   AlertCircle,
+  Bot,
   Check,
   Loader2,
   Lock,
@@ -75,10 +76,6 @@ type RetestState =
   | { phase: 'ok'; model: string }
   | { phase: 'error'; message: string };
 
-/**
- * Copy for verification outcomes that have no entry in the shared i18n table yet. Kept next to the
- * only view that uses it; English and Vietnamese always ship together so the language toggle covers it.
- */
 const errorText = (
   t: Record<string, string>,
   message: string,
@@ -131,11 +128,13 @@ const errorText = (
 export const ApiKeysView: React.FC = () => {
   const {
     apiKeys,
+    bots,
     connectApiKey,
     updateProviderModels,
     getProviderSecret,
     removeApiKey,
     revokeAllKeys,
+    setCurrentView,
     t,
   } = useApp();
 
@@ -532,6 +531,8 @@ export const ApiKeysView: React.FC = () => {
   const activeSecret =
     (activeProvider ? getProviderSecret(activeProvider) : undefined) || draftKey.trim();
 
+  const hasConnectedKey = apiKeys.some((k) => k.connected);
+
   return (
     <div className="content-shell w-full min-w-0 max-w-full space-y-7">
       <header className="page-header flex w-full min-w-0 flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -561,6 +562,30 @@ export const ApiKeysView: React.FC = () => {
           </button>
         </div>
       </header>
+
+      {hasConnectedKey && bots.length === 0 && (
+        <div
+          id="apikeys-create-first-bot-banner"
+          role="status"
+          className="flex flex-col items-start justify-between gap-3 rounded-2xl border border-sage/40 bg-sage/10 p-4 sm:flex-row sm:items-center sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <Bot className="mt-0.5 h-5 w-5 shrink-0 text-sage" aria-hidden="true" />
+            <p className="text-sm font-medium leading-relaxed text-ink">
+              {t.apiKeyConnectedCreateBotHint}
+            </p>
+          </div>
+          <button
+            type="button"
+            id="apikeys-create-first-bot-btn"
+            onClick={() => setCurrentView('bot-wizard')}
+            className="button-primary min-h-10 w-full shrink-0 justify-center sm:w-auto"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+            {t.apiKeyCreateFirstBotCta}
+          </button>
+        </div>
+      )}
 
       <div className="min-w-0 flex-1">
         <h2 className="font-medium text-ink">{t.noCredentialTitle}</h2>
@@ -850,7 +875,7 @@ export const ApiKeysView: React.FC = () => {
               ) : null}
 
               {/* Add Custom Model ID -> Test (Red/Green) -> Save */}
-              <div className="rounded-xl border border-border bg-background/60 p-3.5 space-y-2.5">
+              <div className="space-y-2.5 rounded-xl border border-border bg-background/60 p-3.5">
                 <label htmlFor="custom-model-input" className="field-label block">
                   {t.providerCustomModelLabel}
                 </label>
@@ -1013,7 +1038,7 @@ export const ApiKeysView: React.FC = () => {
                   </label>
 
                   {/* Custom model Test -> Save right during initial Connect */}
-                  <div className="rounded-xl border border-border bg-background/60 p-3.5 space-y-2.5">
+                  <div className="space-y-2.5 rounded-xl border border-border bg-background/60 p-3.5">
                     <label htmlFor="connect-custom-model-input" className="field-label block">
                       {t.providerCustomModelLabel}
                     </label>
@@ -1320,7 +1345,7 @@ export const ApiKeysView: React.FC = () => {
           )}
 
           {/* Custom Model ID Test -> Save inside Custom Provider Modal */}
-          <div className="rounded-xl border border-border bg-background/60 p-3.5 space-y-2.5">
+          <div className="space-y-2.5 rounded-xl border border-border bg-background/60 p-3.5">
             <label htmlFor="custom-provider-model-input" className="field-label block">
               {t.providerCustomModelLabel}
             </label>
@@ -1425,9 +1450,7 @@ export const ApiKeysView: React.FC = () => {
             </button>
           </>
         }
-      >
-        <p className="text-sm leading-relaxed text-ink-muted">{t.clearStatesConfirm}</p>
-      </Modal>
+      />
     </div>
   );
 };

@@ -42,10 +42,9 @@ export const PersonasView: React.FC = () => {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  // The bot the user wants to delete — set when confirm dialog opens.
   const [botToDelete, setBotToDelete] = useState<UserBot | null>(null);
 
-  const connectedKeys = apiKeys.filter((k) => k.connected);
+  const connectedKeys = apiKeys.filter((k) => k.provider && k.connected);
   const plan = planById(currentPlanId);
 
   const startEditBot = (bot: UserBot) => {
@@ -107,7 +106,7 @@ export const PersonasView: React.FC = () => {
           <h1>{t.personasTitle}</h1>
           <p>{t.personasBody}</p>
         </div>
-        <div className="flex w-full flex-wrap gap-2.5 justify-end sm:w-auto">
+        <div className="flex w-full flex-wrap justify-end gap-2.5 sm:w-auto">
           <button
             type="button"
             onClick={() => setCurrentView('bot-wizard')}
@@ -220,7 +219,7 @@ export const PersonasView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => void confirmDeleteBot(bot)}
-                      aria-label={`${t.deleteSession}: ${bot.name}`}
+                      aria-label={`${t.wsDeleteBot}: ${bot.name}`}
                       className="icon-button min-h-10 min-w-10 hover:bg-terracotta/10 hover:text-terracotta"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -341,7 +340,7 @@ export const PersonasView: React.FC = () => {
       <Modal
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
-        title={t.deleteSession}
+        title={t.wsDeleteBot}
         description={botToDelete ? t.botDeleteConfirm.replace('{name}', botToDelete.name) : ''}
         closeLabel={t.close}
         footer={
@@ -363,15 +362,11 @@ export const PersonasView: React.FC = () => {
               }}
               className="button-danger min-h-11 justify-center"
             >
-              {t.deleteSession}
+              {t.wsDeleteBot}
             </button>
           </>
         }
-      >
-        <p className="text-sm leading-relaxed text-ink-muted">
-          {botToDelete ? t.botDeleteConfirm.replace('{name}', botToDelete.name) : ''}
-        </p>
-      </Modal>
+      />
     </div>
   );
 };

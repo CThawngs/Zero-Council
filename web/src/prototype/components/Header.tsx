@@ -39,10 +39,28 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
   useEffect(() => {
     if (!menuOpen) return;
 
-    const close = (event: KeyboardEvent) => {
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
         menuButtonRef.current?.focus();
+        return;
+      }
+      if (event.key === 'Tab' && !isWorkspace && headerRef.current) {
+        const focusables = Array.from(
+          headerRef.current.querySelectorAll<HTMLElement>(
+            'a[href], button:not(:disabled), [tabindex]:not([tabindex="-1"])'
+          )
+        ).filter((el) => el.offsetParent !== null);
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
 
@@ -58,7 +76,7 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
       if (event.matches) setMenuOpen(false);
     };
 
-    window.addEventListener('keydown', close);
+    window.addEventListener('keydown', onKeyDown);
     window.addEventListener('pointerdown', closeOnOutsidePointer);
     desktopQuery.addEventListener('change', closeOnDesktop);
     mobileNavigationRef.current
@@ -66,11 +84,11 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
       ?.focus();
 
     return () => {
-      window.removeEventListener('keydown', close);
+      window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('pointerdown', closeOnOutsidePointer);
       desktopQuery.removeEventListener('change', closeOnDesktop);
     };
-  }, [menuOpen]);
+  }, [menuOpen, isWorkspace]);
 
   const navigate = (view: ViewType) => {
     setMenuOpen(false);
@@ -100,9 +118,6 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
       setCurrentView('overview');
       router.push(`/${href}`);
       return;
-    }
-    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
-      router.replace('/');
     }
     setCurrentView('overview');
     requestAnimationFrame(() => requestAnimationFrame(scroll));
@@ -149,7 +164,6 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
           </nav>
         )}
 
-        {/* MỤC PHẢI */}
         <div className="flex shrink-0 items-center gap-1.5">
           {showPanelToggle && (
             <button
@@ -199,13 +213,22 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
           </button>
 
           {!isWorkspace && !authUser && (
-            <button
-              type="button"
-              onClick={() => navigate('sign-in')}
-              className="button-secondary header-cta"
-            >
-              {labels.nav.signIn}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => navigate('sign-in')}
+                className="button-secondary header-cta"
+              >
+                {labels.nav.signIn}
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('sign-up')}
+                className="button-primary header-cta"
+              >
+                {t.planStartFree}
+              </button>
+            </>
           )}
           {!isWorkspace && authUser && (
             <button
@@ -230,7 +253,6 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
               {t.signOut}
             </button>
           )}
-          {/* MENU MOBILE */}
           <button
             ref={menuButtonRef}
             type="button"
@@ -244,10 +266,11 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             aria-controls="mobile-navigation"
             aria-label={menuOpen ? t.close : t.menu}
           >
-            {!isWorkspace
-              ? menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />
-              : <Menu className="h-5 w-5" />
-            }
+            {menuOpen ? (
+              <X className="h-5 w-5" aria-hidden="true" />
+            ) : (
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>
@@ -286,13 +309,22 @@ export const Header: React.FC<HeaderProps> = ({ isWorkspace }) => {
             ))}
 
             {!authUser && (
-              <button
-                type="button"
-                onClick={() => navigate('sign-in')}
-                className="nav-link justify-between"
-              >
-                {labels.nav.signIn}
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => navigate('sign-in')}
+                  className="nav-link justify-between"
+                >
+                  {labels.nav.signIn}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('sign-up')}
+                  className="button-primary mt-1 min-h-11 w-full justify-center"
+                >
+                  {t.planStartFree}
+                </button>
+              </>
             )}
 
             {authUser && (

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { planById } from '../data/plans';
-import { Bot, Check, Eye, Lock, MessagesSquare } from 'lucide-react';
+import { Bot, Check, Eye, Lock, MessagesSquare, Plus } from 'lucide-react';
 import type { ChatMode } from '../chat/engine';
 import type { AdvisorPersona, SavedConversation } from '../types';
 import type { CommunicationMode } from '@/lib/deliberation/types';
@@ -33,33 +33,26 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
     botsReady,
     isBotDisabled,
     currentPlanId,
+    setCurrentView,
     t,
   } = useApp();
 
   const plan = planById(currentPlanId);
   const cap = plan.maxActiveAdvisors;
 
-  // Chỉ lấy bot do người dùng tạo trên tài khoản.
   const userBots = useMemo(
     () => personas.filter((persona) => persona.id.startsWith('bot:')),
     [personas]
   );
 
   const activePersonas = useMemo(
-    () =>
-      userBots.filter(
-        (persona) => !isBotDisabled(persona.id.slice(4))
-      ),
+    () => userBots.filter((persona) => !isBotDisabled(persona.id.slice(4))),
     [userBots, isBotDisabled]
   );
 
   const initialSelection = editingGroup
-    ? editingGroup.roster.filter((id) =>
-        userBots.some((persona) => persona.id === id)
-      )
-    : activePersonas
-        .slice(0, Math.min(3, cap))
-        .map((persona) => persona.id);
+    ? editingGroup.roster.filter((id) => userBots.some((persona) => persona.id === id))
+    : activePersonas.slice(0, Math.min(3, cap)).map((persona) => persona.id);
 
   const [groupTitle, setGroupTitle] = useState(editingGroup?.title ?? '');
   const [selected, setSelected] = useState<string[]>(initialSelection);
@@ -115,7 +108,6 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
     joinRoom(roster, mode, groupTitle.trim() || undefined);
   };
 
-  // Two supported group modes: independent (`panel`) and debate (`round-robin`).
   const communicationModes = [
     {
       id: 'independent' as const,
@@ -185,7 +177,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
             {t.joinOrderHint}
           </p>
 
-          {!meetsGroupMinimum && (
+          {botsReady && userBots.length > 0 && !meetsGroupMinimum && (
             <p
               role="alert"
               className="rounded-lg border border-brass/40 bg-brass/10 px-3 py-2 text-xs font-medium text-ink"
@@ -201,12 +193,27 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
           ) : userBots.length === 0 ? (
             <div
               role="status"
-              className="rounded-xl border border-dashed border-border bg-background/50 px-4 py-8 text-center"
+              className="space-y-3 rounded-xl border border-dashed border-border bg-background/50 px-5 py-7 text-center"
             >
-              <Bot className="mx-auto mb-3 h-8 w-8 text-ink-muted" />
-              <p className="text-sm font-medium text-ink">
-                {t.joinBotsEmpty}
-              </p>
+              <Bot className="mx-auto h-8 w-8 text-brass" aria-hidden="true" />
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-ink">{t.joinRoomNoBotsTitle}</p>
+                <p className="mx-auto max-w-md text-xs leading-relaxed text-ink-muted">
+                  {t.joinRoomNoBotsBody}
+                </p>
+              </div>
+              <button
+                type="button"
+                id="join-room-create-bot-btn"
+                onClick={() => {
+                  dismiss();
+                  setCurrentView('bot-wizard');
+                }}
+                className="button-primary mx-auto min-h-10 px-4 text-xs"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                {t.joinRoomCreateFirstBotCta}
+              </button>
             </div>
           ) : (
             <ul
@@ -217,54 +224,54 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
                 const isSelected = selected.includes(persona.id);
                 const isLockedBot = isBotDisabled(persona.id.slice(4));
                 const isBlocked = (atCap && !isSelected) || (isLockedBot && !isSelected);
-              return (
-                <li key={persona.id}>
-                  <button
-                    type="button"
-                    data-group-bot-option={persona.id}
-                    onClick={() => toggle(persona.id)}
-                    aria-pressed={isSelected}
-                    disabled={isBlocked}
-                    className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 ${
-                      isSelected
-                        ? 'border-brass bg-background'
-                        : 'border-border bg-background/50 hover:border-brass/50'
-                    }`}
-                  >
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: persona.colorHex }}
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex min-w-0 items-center gap-1.5">
-                        <span className="truncate text-sm font-medium text-ink">
-                          {persona.name}
-                        </span>
-                        {isLockedBot && (
-                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-brass">
-                            <Lock className="h-2.5 w-2.5" aria-hidden="true" />
-                            {t.botDisabledBadge}
-                          </span>
-                        )}
-                      </span>
-                      <span className="block min-w-0 truncate text-[11px] text-ink-muted">
-                        {persona.stance}
-                      </span>
-                    </span>
-                    {isSelected && (
+                return (
+                  <li key={persona.id}>
+                    <button
+                      type="button"
+                      data-group-bot-option={persona.id}
+                      onClick={() => toggle(persona.id)}
+                      aria-pressed={isSelected}
+                      disabled={isBlocked}
+                      className={`flex min-h-11 w-full items-center gap-3 rounded-xl border p-3 text-left transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-not-allowed disabled:opacity-45 ${
+                        isSelected
+                          ? 'border-brass bg-background'
+                          : 'border-border bg-background/50 hover:border-brass/50'
+                      }`}
+                    >
                       <span
-                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold text-accent-ink"
-                        aria-label={`${selected.indexOf(persona.id) + 1}`}
-                      >
-                        {selected.indexOf(persona.id) + 1}
+                        className="h-3 w-3 shrink-0 rounded-full"
+                        style={{ backgroundColor: persona.colorHex }}
+                        aria-hidden="true"
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate text-sm font-medium text-ink">
+                            {persona.name}
+                          </span>
+                          {isLockedBot && (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded bg-surface-2 px-1.5 py-0.5 text-[10px] font-semibold text-brass">
+                              <Lock className="h-2.5 w-2.5" aria-hidden="true" />
+                              {t.botDisabledBadge}
+                            </span>
+                          )}
+                        </span>
+                        <span className="block min-w-0 truncate text-[11px] text-ink-muted">
+                          {persona.stance}
+                        </span>
                       </span>
-                    )}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                      {isSelected && (
+                        <span
+                          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brass text-[11px] font-semibold text-accent-ink"
+                          aria-label={`${selected.indexOf(persona.id) + 1}`}
+                        >
+                          {selected.indexOf(persona.id) + 1}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </fieldset>
 

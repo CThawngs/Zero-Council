@@ -1,89 +1,115 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { FormEvent, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { FormEvent, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { localizeAuthError } from '../i18n';
-import { CheckCircle2, Eye, EyeOff, LockKeyhole, LogIn, Mail } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2, LockKeyhole, LogIn, Mail } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SignInView: React.FC = () => {
-    const { setCurrentView, t } = useApp();
-    const router = useRouter();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [message, setMessage] = useState('');
-    const [error, setError] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
+  const { setCurrentView, t } = useApp();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [resetBusy, setResetBusy] = useState(false);
 
-    // Cân nhắc thêm trạng thái time out mỗi lần nhấn reset password
+  const anyBusy = submitting || oauthBusy || resetBusy;
 
   async function handleSignIn(event: FormEvent) {
     event.preventDefault();
+    if (anyBusy) return;
     setError('');
+    setMessage('');
+    setSubmitting(true);
 
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = await createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setError(localizeAuthError(error.message, t));
-      return;
+      if (signInError) {
+        setError(localizeAuthError(signInError.message, t));
+        setSubmitting(false);
+        return;
+      }
+
+      router.replace('/dashboard');
+      router.refresh();
+    } catch {
+      setError(t.authGenericError);
+      setSubmitting(false);
     }
-
-    // A full navigation, not a client-side route change: the workspace reads the session on
-    // mount, so only a fresh load turns the visitor into a signed-in user. Pushing a route would
-    // leave the same page rendering as if nobody were logged in.
-    router.push('/');
   }
 
   const oauth = async (provider: 'google') => {
+    if (anyBusy) return;
     setError('');
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { 
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          prompt: 'select_account',
-        }
-      },
-    });
-    if (error) setError(localizeAuthError(error.message, t));
-    // On success Supabase redirects the browser to the provider and back to /auth/callback,
-    // so there is nothing else to do here.
+    setMessage('');
+    setOauthBusy(true);
+    try {
+      const supabase = await createClient();
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: 'select_account',
+          },
+        },
+      });
+      if (oauthError) {
+        setError(localizeAuthError(oauthError.message, t));
+        setOauthBusy(false);
+      }
+    } catch {
+      setError(t.authGenericError);
+      setOauthBusy(false);
+    }
   };
 
   async function resetPassword() {
+    if (anyBusy) return;
     setError('');
     setMessage('');
 
-    if (!email) {
+    if (!email.trim()) {
       setError(t.authEmailRequiredError);
       return;
     }
 
-    const checked = await fetch(`/api/auth/check-account?email=${encodeURIComponent(email.trim().toLowerCase())}`);
-    const body = (await checked.json().catch(() => null)) as { exists?: boolean } | null;
-    if (!checked.ok || !body?.exists) {
-      setError(t.authAccountNotFound);
-      return;
+    setResetBusy(true);
+    try {
+      const checked = await fetch(
+        `/api/auth/check-account?email=${encodeURIComponent(email.trim().toLowerCase())}`
+      );
+      const body = (await checked.json().catch(() => null)) as { exists?: boolean } | null;
+      if (!checked.ok || !body?.exists) {
+        setError(t.authAccountNotFound);
+        return;
+      }
+
+      const supabase = await createClient();
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/auth?reset=1')}`,
+      });
+
+      if (resetError) {
+        setError(localizeAuthError(resetError.message, t));
+        return;
+      }
+
+      setMessage(t.authResetSent);
+    } catch {
+      setError(t.authGenericError);
+    } finally {
+      setResetBusy(false);
     }
-
-    const supabase = await createClient();
-    // Default Supabase template: resetPasswordForEmail sends a link whose click
-    // lands on /auth/callback (exchanges code/token_hash) then /auth?reset=1
-    // where the set-password form lives. No template edit needed from the user.
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/auth?reset=1')}`,
-    });
-
-    if (error) {
-      setError(localizeAuthError(error.message, t));
-      return;
-    }
-
-    setMessage(t.authResetSent);
   }
 
   return (
@@ -104,13 +130,17 @@ export const SignInView: React.FC = () => {
             <label className="field">
               <span className="field-label">{t.authEmail}</span>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
+                <Mail
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
+                  aria-hidden="true"
+                />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t.emailPlaceholder}
                   required
+                  disabled={anyBusy}
                   style={{ paddingLeft: '2.25rem' }}
                   autoComplete="email"
                 />
@@ -118,28 +148,36 @@ export const SignInView: React.FC = () => {
             </label>
 
             <div className="field">
-              <div className='flex justify-between'>
-                <span className="field-label">{t.authPassword}</span>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="signin-password" className="field-label">
+                  {t.authPassword}
+                </label>
 
-                {/* Đặt lại mk */}
                 <button
-                type="button"
-                onClick={resetPassword}
-                className="max-w-fit field-label text-brass! hover:underline disabled:opacity-50"
+                  type="button"
+                  onClick={() => void resetPassword()}
+                  disabled={anyBusy}
+                  className="inline-flex max-w-fit items-center gap-1.5 field-label text-brass! hover:underline disabled:opacity-50"
                 >
+                  {resetBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : null}
                   {t.authForgotPasswordLink}
                 </button>
               </div>
-              
+
               <div className="relative">
-                <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
+                <LockKeyhole
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
+                  aria-hidden="true"
+                />
                 <input
+                  id="signin-password"
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t.authYourPassword}
                   required
-                  style={{ paddingLeft: '2.25rem', paddingRight: '2.75rem' }}
+                  disabled={anyBusy}
+                  style={{ paddingLeft: '2.25rem', paddingRight: '3.5rem' }}
                   autoComplete="current-password"
                 />
                 <button
@@ -153,9 +191,17 @@ export const SignInView: React.FC = () => {
               </div>
             </div>
 
-            <button type="submit" className="button-primary min-h-11 w-full justify-center">
-              <LogIn className="h-4 w-4" />
-              {t.authSignInAction}
+            <button
+              type="submit"
+              disabled={anyBusy}
+              className="button-primary min-h-11 w-full justify-center disabled:opacity-60"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <LogIn className="h-4 w-4" aria-hidden="true" />
+              )}
+              {submitting ? t.authSignInPending : t.authSignInAction}
             </button>
 
             {message && (
@@ -164,7 +210,11 @@ export const SignInView: React.FC = () => {
                 <span>{message}</span>
               </div>
             )}
-            {error && <p className="field-error" role="alert">{error}</p>}
+            {error && (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            )}
 
             <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-ink-muted">
               <span className="h-px flex-1 bg-border" />
@@ -172,20 +222,45 @@ export const SignInView: React.FC = () => {
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <button type="button" onClick={() => oauth('google')} className="button-secondary min-h-11 w-full justify-center">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z" />
-                <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z" />
-                <path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.93.46 3.76 1.27 5.39l4-3.11Z" />
-                <path fill="#EA4335" d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z" />
-              </svg>
+            <button
+              type="button"
+              onClick={() => void oauth('google')}
+              disabled={anyBusy}
+              className="button-secondary min-h-11 w-full justify-center disabled:opacity-60"
+            >
+              {oauthBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fill="#4285F4"
+                    d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.93.46 3.76 1.27 5.39l4-3.11Z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z"
+                  />
+                </svg>
+              )}
               {t.authContinueGoogle}
             </button>
-
           </form>
 
           <p className="text-center text-sm text-ink-muted">
-            <button type="button" onClick={() => setCurrentView('sign-up')} className="font-medium text-brass hover:underline">
+            <button
+              type="button"
+              onClick={() => setCurrentView('sign-up')}
+              disabled={anyBusy}
+              className="font-medium text-brass hover:underline disabled:opacity-50"
+            >
               {t.authOrSignUp}
             </button>
           </p>

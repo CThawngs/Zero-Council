@@ -1,29 +1,31 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
-import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { FormEvent, useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { localizeAuthError } from '../i18n';
-import { Eye, EyeOff, LockKeyhole, Mail, RefreshCw, Save } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LockKeyhole, Mail, RefreshCw, Save } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SetPasswordView: React.FC = () => {
-    const { t } = useApp();
-    const router = useRouter();
-    const [email, setEmail] = useState(''); 
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter();
+  const { t } = useApp();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-    const [loading, setLoading] = useState(true);
-    const [isValidToken, setIsValidToken] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isValidToken, setIsValidToken] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
 
-    // Lắng nghe sự kiện khôi phục mật khẩu / xác thực từ URL
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' || session) {
         if (session?.user?.email) {
           setEmail(session.user.email);
@@ -33,7 +35,6 @@ export const SetPasswordView: React.FC = () => {
       }
     });
 
-    // Timeout 3s dự phòng trường hợp liên kết lỗi/hết hạn không kích hoạt auth state
     const timer = setTimeout(() => {
       setLoading((prevLoading) => {
         if (prevLoading) {
@@ -50,28 +51,35 @@ export const SetPasswordView: React.FC = () => {
     };
   }, []);
 
-  
   async function handleNewSetPassword(event: FormEvent) {
     event.preventDefault();
+    if (submitting) return;
     setError('');
+    setSubmitting(true);
 
-    const supabase = await createClient();
-    const { error } = await supabase.auth.updateUser({
-      password,
-      data: {
-        has_password: true,
+    try {
+      const supabase = await createClient();
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+        data: {
+          has_password: true,
+        },
+      });
+
+      if (updateError) {
+        setError(localizeAuthError(updateError.message, t));
+        setSubmitting(false);
+        return;
       }
-    });
-    
-    if (error) {
-      setError(localizeAuthError(error.message, t));
-      return;
-    }
 
-    router.push('/');
+      router.replace('/dashboard');
+      router.refresh();
+    } catch {
+      setError(t.authGenericError);
+      setSubmitting(false);
+    }
   }
 
-  
   return (
     <div className="grid min-h-[calc(100vh-76px)] lg:grid-cols-2">
       <AuthShowcase />
@@ -86,74 +94,91 @@ export const SetPasswordView: React.FC = () => {
             <p>{t.authSetPasswordBody}</p>
           </header>
 
-          { /* TRẠNG THÁI 1: Đang load */
-            loading ? (
-            <div className="panel flex flex-col items-center justify-center p-8 space-y-3 text-center">
+          {loading ? (
+            <div className="panel flex flex-col items-center justify-center space-y-3 p-8 text-center">
               <RefreshCw className="h-6 w-6 animate-spin text-ink-muted" />
               <p className="text-sm text-ink-muted">{t.authValidatingLink}</p>
             </div>
           ) : !isValidToken ? (
-            /* TRẠNG THÁI 2: Link không hợp lệ / Hết hạn */
-            <div className="panel p-6 text-center space-y-4">
-              <p className="text-terracotta font-medium">{t.authInvalidTokenTitle}</p>
+            <div className="panel space-y-4 p-6 text-center">
+              <p className="font-medium text-terracotta">{t.authInvalidTokenTitle}</p>
               <p className="text-sm text-ink-muted">{t.authInvalidTokenBody}</p>
-              <a 
+              <a
                 href="/auth"
-                className="button-primary inline-flex items-center justify-center min-h-10 px-4 w-full"
+                className="button-primary inline-flex min-h-10 w-full items-center justify-center px-4"
               >
                 {t.authResendEmailAction}
               </a>
             </div>
           ) : (
-            /* TRẠNG THÁI 3: Các yêu cầu hợp lệ */
-          <form onSubmit={handleNewSetPassword} className="panel space-y-5 p-5 sm:p-7">
-            <label className="field">
-              <span className="field-label">{t.authEmail}</span>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
-                <input
-                  type="email"
-                  value={email ? email : ''}
-                  placeholder={t.emailPlaceholder}
-                  required
-                  readOnly
-                  style={{ paddingLeft: '2.25rem' }}
-                  autoComplete="email"
-                />
-              </div>
-            </label>
+            <form onSubmit={handleNewSetPassword} className="panel space-y-5 p-5 sm:p-7">
+              <label className="field">
+                <span className="field-label">{t.authEmail}</span>
+                <div className="relative">
+                  <Mail
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type="email"
+                    value={email ? email : ''}
+                    placeholder={t.emailPlaceholder}
+                    required
+                    readOnly
+                    style={{ paddingLeft: '2.25rem' }}
+                    autoComplete="email"
+                  />
+                </div>
+              </label>
 
-            <label className="field">
-              <span className="field-label">{t.authPassword}</span>
-              <div className="relative">
-                <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={t.authYourPassword}
-                  required
-                  style={{ paddingLeft: '2.25rem', paddingRight: '2.75rem' }}
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword((value) => !value)}
-                  className="icon-button absolute right-1.5 top-1/2 -translate-y-1/2"
-                  aria-label={showPassword ? t.authHidePassword : t.authShowPassword}
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </label>
+              <label className="field">
+                <span className="field-label">{t.authPassword}</span>
+                <div className="relative">
+                  <LockKeyhole
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
+                    aria-hidden="true"
+                  />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder={t.authPasswordHint}
+                    required
+                    minLength={8}
+                    disabled={submitting}
+                    style={{ paddingLeft: '2.25rem', paddingRight: '3.5rem' }}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    className="icon-button absolute right-1.5 top-1/2 -translate-y-1/2"
+                    aria-label={showPassword ? t.authHidePassword : t.authShowPassword}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </label>
 
-            <button type="submit" className="button-primary min-h-11 w-full justify-center">
-              <Save className="h-4 w-4" />
-              {t.authUpdatePassword}
-            </button>
+              <button
+                type="submit"
+                disabled={submitting}
+                className="button-primary min-h-11 w-full justify-center disabled:opacity-60"
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                {t.authUpdatePassword}
+              </button>
 
-            {error && <p className="field-error" role="alert">{error}</p>}
-          </form>
+              {error && (
+                <p className="field-error" role="alert">
+                  {error}
+                </p>
+              )}
+            </form>
           )}
         </div>
       </div>

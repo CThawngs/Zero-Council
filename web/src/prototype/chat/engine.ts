@@ -8,20 +8,16 @@
  * THE ONE THING NOT TO BREAK
  * --------------------------
  * Bot-to-bot handoff is a STRUCTURED field (`BotTurn.handoffs`), never a regex over prose.
- * Parsing "@name" out of a bot's free text looks like it works — it does, against a scripted
- * generator that obeys — and then breaks in production four ways: a quoted "@dreamer" in a code
- * block triggers a handoff; a quoted third word never resolves; a model that forgets the convention
- * produces silence instead of an error; and there is no way to distinguish addressing someone from
- * quoting them. `@` in user text IS parsed (that is the convention and the model composes it), but
- * it decides WHO OPENS, and even that degrades to round-robin rather than failing.
+ * Parsing "@name" out of a bot's free text looks like it works in toy demos and breaks in
+ * production four ways: a quoted "@dreamer" in a code block triggers a handoff; a quoted third
+ * word never resolves; a model that forgets the convention produces silence instead of an error;
+ * and there is no way to distinguish addressing someone from quoting them. `@` in user text IS
+ * parsed (that is the convention and the human composes it), and it decides WHO OPENS, degrading
+ * cleanly to round-robin when omitted.
  *
- * `generate` is the only seam. The scripted provider satisfies it today; BYOK satisfies it later by
- * mapping its own tool call onto `handoffs`. Neither the routing rules nor their tests change.
- *
- * The request is checked (`rosterProblems`), every wait is bounded (`DEFAULT_TURN_TIMEOUT_MS`), and
- * an answer that lands after a cancel is discarded rather than committed. Those three come from the
- * contract in `lib/deliberation/engine-v2.ts`, which is the same idea applied to the structured
- * deliberation room.
+ * `generate` is the single provider seam: BYOK adapters map structured tool/JSON output onto
+ * `handoffs`, every input roster is validated (`rosterProblems`), every wait is bounded
+ * (`DEFAULT_TURN_TIMEOUT_MS`), and any answer arriving after cancellation is discarded.
  */
 
 export const rosterProblems = (request: {
@@ -183,6 +179,7 @@ export type TurnFailureReason =
 export interface TurnError {
   reason: TurnFailureReason;
   botId: string;
+  provider?: string;
   detail: string;
   retryable: boolean;
 }
@@ -551,10 +548,6 @@ const executeBoundedAttempt = async <T>(
  *
  * A generator that throws is retried exactly once and only when the failure looks transient;
  * anything else is surfaced as a typed failure rather than silently swallowed.
- *
- * Three guarantees here are the contract from `lib/deliberation/engine-v2.ts`, applied to the room
- * that actually ships: the request is checked before any provider is called, every wait is bounded,
- * and an answer that arrives after a cancel is discarded rather than committed.
  */
 export const runTurn = async ({
   roster,
@@ -612,10 +605,12 @@ export const runTurn = async ({
   let turnError: TurnError | undefined;
   const recordTurnError = (botId: string, detail: string, isTimeout = false) => {
     const reason = classifyTurnFailureReason(detail, isTimeout);
+    const providerMatch = /\[provider=([^\]]+)\]/.exec(detail);
     failureReason = reason;
     turnError = {
       reason,
       botId,
+      ...(providerMatch?.[1] ? { provider: providerMatch[1] } : {}),
       detail,
       retryable: reason === 'rate-limit' || reason === 'provider-error' || reason === 'timeout',
     };

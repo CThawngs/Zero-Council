@@ -26,8 +26,9 @@ import {
   type MarkdownBlock,
   type TreeNode,
 } from '../chat/content-render';
+import { copy } from '../i18n';
 import { Modal } from './Modal';
-import { useApp } from '../context/AppContext';
+import { useApp, useOptionalApp } from '../context/AppContext';
 
 export interface ContentRenderPanelProps {
   content: string;
@@ -63,9 +64,9 @@ const copyTextToClipboard = async (text: string): Promise<boolean> => {
       scratch.style.opacity = '0';
       document.body.appendChild(scratch);
       scratch.select();
-      document.execCommand('copy');
+      const copiedOk = document.execCommand('copy');
       document.body.removeChild(scratch);
-      return true;
+      return copiedOk;
     } catch {
       return false;
     }
@@ -139,6 +140,8 @@ const CodeBlockView: React.FC<{
   language?: string;
   compact?: boolean;
 }> = ({ code, language = '', compact = false }) => {
+  const app = useOptionalApp();
+  const t = app?.t ?? copy.en;
   const [copied, setCopied] = useState(false);
   const lines = useMemo(() => code.replace(/\r\n?/g, '\n').split('\n'), [code]);
 
@@ -146,6 +149,8 @@ const CodeBlockView: React.FC<{
     if (await copyTextToClipboard(code)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
+    } else {
+      app?.showToast('toastCopyFailed');
     }
   };
 
@@ -154,16 +159,20 @@ const CodeBlockView: React.FC<{
       <div className="flex items-center justify-between gap-2 border-b border-border bg-surface-2/80 px-3 py-1.5 text-[11px] text-ink-muted">
         <span className="inline-flex items-center gap-1.5 font-mono uppercase tracking-wider">
           <Code2 className="h-3.5 w-3.5 text-brass" aria-hidden="true" />
-          {language || 'code'}
+          {language || t.contentPanelCodeLabel}
         </span>
         <button
           type="button"
-          onClick={handleCopy}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition hover:bg-brass/10 hover:text-ink"
-          aria-label="Copy code"
+          onClick={() => void handleCopy()}
+          className="inline-flex min-h-7 items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition hover:bg-brass/10 hover:text-ink"
+          aria-label={t.contentPanelCopyCode}
         >
-          {copied ? <Check className="h-3 w-3 text-sage" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
-          <span>{copied ? 'Copied' : 'Copy'}</span>
+          {copied ? (
+            <Check className="h-3 w-3 text-sage" aria-hidden="true" />
+          ) : (
+            <Copy className="h-3 w-3" aria-hidden="true" />
+          )}
+          <span>{copied ? t.contentPanelCopied : t.contentPanelCopy}</span>
         </button>
       </div>
       <div className={`overflow-x-auto ${compact ? 'max-h-72' : 'max-h-[32rem]'}`}>
@@ -224,7 +233,8 @@ const TreeNodeItem: React.FC<{
             type="button"
             onClick={() => onToggle(node.id)}
             aria-expanded={!isCollapsed}
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border border-border bg-surface text-ink-muted transition hover:border-brass hover:text-ink"
+            aria-label={node.label}
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border border-border bg-surface text-ink-muted transition hover:border-brass hover:text-ink"
           >
             {isCollapsed ? (
               <ChevronRight className="h-3 w-3" aria-hidden="true" />
@@ -235,7 +245,7 @@ const TreeNodeItem: React.FC<{
         ) : (
           <span
             aria-hidden="true"
-            className="inline-flex h-5 w-5 shrink-0 items-center justify-center"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-brass/70" />
           </span>
@@ -250,7 +260,7 @@ const TreeNodeItem: React.FC<{
         )}
       </div>
       {hasChildren && !isCollapsed && (
-        <ul className="ml-2.5 border-l border-border/80 pl-3.5">
+        <ul className="ml-3 border-l border-border/80 pl-3.5">
           {node.children.map((child) => (
             <TreeNodeItem
               key={child.id}
@@ -271,6 +281,8 @@ const TreeGraphView: React.FC<{
   nodes?: TreeNode[];
   compact?: boolean;
 }> = ({ raw, nodes: preParsed, compact = false }) => {
+  const app = useOptionalApp();
+  const t = app?.t ?? copy.en;
   const nodes = useMemo(() => preParsed ?? parseTree(raw), [preParsed, raw]);
   const branchIds = useMemo(() => collectBranchIds(nodes), [nodes]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -288,7 +300,7 @@ const TreeGraphView: React.FC<{
   if (nodes.length === 0) {
     return (
       <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-xs text-ink-muted">
-        No tree structure detected.
+        {t.contentPanelNoTree}
       </p>
     );
   }
@@ -298,23 +310,23 @@ const TreeGraphView: React.FC<{
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-2/80 px-3 py-1.5 text-[11px] text-ink-muted">
         <span className="inline-flex items-center gap-1.5 font-medium text-ink">
           <GitFork className="h-3.5 w-3.5 text-brass" aria-hidden="true" />
-          Tree ({totalCount})
+          {t.contentPanelTreeCount.replace('{count}', String(totalCount))}
         </span>
         {branchIds.length > 0 && (
           <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => setCollapsed(new Set())}
-              className="rounded px-2 py-0.5 transition hover:bg-brass/10 hover:text-ink"
+              className="min-h-7 rounded px-2 py-0.5 transition hover:bg-brass/10 hover:text-ink"
             >
-              Expand all
+              {t.contentPanelExpandAll}
             </button>
             <button
               type="button"
               onClick={() => setCollapsed(new Set(branchIds))}
-              className="rounded px-2 py-0.5 transition hover:bg-brass/10 hover:text-ink"
+              className="min-h-7 rounded px-2 py-0.5 transition hover:bg-brass/10 hover:text-ink"
             >
-              Collapse all
+              {t.contentPanelCollapseAll}
             </button>
           </div>
         )}
@@ -378,7 +390,10 @@ const MarkdownBlockView: React.FC<{
           }`}
         >
           {block.items.map((item, i) => (
-            <li key={i} className={item.checked !== undefined ? 'list-none -ml-4 flex items-start gap-2' : ''}>
+            <li
+              key={i}
+              className={item.checked !== undefined ? 'list-none -ml-4 flex items-start gap-2' : ''}
+            >
               {item.checked !== undefined && (
                 <input
                   type="checkbox"
@@ -448,9 +463,14 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
   renderMentionText,
   className = '',
 }) => {
-  // Store user-selected mode keyed to `initialMode` so prop changes reset mode without a setState-in-effect.
-  const [modeOverride, setModeOverride] = useState<{ forInitial: ContentMode; value: ContentMode } | null>(null);
-  const mode = modeOverride && modeOverride.forInitial === initialMode ? modeOverride.value : initialMode;
+  const app = useOptionalApp();
+  const t = app?.t ?? copy.en;
+  const [modeOverride, setModeOverride] = useState<{
+    forInitial: ContentMode;
+    value: ContentMode;
+  } | null>(null);
+  const mode =
+    modeOverride && modeOverride.forInitial === initialMode ? modeOverride.value : initialMode;
   const [copied, setCopied] = useState(false);
 
   const detectedKind = useMemo(
@@ -475,15 +495,33 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
     if (await copyTextToClipboard(content)) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
+    } else {
+      app?.showToast('toastCopyFailed');
     }
   };
 
   const modeOptions: { id: ContentMode; label: string; icon: React.ReactNode }[] = [
-    { id: 'auto', label: 'Auto', icon: <Sparkles className="h-3 w-3" aria-hidden="true" /> },
-    { id: 'markdown', label: 'MD', icon: <FileText className="h-3 w-3" aria-hidden="true" /> },
-    { id: 'code', label: 'Code', icon: <Code2 className="h-3 w-3" aria-hidden="true" /> },
-    { id: 'tree', label: 'Tree', icon: <GitFork className="h-3 w-3" aria-hidden="true" /> },
-    { id: 'raw', label: 'Raw', icon: null },
+    {
+      id: 'auto',
+      label: t.contentPanelModeAuto,
+      icon: <Sparkles className="h-3 w-3" aria-hidden="true" />,
+    },
+    {
+      id: 'markdown',
+      label: t.contentPanelModeMd,
+      icon: <FileText className="h-3 w-3" aria-hidden="true" />,
+    },
+    {
+      id: 'code',
+      label: t.contentPanelModeCode,
+      icon: <Code2 className="h-3 w-3" aria-hidden="true" />,
+    },
+    {
+      id: 'tree',
+      label: t.contentPanelModeTree,
+      icon: <GitFork className="h-3 w-3" aria-hidden="true" />,
+    },
+    { id: 'raw', label: t.contentPanelModeRaw, icon: null },
   ];
 
   const body = (
@@ -522,7 +560,7 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
 
   return (
     <section
-      aria-label={title || 'Content panel'}
+      aria-label={title || t.contentPanelTitle}
       className={`overflow-hidden rounded-2xl border border-border bg-surface shadow-sm ${className}`}
     >
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-2/70 px-4 py-2.5">
@@ -534,7 +572,11 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <div role="group" aria-label="Render mode" className="flex items-center rounded-lg border border-border bg-background p-0.5">
+          <div
+            role="group"
+            aria-label={t.contentPanelRenderMode}
+            className="flex flex-wrap items-center rounded-lg border border-border bg-background p-0.5"
+          >
             {modeOptions.map((opt) => {
               const active = mode === opt.id;
               return (
@@ -543,7 +585,7 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
                   type="button"
                   aria-pressed={active}
                   onClick={() => setModeOverride({ forInitial: initialMode, value: opt.id })}
-                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                  className={`inline-flex min-h-7 items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition ${
                     active
                       ? 'bg-brass text-[var(--color-accent-ink)]'
                       : 'text-ink-muted hover:text-ink'
@@ -558,11 +600,15 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
 
           <button
             type="button"
-            onClick={handleCopyAll}
-            className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-ink-muted transition hover:border-brass/60 hover:text-ink"
+            onClick={() => void handleCopyAll()}
+            className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-ink-muted transition hover:border-brass/60 hover:text-ink"
           >
-            {copied ? <Check className="h-3 w-3 text-sage" aria-hidden="true" /> : <Copy className="h-3 w-3" aria-hidden="true" />}
-            <span>{copied ? 'Copied' : 'Copy'}</span>
+            {copied ? (
+              <Check className="h-3 w-3 text-sage" aria-hidden="true" />
+            ) : (
+              <Copy className="h-3 w-3" aria-hidden="true" />
+            )}
+            <span>{copied ? t.contentPanelCopied : t.contentPanelCopy}</span>
           </button>
 
           {onOpenModal && (
@@ -576,8 +622,8 @@ export const ContentRenderPanel: React.FC<ContentRenderPanelProps> = ({
                   language: language || unwrapped.lang,
                 })
               }
-              aria-label="Open in panel"
-              className="inline-flex items-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-medium text-ink-muted transition hover:border-brass/60 hover:text-ink"
+              aria-label={t.contentPanelOpen}
+              className="inline-flex min-h-8 min-w-8 items-center justify-center gap-1 rounded-lg border border-border bg-background px-2 py-1 text-[11px] font-medium text-ink-muted transition hover:border-brass/60 hover:text-ink"
             >
               <Maximize2 className="h-3 w-3" aria-hidden="true" />
             </button>

@@ -22,6 +22,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  RotateCcw,
   Settings2,
   Square,
   Trash2,
@@ -40,7 +41,6 @@ import {
   compactMentionKey,
   detectMentionQuery,
   filterMentionCandidates,
-  formatTurnFailureReason,
   tokenizeMentions,
   triggerMentionAtCursor,
   type MentionCandidate,
@@ -48,6 +48,7 @@ import {
 import { useBotSettingsPanel } from './BotSettingsPanel';
 import { CouncilOrb } from './CouncilOrb';
 import { MentionAutocomplete } from './MentionAutocomplete';
+import { Modal } from './Modal';
 import { hasRichContent } from '../chat/content-render';
 import { ContentRenderPanel } from './ContentRenderPanel';
 import { ExpandableText } from './ExpandableText';
@@ -137,6 +138,7 @@ export const ChatRoomView: React.FC = () => {
     renameConversation,
     deleteConversationById,
     sendMessage,
+    retryLastTurn,
     stopRoom,
     wrapUpRoom,
     clearRoom,
@@ -157,6 +159,7 @@ export const ChatRoomView: React.FC = () => {
     setCurrentView,
     openFirstBotOrWizard,
     openContentPanel,
+    showToast,
     currentPlanId,
     language,
     t,
@@ -179,6 +182,7 @@ export const ChatRoomView: React.FC = () => {
   const [showLink, setShowLink] = useState(false);
   const [renamingThread, setRenamingThread] = useState(false);
   const [threadTitleDraft, setThreadTitleDraft] = useState('');
+  const [clearConfirmOpen, setClearConfirmOpen] = useState(false);
 
   const isRunning = isRoomBusy;
   const plan = planById(currentPlanId);
@@ -216,7 +220,7 @@ export const ChatRoomView: React.FC = () => {
   const soloBotLocked = isSolo && roomRosterPartition.activeIds.length === 0;
   const groupLockedCount = !isSolo ? roomRosterPartition.disabledIds.length : 0;
 
-  // Determine which active bots in this room have a verified connected API key vs preview fallback.
+  // Determine which active bots in this room have a verified connected API key.
   const anyConnectedKey = useMemo(
     () =>
       apiKeys.some(
@@ -305,16 +309,61 @@ export const ChatRoomView: React.FC = () => {
         return t.chatNobodySpoke;
       case 'cancelled':
         return t.chatCancelled;
-      case 'failed':
-        return currentRoom.failures[0]?.kind === 'timeout'
-          ? t.chatAdvisorTimedOut
-          : t.chatAdvisorFailed.replace(
-              '{reason}',
-              formatTurnFailureReason(currentRoom.failures[0], language)
-            );
       default:
         return null;
     }
+  })();
+
+  const turnFailureCard = (() => {
+    if (
+      isRunning ||
+      !currentRoom ||
+      currentRoom.messages.length === 0 ||
+      (currentRoom.stoppedBy !== 'failed' && !currentRoom.turnError)
+    ) {
+      return null;
+    }
+    const reason =
+      currentRoom.turnError?.reason ??
+      currentRoom.failureReason ??
+      (currentRoom.failures[0]?.kind === 'timeout' ? 'timeout' : 'provider-error');
+    const failedPersona = currentRoom.turnError?.botId
+      ? roster.find((persona) => matchId(persona, currentRoom.turnError!.botId))
+      : undefined;
+    const failedProvider = providerLabel(
+      currentRoom.turnError?.provider ??
+        failedPersona?.provider ??
+        roster[0]?.provider ??
+        'openai'
+    );
+    const botDisplayName = failedPersona?.name ?? roster[0]?.name ?? 'Bot';
+    const cardTitle =
+      reason === 'missing-key'
+        ? t.turnMissingApiKeyTitle
+        : t.turnFailedTitle.replace('{bot}', botDisplayName);
+    const bodyText = (() => {
+      switch (reason) {
+        case 'missing-key':
+          return t.turnMissingApiKeyBody
+            .replace('{bot}', botDisplayName)
+            .replace('{provider}', failedProvider);
+        case 'timeout':
+          return t.turnFailedBody.replace('{reason}', `${failedProvider} ? ${ux.failureTimeout}`);
+        case 'rate-limit':
+          return t.turnFailedBody.replace('{reason}', `${failedProvider} ? ${ux.failureTransient}`);
+        case 'provider-auth':
+          return t.turnFailedBody.replace('{reason}', `${failedProvider} ? ${ux.failureFatal}`);
+        default:
+          return t.turnFailedBody.replace('{reason}', `${failedProvider} ? ${ux.failureUnknown}`);
+      }
+    })();
+    return {
+      reason,
+      cardTitle,
+      botName: failedPersona?.name,
+      bodyText,
+      needsKey: reason === 'missing-key' || reason === 'provider-auth',
+    };
   })();
 
   useEffect(() => {
@@ -465,6 +514,20 @@ export const ChatRoomView: React.FC = () => {
     setRenamingThread(false);
   };
 
+  const handleClearClick = () => {
+    if (currentRoom.messages.length === 0 && !currentRoom.conversationId) {
+      clearRoom();
+      return;
+    }
+    setClearConfirmOpen(true);
+  };
+
+  const confirmClearRoom = () => {
+    setClearConfirmOpen(false);
+    clearRoom();
+    showToast('chatClearedToast');
+  };
+
   const visibleAvatars = roster.slice(0, 4);
   const overflowCount = Math.max(0, roster.length - visibleAvatars.length);
 
@@ -529,7 +592,7 @@ export const ChatRoomView: React.FC = () => {
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5 sm:gap-2">
                 <span
                   className={`h-2 w-2 shrink-0 rounded-full ${
                     isRunning
@@ -543,13 +606,13 @@ export const ChatRoomView: React.FC = () => {
                 <h1 className="truncate font-serif text-base leading-tight text-ink sm:text-lg">
                   {currentRoom.title}
                 </h1>
-                <span className="badge-neutral hidden shrink-0 text-[10px] xs:inline-flex sm:inline-flex">
+                <span className="badge-neutral inline-flex shrink-0 text-[10px]">
                   {isSolo
                     ? t.soloBadge
                     : t.groupBadge.replace('{count}', String(roster.length))}
                 </span>
                 {!isSolo && (
-                  <span className="badge-neutral hidden shrink-0 text-[10px] md:inline-flex">
+                  <span className="badge-neutral inline-flex shrink-0 text-[10px]">
                     {currentRoom.mode === 'panel' ? t.modeIndependentTitle : t.modeDebateTitle}
                   </span>
                 )}
@@ -594,7 +657,7 @@ export const ChatRoomView: React.FC = () => {
             )}
             <button
               type="button"
-              onClick={clearRoom}
+              onClick={handleClearClick}
               aria-label={t.chatClear}
               title={t.chatClear}
               className="button-quiet min-h-8 px-2 text-xs justify-center"
@@ -751,7 +814,7 @@ export const ChatRoomView: React.FC = () => {
           </div>
         )}
 
-        {/* Honest No-Key Preview Banner — tells user clearly when bots run in offline preview vs live BYOK */}
+        {/* Honest No-Key Banner — tells user clearly when a seated bot's provider key is missing */}
         {noKeyMessage && (
           <div
             id="chat-no-key-banner"
@@ -1091,6 +1154,56 @@ export const ChatRoomView: React.FC = () => {
             </div>
           )}
 
+          {turnFailureCard && (
+            <div
+              id="chat-turn-error-card"
+              role="alert"
+              className="mx-auto max-w-lg rounded-2xl border border-terracotta/45 bg-terracotta/10 p-4 text-xs leading-relaxed text-ink"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle
+                  className="mt-0.5 h-4 w-4 shrink-0 text-terracotta"
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-ink">{turnFailureCard.cardTitle}</p>
+                    {turnFailureCard.botName && (
+                      <span className="badge-neutral text-[10px]">{turnFailureCard.botName}</span>
+                    )}
+                  </div>
+                  <p className="text-ink-muted">{turnFailureCard.bodyText}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                    {turnFailureCard.needsKey && (
+                      <button
+                        type="button"
+                        id="chat-turn-connect-key-btn"
+                        onClick={() => setCurrentView('api-keys')}
+                        className="button-primary min-h-9 px-3 py-1.5 text-xs justify-center"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>{t.turnConnectApiKey}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      id="chat-turn-retry-btn"
+                      onClick={() => void retryLastTurn()}
+                      className={
+                        turnFailureCard.needsKey
+                          ? 'button-secondary min-h-9 px-3 py-1.5 text-xs justify-center'
+                          : 'button-primary min-h-9 px-3 py-1.5 text-xs justify-center'
+                      }
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{t.turnRetryCta}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {pauseNote && (
             <p className="mx-auto flex max-w-lg items-start gap-2 rounded-xl border border-border bg-background/60 px-3.5 py-3 text-xs leading-relaxed text-ink">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-brass" aria-hidden="true" />
@@ -1238,8 +1351,6 @@ export const ChatRoomView: React.FC = () => {
                     setActiveMentionIdx(0);
 
                     const nextMatch = detectMentionQuery(nextValue, nextCursor, completedHandles);
-                    // Bulk paste of an already-complete handle (e.g. "stop @The Pragmatist") stays un-intercepted
-                    // so immediate Enter submits, while interactive '@' typing or prefix queries open the menu.
                     const isBulkExactHandle =
                       delta > 3 &&
                       !nextValue.endsWith('@') &&
@@ -1449,6 +1560,33 @@ export const ChatRoomView: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={clearConfirmOpen}
+        onClose={() => setClearConfirmOpen(false)}
+        title={t.chatClearConfirmTitle}
+        description={t.chatClearConfirmBody}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setClearConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.chatClearKeepAction}
+            </button>
+            <button
+              type="button"
+              id="confirm-clear-room-btn"
+              onClick={confirmClearRoom}
+              className="button-danger min-h-11 justify-center"
+            >
+              {t.chatClearConfirmAction}
+            </button>
+          </>
+        }
+      />
     </div>
   );
 };

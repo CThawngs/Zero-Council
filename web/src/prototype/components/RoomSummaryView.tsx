@@ -1,23 +1,41 @@
 import React from 'react';
-import { ArrowLeft, Copy, Plus } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Copy,
+  KeyRound,
+  Loader2,
+  Plus,
+  RotateCcw,
+} from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { modelLabel, providerLabel } from '../data/catalog';
 import { RESUME_ALL, USER_HANDLE } from '../chat/engine';
 import { attachmentStatus } from '../chat/attachment-status';
+import { CHAT_UX_COPY, formatTurnFailureReason } from '../chat/mentions';
 import { hasRichContent } from '../chat/content-render';
 import { Avatar, AttachmentGlyph } from './ChatRoomView';
 import { ContentRenderPanel } from './ContentRenderPanel';
 import { ExpandableText } from './ExpandableText';
 
 /**
- * What the council said, in one page, after the user ends the meeting.
- *
- * Extractive on purpose: every line here is something an advisor (or the user) actually wrote, taken
- * from the transcript. A recap that paraphrased would be one more model call and one more chance to
- * put words in an advisor's mouth, and in the scripted preview there is no model to ask at all.
+ * Extractive transcript summary shown when wrapping up a multi-bot council room, plus an optional
+ * BYOK-powered structured AI conclusion trigger.
  */
 export const RoomSummaryView: React.FC = () => {
-  const { currentRoom, personas, setCurrentView, openFirstBotOrWizard, showToast, openRoomConclusion, isDeliberating, t } = useApp();
+  const {
+    currentRoom,
+    personas,
+    setCurrentView,
+    openFirstBotOrWizard,
+    showToast,
+    openRoomConclusion,
+    conclusionError,
+    clearConclusionError,
+    isDeliberating,
+    language,
+    t,
+  } = useApp();
 
   if (!currentRoom) {
     return (
@@ -75,7 +93,10 @@ export const RoomSummaryView: React.FC = () => {
       case 'failed':
         return currentRoom.failures[0]?.kind === 'timeout'
           ? t.chatAdvisorTimedOut
-          : t.chatAdvisorFailed.replace('{reason}', currentRoom.failures[0]?.kind ?? 'error');
+          : t.chatAdvisorFailed.replace(
+              '{reason}',
+              formatTurnFailureReason(currentRoom.failures[0], language)
+            );
       default:
         return t.summaryOutcomeDone;
     }
@@ -97,20 +118,31 @@ export const RoomSummaryView: React.FC = () => {
   const copyRecap = async () => {
     try {
       await navigator.clipboard.writeText(recapText);
+      showToast('summaryCopied');
     } catch {
-      // Clipboard API refused (insecure context, permissions). Fall back to the old selection trick
-      // rather than leave a button that does nothing.
-      const scratch = document.createElement('textarea');
-      scratch.value = recapText;
-      scratch.style.position = 'fixed';
-      scratch.style.opacity = '0';
-      document.body.appendChild(scratch);
-      scratch.select();
-      document.execCommand('copy');
-      document.body.removeChild(scratch);
+      showToast('toastCopyFailed');
     }
-    showToast('summaryCopied');
   };
+
+  const conclusionErrorText = (() => {
+    if (!conclusionError) return null;
+    const ux = CHAT_UX_COPY[language];
+    const primaryProvider = providerLabel(roster[0]?.provider ?? 'openai');
+    switch (conclusionError.reason) {
+      case 'missing-key':
+        return t.turnMissingApiKeyBody
+          .replace('{bot}', t.sampleChair)
+          .replace('{provider}', primaryProvider);
+      case 'timeout':
+        return t.conclusionFailedBody.replace('{reason}', ux.failureTimeout);
+      case 'rate-limit':
+        return t.conclusionFailedBody.replace('{reason}', ux.failureTransient);
+      case 'provider-auth':
+        return t.conclusionFailedBody.replace('{reason}', ux.failureFatal);
+      default:
+        return t.conclusionFailedBody.replace('{reason}', ux.failureUnknown);
+    }
+  })();
 
   const stats = [
     { label: t.summaryStatAdvisors, value: roster.length },
@@ -140,7 +172,7 @@ export const RoomSummaryView: React.FC = () => {
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
             {t.summaryBack}
           </button>
-          <button type="button" onClick={copyRecap} className="button-secondary min-h-11 justify-center">
+          <button type="button" onClick={() => void copyRecap()} className="button-secondary min-h-11 justify-center">
             <Copy className="h-4 w-4" aria-hidden="true" />
             {t.summaryCopy}
           </button>
@@ -295,13 +327,64 @@ export const RoomSummaryView: React.FC = () => {
         <div className="rounded-2xl border border-brass/40 bg-brass/5 p-5 sm:p-6">
           <p className="text-sm leading-relaxed text-ink">{t.summaryConclusionBody}</p>
           <p className="mt-2 text-xs leading-relaxed text-ink-muted">{t.summaryConclusionNote}</p>
+
+          {conclusionError && conclusionErrorText && !isDeliberating && (
+            <div
+              id="summary-conclusion-error"
+              role="alert"
+              className="mt-4 rounded-xl border border-terracotta/45 bg-terracotta/10 p-4 text-xs leading-relaxed text-ink"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertCircle
+                  className="mt-0.5 h-4 w-4 shrink-0 text-terracotta"
+                  aria-hidden="true"
+                />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="font-semibold text-ink">{t.conclusionFailedBanner}</p>
+                  <p className="text-ink-muted">{conclusionErrorText}</p>
+                  <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                    {(conclusionError.reason === 'missing-key' ||
+                      conclusionError.reason === 'provider-auth') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          clearConclusionError();
+                          setCurrentView('api-keys');
+                        }}
+                        className="button-primary min-h-9 px-3 py-1.5 text-xs justify-center"
+                      >
+                        <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>{t.turnConnectApiKey}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={openRoomConclusion}
+                      className="button-secondary min-h-9 px-3 py-1.5 text-xs justify-center"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{t.conclusionRetryCta}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={openRoomConclusion}
             disabled={isDeliberating}
             className="button-primary mt-4 min-h-11 justify-center disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isDeliberating ? '...' : t.summaryConclusionOpen}
+            {isDeliberating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <span>{t.conclusionGenerating}</span>
+              </>
+            ) : (
+              t.summaryConclusionOpen
+            )}
           </button>
         </div>
       </section>

@@ -210,6 +210,7 @@ interface AppContextType {
   currentRoom: ChatRoom | null;
   roomRosterPartition: { activeIds: string[]; disabledIds: string[] };
   sendMessage: (body: string) => Promise<void>;
+  retryLastTurn: () => Promise<void>;
   stopRoom: () => void;
   clearRoom: () => void;
   isRoomBusy: boolean;
@@ -296,20 +297,9 @@ const botToPersona = (bot: UserBot, index = 0): AdvisorPersona => {
   };
 };
 
-
 /**
- * Build a `GenerateFn` for deliberation using the user's currently connected BYOK keys.
- *
- * Key selection order:
- *   1. The key for the advisor's own provider (persona.provider), if connected.
- *   2. Any other connected key as fallback, so advisors without a matching
- *      provider still get a real AI response (not fixture) when at least one key exists.
- *
- * Returns `undefined` when no keys are connected — the engine then falls back
- * to fixture (canned) text, which is the same behaviour as before BYOK.
- *
- * Security: keys live only in the in-memory `keys` map (populated from the server
- * on sign-in) and are never stored to localStorage or the DOM.
+ * Executes a single structured synthesis / completion call using the user's connected BYOK key
+ * (in-memory during the current session or decrypted server-side via `/api/providers/chat`).
  */
 const completeByokTextViaServer = async (
   credentials: {
@@ -377,7 +367,19 @@ export const AppProvider: React.FC<{
       setCurrentViewState(next);
       if (typeof window === 'undefined') return;
       const pathname = window.location.pathname;
-      if (next === 'sign-in' || next === 'sign-up' || next === 'set-password') {
+      if (next === 'sign-up') {
+        if (!pathname.startsWith('/auth') || !window.location.search.includes('mode=signup')) {
+          router.push('/auth?mode=signup');
+        }
+        return;
+      }
+      if (next === 'sign-in') {
+        if (!pathname.startsWith('/auth') || window.location.search.includes('mode=signup')) {
+          router.push('/auth');
+        }
+        return;
+      }
+      if (next === 'set-password') {
         if (!pathname.startsWith('/auth')) router.push('/auth');
         return;
       }
@@ -1123,6 +1125,124 @@ export const AppProvider: React.FC<{
 
   const [keys, setKeys] = useState<Record<string, string>>({});
 
+  const executeRoomTurn = async ({
+    parked,
+    historyBeforeTurn,
+    userMessage,
+    turnsBeforeTurn,
+    active,
+    activeBots,
+    isSolo,
+  }: {
+    parked: ChatRoom;
+    historyBeforeTurn: ChatMessage[];
+    userMessage: ChatMessage;
+    turnsBeforeTurn: number;
+    active: AdvisorPersona[];
+    activeBots: ChatBot[];
+    isSolo: boolean;
+  }) => {
+    const controller = new AbortController();
+    roomAbortRef.current = controller;
+
+    try {
+      const result = await runTurn({
+        roster: activeBots,
+        mode: isSolo ? 'round-robin' : parked.mode,
+        soloMode: isSolo,
+        history: historyBeforeTurn,
+        userMessage,
+        generate: (request) => {
+          const persona = active.find((p) => p.id === request.bot.id);
+          if (!persona) {
+            throw new Error('PROVIDER_NOT_CONNECTED');
+          }
+          const isUserBot = persona.id.startsWith('bot:');
+          const resolvedProvider: ModelProvider | undefined = persona.provider;
+          const resolvedKey = keys[persona.provider];
+          const keyMeta = apiKeys.find((item) => item.provider === persona.provider);
+          const hasServerKey = Boolean(keyMeta?.connected && keyMeta?.hasKey);
+          const resolvedModel = isUserBot
+            ? persona.model
+            : keyMeta?.connected
+              ? keyMeta.modelName
+              : persona.model;
+          if (!resolvedProvider || (!resolvedKey && !hasServerKey)) {
+            throw new Error(`PROVIDER_NOT_CONNECTED [provider=${persona.provider}]`);
+          }
+          if (!resolvedKey) {
+            const { signal: turnSignal, ...serializableTurn } = request;
+            const botPersona = active.find((p) => p.id === request.bot.id)?.instructions;
+            return fetch('/api/providers/chat', {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                mode: 'turn',
+                provider: resolvedProvider,
+                model: resolvedModel,
+                ...(isUserBot ? { botId: persona.id.slice(4) } : {}),
+                persona: botPersona,
+                turnRequest: serializableTurn,
+              }),
+              signal: turnSignal,
+            }).then(async (response) => {
+              const payload = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                turn?: BotTurn;
+                error?: unknown;
+              } | null;
+              if (!response.ok || payload?.ok !== true || !payload.turn) {
+                const rawCode =
+                  typeof payload?.error === 'string' ? payload.error : 'PROVIDER_ERROR';
+                throw new Error(`${rawCode} [provider=${resolvedProvider}]`);
+              }
+              return payload.turn;
+            });
+          }
+          return byokGenerator(
+            {
+              provider: resolvedProvider,
+              model: resolvedModel,
+              apiKey: resolvedKey,
+              protocol: keyMeta?.protocol,
+              baseUrl: keyMeta?.baseUrl,
+            },
+            { personaOf: (bot) => active.find((p) => p.id === bot.id)?.instructions }
+          )(request);
+        },
+        maxTurns: isSolo ? 1 : DEFAULT_MAX_TURNS,
+        rounds: isSolo ? 1 : COUNCIL_ROUNDS,
+        roomBudget: DEFAULT_ROOM_BUDGET,
+        turnsUsed: turnsBeforeTurn,
+        language,
+        roundIndex: parked.messages.filter((message) => message.authorId === USER_HANDLE).length,
+        signal: controller.signal,
+        turnTimeoutMs: DEFAULT_TURN_TIMEOUT_MS,
+        onTurn: (message) => {
+          setCurrentRoom((room) =>
+            room ? { ...room, messages: [...room.messages, message] } : room
+          );
+        },
+      });
+
+      const finalSnapshot: ChatRoom = {
+        ...parked,
+        messages: result.messages,
+        turns: turnsBeforeTurn + result.speakers.length,
+        stoppedBy: result.stoppedBy,
+        failures: result.failures,
+        failureReason: result.failureReason,
+        turnError: result.turnError ?? null,
+      };
+      setCurrentRoom(finalSnapshot);
+      void persistRoomSnapshot(finalSnapshot);
+    } finally {
+      roomAbortRef.current = null;
+      setIsRoomBusy(false);
+    }
+  };
+
   const sendMessage = async (body: string) => {
     if (!currentRoom) return;
     const isSolo = currentRoom.kind === 'solo' || currentRoom.roster.length === 1;
@@ -1224,6 +1344,10 @@ export const AppProvider: React.FC<{
       title: autoTitle,
       messages: [...currentRoom.messages, userMessage],
       pending: [],
+      stoppedBy: null,
+      failures: [],
+      failureReason: undefined,
+      turnError: null,
       held,
     };
     setCurrentRoom(parked);
@@ -1235,103 +1359,72 @@ export const AppProvider: React.FC<{
       return;
     }
 
-    const controller = new AbortController();
-    roomAbortRef.current = controller;
+    await executeRoomTurn({
+      parked,
+      historyBeforeTurn: currentRoom.messages,
+      userMessage,
+      turnsBeforeTurn: currentRoom.turns,
+      active,
+      activeBots,
+      isSolo,
+    });
+  };
 
-    try {
-      const result = await runTurn({
-        roster: activeBots,
-        mode: isSolo ? 'round-robin' : currentRoom.mode,
-        soloMode: isSolo,
-        history: currentRoom.messages,
-        userMessage,
-        generate: (request) => {
-          const persona = active.find((p) => p.id === request.bot.id);
-          if (!persona) {
-            throw new Error('PROVIDER_NOT_CONNECTED');
-          }
-          const isUserBot = persona.id.startsWith('bot:');
-          const resolvedProvider: ModelProvider | undefined = persona.provider;
-          const resolvedKey = keys[persona.provider];
-          const keyMeta = apiKeys.find((item) => item.provider === persona.provider);
-          const hasServerKey = Boolean(keyMeta?.connected && keyMeta?.hasKey);
-          const resolvedModel = isUserBot
-            ? persona.model
-            : keyMeta?.connected
-              ? keyMeta.modelName
-              : persona.model;
-          if (!resolvedProvider || (!resolvedKey && !hasServerKey)) {
-            throw new Error('PROVIDER_NOT_CONNECTED');
-          }
-          if (!resolvedKey) {
-            const { signal: turnSignal, ...serializableTurn } = request;
-            const botPersona = active.find((p) => p.id === request.bot.id)?.instructions;
-            return fetch('/api/providers/chat', {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                mode: 'turn',
-                provider: resolvedProvider,
-                model: resolvedModel,
-                ...(isUserBot ? { botId: persona.id.slice(4) } : {}),
-                persona: botPersona,
-                turnRequest: serializableTurn,
-              }),
-              signal: turnSignal,
-            }).then(async (response) => {
-              const payload = (await response.json().catch(() => null)) as {
-                ok?: boolean;
-                turn?: BotTurn;
-                error?: unknown;
-              } | null;
-              if (!response.ok || payload?.ok !== true || !payload.turn) {
-                throw new Error(typeof payload?.error === 'string' ? payload.error : 'PROVIDER_ERROR');
-              }
-              return payload.turn;
-            });
-          }
-          return byokGenerator(
-            {
-              provider: resolvedProvider,
-              model: resolvedModel,
-              apiKey: resolvedKey,
-              protocol: keyMeta?.protocol,
-              baseUrl: keyMeta?.baseUrl,
-            },
-            { personaOf: (bot) => active.find((p) => p.id === bot.id)?.instructions }
-          )(request);
-        },
-        maxTurns: isSolo ? 1 : DEFAULT_MAX_TURNS,
-        rounds: isSolo ? 1 : COUNCIL_ROUNDS,
-        roomBudget: DEFAULT_ROOM_BUDGET,
-        turnsUsed: currentRoom.turns,
-        language,
-        roundIndex: parked.messages.filter((message) => message.authorId === USER_HANDLE).length,
-        signal: controller.signal,
-        turnTimeoutMs: DEFAULT_TURN_TIMEOUT_MS,
-        onTurn: (message) => {
-          setCurrentRoom((room) =>
-            room ? { ...room, messages: [...room.messages, message] } : room
-          );
-        },
-      });
-
-      const finalSnapshot: ChatRoom = {
-        ...parked,
-        messages: result.messages,
-        turns: currentRoom.turns + result.speakers.length,
-        stoppedBy: result.stoppedBy,
-        failures: result.failures,
-        failureReason: result.failureReason,
-        turnError: result.turnError ?? null,
-      };
-      setCurrentRoom(finalSnapshot);
-      void persistRoomSnapshot(finalSnapshot);
-    } finally {
-      roomAbortRef.current = null;
-      setIsRoomBusy(false);
+  const retryLastTurn = async () => {
+    if (!currentRoom || isRoomBusy) return;
+    let lastUserIdx = -1;
+    for (let i = currentRoom.messages.length - 1; i >= 0; i -= 1) {
+      if (currentRoom.messages[i].authorId === USER_HANDLE) {
+        lastUserIdx = i;
+        break;
+      }
     }
+    if (lastUserIdx < 0) return;
+
+    const isSolo = currentRoom.kind === 'solo' || currentRoom.roster.length === 1;
+    const { activeIds } = partitionRoomRosterByPlan(
+      currentRoom.roster,
+      currentPlanId,
+      disabledBotIds
+    );
+    if (activeIds.length === 0) {
+      showToast('toastPersonaCap', { cap: String(isSolo ? botCap : personaCap) });
+      return;
+    }
+
+    const roster = activeIds
+      .map((id) => localizedPersonas.find((persona) => matchPersonaId(persona, id)))
+      .filter((persona): persona is AdvisorPersona => Boolean(persona));
+    const active = isSolo
+      ? roster
+      : roster.filter((persona) => !currentRoom.held.includes(persona.id));
+    const activeBots = toChatBots(active);
+
+    const historyBeforeTurn = currentRoom.messages.slice(0, lastUserIdx);
+    const userMessage = currentRoom.messages[lastUserIdx];
+    const partialBotReplies = currentRoom.messages.length - (lastUserIdx + 1);
+    const turnsBeforeTurn = Math.max(0, currentRoom.turns - partialBotReplies);
+
+    const parked: ChatRoom = {
+      ...currentRoom,
+      messages: [...historyBeforeTurn, userMessage],
+      stoppedBy: null,
+      failures: [],
+      failureReason: undefined,
+      turnError: null,
+    };
+    setCurrentRoom(parked);
+    setIsRoomBusy(true);
+
+    await executeRoomTurn({
+      parked,
+      historyBeforeTurn,
+      userMessage,
+      turnsBeforeTurn,
+      active,
+      activeBots,
+      isSolo,
+    });
   };
 
   const openingQuestionRef = useRef<string | null>(null);
@@ -1994,6 +2087,7 @@ export const AppProvider: React.FC<{
         currentRoom,
         roomRosterPartition,
         sendMessage,
+        retryLastTurn,
         stopRoom,
         clearRoom,
         isRoomBusy,

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ReceiptText } from 'lucide-react';
+import { AlertTriangle, ReceiptText, RefreshCw } from 'lucide-react';
 import { Modal } from './Modal';
 import { PlanGrid } from './PlanGrid';
 import type { Plan } from '../data/plans';
@@ -22,6 +22,13 @@ interface GrantHistoryItem {
   expiresAt: string;
 }
 
+interface BillingHistorySnapshot {
+  key: string;
+  orders: OrderHistoryItem[];
+  grants: GrantHistoryItem[];
+  error: boolean;
+}
+
 export const BillingHistoryView: React.FC = () => {
   const {
     requestCheckout,
@@ -41,32 +48,54 @@ export const BillingHistoryView: React.FC = () => {
         : source === 'ADMIN'
           ? t.billingSourceAdmin
           : source;
+
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [downgradeConfirmOpen, setDowngradeConfirmOpen] = useState(false);
-  const [orders, setOrders] = useState<OrderHistoryItem[]>([]);
-  const [grants, setGrants] = useState<GrantHistoryItem[]>([]);
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const [snapshot, setSnapshot] = useState<BillingHistorySnapshot | null>(null);
+
+  const requestKey = authUser ? `${authUser.id}:${currentPlanId}:${reloadNonce}` : null;
 
   useEffect(() => {
-    if (!authUser) return;
+    if (!requestKey) return;
     let cancelled = false;
     void fetch('/api/orders', { credentials: 'same-origin' })
-      .then((res) => (res.ok ? res.json() : null))
-      .then(
-        (
-          body: { orders?: OrderHistoryItem[]; grants?: GrantHistoryItem[] } | null
-        ) => {
-          if (cancelled || !body) return;
-          setOrders(body.orders ?? []);
-          setGrants(body.grants ?? []);
-        }
-      )
-      .catch(() => {});
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP_${res.status}`);
+        return (await res.json()) as {
+          orders?: OrderHistoryItem[];
+          grants?: GrantHistoryItem[];
+        };
+      })
+      .then((body) => {
+        if (cancelled) return;
+        setSnapshot({
+          key: requestKey,
+          orders: body.orders ?? [],
+          grants: body.grants ?? [],
+          error: false,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSnapshot((prev) => ({
+          key: requestKey,
+          orders: prev?.orders ?? [],
+          grants: prev?.grants ?? [],
+          error: true,
+        }));
+      });
     return () => {
       cancelled = true;
     };
-  }, [authUser, currentPlanId]);
+  }, [requestKey]);
+
+  const loading = Boolean(requestKey && snapshot?.key !== requestKey);
+  const loadError = Boolean(requestKey && snapshot?.key === requestKey && snapshot.error);
+  const orders = snapshot?.orders ?? [];
+  const grants = snapshot?.grants ?? [];
 
   const doCancel = async () => {
     setBusy(true);
@@ -101,7 +130,7 @@ export const BillingHistoryView: React.FC = () => {
   return (
     <div className="content-shell space-y-7">
       <header className="page-header">
-        <h2 className='text-3xl'>{t.billingTitle}</h2>
+        <h2 className="text-3xl">{t.billingTitle}</h2>
         <p>{t.billingBody}</p>
       </header>
 
@@ -123,9 +152,39 @@ export const BillingHistoryView: React.FC = () => {
         statusMessage={message || undefined}
       />
 
-      {paidOrders.length === 0 && grants.length === 0 ? (
+      {loading ? (
+        <section
+          role="status"
+          aria-busy="true"
+          className="panel animate-pulse space-y-4 p-5 sm:p-7"
+        >
+          <div className="h-5 w-48 rounded-md border border-border/60 bg-surface-2" />
+          <div className="space-y-2.5">
+            <div className="h-12 w-full rounded-xl border border-border/60 bg-surface-2" />
+            <div className="h-12 w-full rounded-xl border border-border/60 bg-surface-2" />
+          </div>
+        </section>
+      ) : loadError ? (
+        <section
+          role="alert"
+          className="panel flex flex-col items-start justify-between gap-4 border-terracotta/40 bg-terracotta/5 p-5 sm:flex-row sm:items-center sm:p-6"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-terracotta" aria-hidden="true" />
+            <p className="text-sm font-medium text-ink">{t.billingLoadError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setReloadNonce((n) => n + 1)}
+            className="button-secondary min-h-10 shrink-0 px-4 text-xs"
+          >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+            {t.billingRetry}
+          </button>
+        </section>
+      ) : paidOrders.length === 0 && grants.length === 0 ? (
         <section className="panel flex gap-4 p-5 sm:p-7">
-          <ReceiptText className="h-6 w-6 shrink-0 text-brass" />
+          <ReceiptText className="h-6 w-6 shrink-0 text-brass" aria-hidden="true" />
           <div>
             <h2 className="font-serif text-xl text-ink">{t.billingEmpty}</h2>
             <p className="mt-2 text-sm leading-relaxed text-ink-muted">{t.billingNote}</p>
@@ -207,16 +266,17 @@ export const BillingHistoryView: React.FC = () => {
             <button
               type="button"
               disabled={busy}
-              onClick={async () => { setCancelConfirmOpen(false); await doCancel(); }}
+              onClick={async () => {
+                setCancelConfirmOpen(false);
+                await doCancel();
+              }}
               className="button-danger min-h-11 justify-center disabled:opacity-50"
             >
               {t.planCancelToFree}
             </button>
           </>
         }
-      >
-        <p className="text-sm leading-relaxed text-ink-muted">{t.planCancelConfirm}</p>
-      </Modal>
+      />
 
       {/* Downgrade-to-pro confirmation */}
       <Modal
@@ -237,16 +297,17 @@ export const BillingHistoryView: React.FC = () => {
             <button
               type="button"
               disabled={busy}
-              onClick={async () => { setDowngradeConfirmOpen(false); await doDowngrade(); }}
+              onClick={async () => {
+                setDowngradeConfirmOpen(false);
+                await doDowngrade();
+              }}
               className="button-danger min-h-11 justify-center disabled:opacity-50"
             >
               {t.planDowngradeToPro}
             </button>
           </>
         }
-      >
-        <p className="text-sm leading-relaxed text-ink-muted">{t.planDowngradeConfirm}</p>
-      </Modal>
+      />
     </div>
   );
 };
