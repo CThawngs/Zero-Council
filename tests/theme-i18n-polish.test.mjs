@@ -292,3 +292,28 @@ test('attachment readers, attachmentStatus, and conversation defaults localize c
   assert.ok('value' in groupEn && groupEn.value.title === 'Group Chat');
   assert.ok('value' in groupVi && groupVi.value.title === copy.vi.defaultGroupTitle);
 });
+
+test('AC-12: zero banned prototype/mock/unverified phrases in copy.en and copy.vi', () => {
+  const bannedPatterns = [
+    /illustrative/i,
+    /minh hoạ/i,
+    /minh họa/i,
+    /dev simulation/i,
+    /mô phỏng/i,
+    /held in your own browser for the current tab only/i,
+    /100% private/i,
+    /100% riêng tư/i,
+  ];
+  for (const lang of ['en', 'vi']) {
+    const leaves = collectLeafStrings(copy[lang]);
+    for (const [key, val] of leaves) {
+      for (const rx of bannedPatterns) {
+        assert.equal(
+          rx.test(val),
+          false,
+          `copy.${lang}.${key} contains banned pattern ${rx}: ${val}`
+        );
+      }
+    }
+  }
+});

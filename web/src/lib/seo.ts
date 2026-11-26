@@ -14,8 +14,8 @@ export const DEFAULT_SEO_KEYWORDS: string[] = [
   'bring your own key AI',
   'group chat AI bots',
   'multi-LLM deliberation',
-  'Six Thinking Hats AI',
-  'decision matrix AI',
+  'AI group debate',
+  'AI room conclusion',
   'OpenAI',
   'Anthropic Claude',
   'Google Gemini',
@@ -269,7 +269,7 @@ export function buildNoIndexMetadata({
 export function buildLlmsTxt(siteUrl: string = getSiteUrl()): string {
   const planLines = PLANS.map(
     (plan) =>
-      `- **${plan.name}**: ${plan.priceVnd.toLocaleString('en-US')} VND/month (~$${plan.priceUsd}/mo reference) — up to ${plan.maxActiveAdvisors} active AI advisors/bots per room and ${plan.maxBots} custom bots.`
+      `- **${plan.name}**: ${plan.priceVnd === 0 ? '0 VND ($0)' : `${plan.priceVnd.toLocaleString('en-US')} VND per one-time 30-day pass (~${plan.priceUsd} reference, no auto-renewal)`} — up to ${plan.maxActiveAdvisors} active AI advisors/bots per room and ${plan.maxBots} custom bots.`
   ).join('\n');
 
   return `# Zero Council
@@ -280,18 +280,15 @@ export function buildLlmsTxt(siteUrl: string = getSiteUrl()): string {
 Zero Council lets individuals, founders, engineers, and product teams convene multiple AI models in one conversation instead of relying on a single LLM opinion. Users connect their own API keys with zero token markup and run structured deliberations or interactive multi-bot group chats.
 
 ## Core Capabilities
-- **Multi-Bot Group Chat**: Combine 2 to 8 custom AI bots in one room using Round-Robin or Panel modes, interactive \`@mention\` turn handoffs, department folders, templates, and JSON workspace import/export.
-- **3 Structured Decision Frameworks**:
-  1. **Good / Normal / Bad Scenarios**: Maps favorable, baseline, and downside branches with concrete exit criteria.
-  2. **Six Thinking Hats**: Evaluates decisions across facts, intuition, risks, upside, alternatives, and process.
-  3. **Weighted Decision Matrix**: Scores named options against weighted criteria side by side.
+- **Solo & Multi-Bot Group Councils**: Run 1-on-1 bot threads or combine 2 to 8 custom AI bots in one room using Independent (Panel) or Debate (Round-Robin) modes, interactive \`@mention\` and \`@all\` turn handoffs, department folders, and JSON workspace import/export.
+- **Content Render Panel, Meeting Recap & AI Conclusion**: Inspect Markdown, syntax-highlighted code, and interactive trees in the Content Panel, copy extractive Room Summaries, and generate Chair syntheses with Good / Normal / Bad scenario branches.
 - **Multimodal Context & Live Web Search**: Attach links, PDF/Word/Excel/PowerPoint/text documents, images, and video frames, or toggle live web search inside the council room.
 - **Bilingual Interface**: Full 1:1 parity across English (\`en\`) and Vietnamese (\`vi\`) with Light and Dark themes.
 
 ## Security & BYOK Model
 - **Zero Markup**: Users bring their own API keys and pay model providers directly at native API rates.
-- **AES-256 Encryption**: Provider keys are verified live before saving, encrypted at rest with AES-256, scoped strictly to the owner's account, and never exposed in client bundles or server logs.
-- **Privacy First**: Conversations are private to the account owner and never used to train models. Analytics (if opted in) are cookie-free and never inspect prompts or responses.
+- **AES-256-GCM Encryption**: Provider keys are verified live before saving, encrypted at rest on the server with AES-256-GCM, shown only masked in the UI, and proxied server-side over HTTPS/TLS.
+- **Account-Scoped Storage**: Bots and conversations persist in the user's authenticated account database until deleted. Optional Umami analytics load only after explicit consent.
 
 ## Supported LLM Providers
 - **8 Built-in Verified Providers** (locked canonical endpoints):

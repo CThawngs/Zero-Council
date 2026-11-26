@@ -179,8 +179,8 @@ test('robots(), sitemap(), manifest(), and llms.txt expose complete, accurate pu
       'NVIDIA NIM',
       'DeepSeek',
       'AES-256',
-      '139,000 VND/month',
-      '379,000 VND/month',
+      '139,000 VND per one-time 30-day pass',
+      '379,000 VND per one-time 30-day pass',
       'https://zerocouncil.example/guide',
       'https://zerocouncil.example/legal/privacy',
     ]) {
@@ -287,21 +287,26 @@ test('unused boilerplate public SVGs are removed and brand icon.svg exists', () 
   assert.match(iconContent, /<svg[^>]*viewBox="0 0 64 64"/);
 });
 
-test('SERP CTR metadata and hero card copy match Growth audit in EN & VI', () => {
-  assert.equal(copy.en.documentTitle, 'Zero Council — Multi-Model AI Decision Council (BYOK)');
+test('SERP CTR metadata and hero card copy match shipped BYOK architecture in EN & VI', () => {
+  assert.equal(copy.en.documentTitle, 'Zero Council — Multi-Model BYOK AI Council Workspace');
   assert.equal(
     copy.en.documentDescription,
-    'Convene 2–8 AI advisors across distinct models with Decision Matrix, Six Thinking Hats & Scenario Paths. AES-256 encrypted BYOK. Start free.'
+    'Run 1-on-1 AI chats and multi-bot councils across 8 built-in BYOK providers or custom endpoints, with Independent & Debate modes, web search, attachments, and AI conclusions.'
   );
-  assert.equal(copy.vi.documentTitle, 'Zero Council — Hội đồng cố vấn AI đa mô hình (BYOK)');
+  assert.equal(copy.vi.documentTitle, 'Zero Council — Không gian Hội đồng AI đa mô hình (BYOK)');
   assert.equal(
     copy.vi.documentDescription,
-    'Triệu tập 2–8 cố vấn AI đa mô hình phân tích bằng Ma trận quyết định, 6 Chiếc Mũ & Nhánh kịch bản. Dùng API key riêng mã hóa AES-256. Bắt đầu miễn phí.'
+    'Trò chuyện 1-1 hoặc mở hội đồng nhiều bot AI trên 8 nhà cung cấp BYOK tích hợp sẵn và cổng tùy chỉnh, hỗ trợ chế độ Độc lập & Tranh luận, tìm kiếm web, đính kèm tệp và kết luận AI.'
   );
-  assert.ok(copy.vi.framework1Body.startsWith('Dự báo các kết quả'));
-  assert.ok(!copy.vi.framework1Body.includes('Dự bảo'));
-  assert.equal(copy.en.heroModelsList, 'Claude · GPT · Gemini · DeepSeek');
-  assert.equal(copy.vi.heroModelsList, 'Claude · GPT · Gemini · DeepSeek');
-  assert.equal(copy.en.heroFrameworkBadge, 'Decision Matrix');
-  assert.equal(copy.vi.heroFrameworkBadge, 'Ma trận quyết định');
+  assert.ok(copy.vi.framework1Body.startsWith('Thu thập góc nhìn khách quan'));
+  assert.equal(
+    copy.en.heroModelsList,
+    'Claude · OpenAI · Gemini · DeepSeek · Grok · Groq · OpenRouter · NIM'
+  );
+  assert.equal(
+    copy.vi.heroModelsList,
+    'Claude · OpenAI · Gemini · DeepSeek · Grok · Groq · OpenRouter · NIM'
+  );
+  assert.equal(copy.en.heroFrameworkBadge, 'Independent & Debate Modes');
+  assert.equal(copy.vi.heroFrameworkBadge, 'Chế độ Độc lập & Tranh luận');
 });

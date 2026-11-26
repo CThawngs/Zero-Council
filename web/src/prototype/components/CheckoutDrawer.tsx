@@ -779,25 +779,6 @@ export const CheckoutDrawer: React.FC<CheckoutDrawerProps> = ({ plan, onClose })
                   <span>{t.checkoutQrAutoTracking}</span>
                 </div>
 
-                {qr.isDevSimulation ? (
-                  <div className="w-full rounded-xl border border-dashed border-brass/50 bg-brass/10 p-3.5 text-center">
-                    <p className="text-xs font-semibold text-brass">{t.checkoutDevSimTitle}</p>
-                    <p className="mt-1 text-[11px] leading-relaxed text-ink-muted">{t.checkoutDevSimBody}</p>
-                    <button
-                      type="button"
-                      id="qr-dev-simulate-pay-btn"
-                      onClick={async () => {
-                        try {
-                          await fetch(`/api/payos/orders/${qr.orderCode}`, { method: 'PATCH' });
-                        } catch {}
-                      }}
-                      className="button-secondary mt-2.5 min-h-9 w-full justify-center text-xs border-brass/40 text-brass hover:bg-brass/20"
-                    >
-                      {t.checkoutDevSimAction}
-                    </button>
-                  </div>
-                ) : null}
-
                 <p className="text-center text-xs leading-relaxed text-ink-muted">
                   {t.checkoutQrCancelHint}
                 </p>

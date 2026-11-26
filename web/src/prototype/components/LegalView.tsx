@@ -77,15 +77,6 @@ export const LegalView: React.FC<LegalViewProps> = ({ documentSlug, standalone =
             <h1 className="mt-3 text-3xl font-extrabold text-ink sm:text-4xl">{docCopy.title}</h1>
           </header>
 
-          {false && docCopy.draft ? (
-            <p
-              role="note"
-              className="mt-6 rounded-2xl border-2 border-dashed border-[var(--tint-orange)] bg-[var(--tint-orange)]/10 p-4 text-sm font-semibold leading-relaxed text-ink"
-            >
-              {t.legalDraftNotice}
-            </p>
-          ) : null}
-
           <p className="mt-6 text-base leading-relaxed text-ink">{docCopy.intro}</p>
 
           <div className="mt-8 space-y-8">

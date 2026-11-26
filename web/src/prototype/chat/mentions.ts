@@ -46,14 +46,14 @@ export const CHAT_UX_COPY: Record<ChatLanguage, ChatUxCopy> = {
     mentionUserSubtitle: 'Your handle in this conversation (@user / @you)',
     mentionUserBadge: 'You',
     mentionConnectedLabel: 'Connected',
-    mentionPreviewLabel: 'Preview',
+    mentionPreviewLabel: 'API key required',
     defaultAttachmentPrompt: 'Analyze the attached files and media.',
     noKeySoloNote:
-      'Preview mode — no API key is connected for this bot yet, so replies use simulated preview text.',
+      'No API key is connected for this bot’s provider yet. Connect an API key in Integrations to start chatting.',
     noKeyGroupAllNote:
-      'Preview mode — no API key is connected yet, so bots reply with simulated preview text.',
+      'No API key is connected for the bots in this room yet. Connect at least one provider API key to run this council.',
     noKeyGroupPartialNote:
-      '{names} has no connected API key yet and will use simulated preview replies.',
+      '{names} cannot reply yet because its provider has no connected API key.',
     connectApiKeyCta: 'Connect API Key',
     openSettingsCtaSolo: 'Bot settings',
     openSettingsCtaGroup: 'Room settings',
@@ -74,14 +74,14 @@ export const CHAT_UX_COPY: Record<ChatLanguage, ChatUxCopy> = {
     mentionUserSubtitle: 'Định danh của bạn trong cuộc trò chuyện (@user / @you)',
     mentionUserBadge: 'Bạn',
     mentionConnectedLabel: 'Đã kết nối',
-    mentionPreviewLabel: 'Xem trước',
+    mentionPreviewLabel: 'Cần khóa API',
     defaultAttachmentPrompt: 'Hãy phân tích các tệp và phương tiện đính kèm.',
     noKeySoloNote:
-      'Chế độ xem trước — bot này chưa có API Key kết nối nên phản hồi đang dùng nội dung mô phỏng.',
+      'Nhà cung cấp của bot này chưa được kết nối khóa API. Hãy kết nối khóa API trong mục Tích hợp để bắt đầu trò chuyện.',
     noKeyGroupAllNote:
-      'Chế độ xem trước — chưa kết nối API Key nên các bot đang phản hồi bằng nội dung mô phỏng.',
+      'Các bot trong phòng này chưa có khóa API được kết nối. Hãy kết nối ít nhất một khóa API nhà cung cấp để chạy hội đồng.',
     noKeyGroupPartialNote:
-      '{names} chưa kết nối API Key nên sẽ dùng phản hồi xem trước mô phỏng.',
+      '{names} chưa thể phản hồi vì nhà cung cấp của bot chưa có khóa API được kết nối.',
     connectApiKeyCta: 'Kết nối API Key',
     openSettingsCtaSolo: 'Cài đặt bot',
     openSettingsCtaGroup: 'Cài đặt phòng',
