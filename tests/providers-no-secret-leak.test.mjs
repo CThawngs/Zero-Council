@@ -2,9 +2,9 @@
 // 1. maskProviderKey never exposes key prefixes or short secrets.
 // 2. pickConclusionAnalyst / analyzeChatRoomConclusion work with server-held keys (`hasKey: true`,
 //    no plaintext key in `keys`) when routed via the server completion adapter.
-// 3. `/api/providers` route handlers and `AppContext.tsx` do not serialize or hydrate `key`.
+// 3. `/api/providers` route handlers and `web/src/prototype/context/**` do not serialize or hydrate `key`.
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -82,7 +82,7 @@ test('pickConclusionAnalyst & analyzeChatRoomConclusion support server-held keys
   assert.equal(result.analysis.chair.summary, 'Proxy conclusion generated server-side.');
 });
 
-test('GET /api/providers strips plaintext key and AppContext never hydrates entry.key', () => {
+test('GET /api/providers strips plaintext key and AppContext modules never hydrate entry.key', () => {
   const providersRoute = readFileSync(join(ROOT, 'web/src/app/api/providers/route.ts'), 'utf8');
   assert.match(providersRoute, /rows\.map\(\(\{\s*key,\s*\.\.\.record\s*\}\)\s*=>/);
   assert.match(providersRoute, /hasKey:\s*true/);
@@ -93,7 +93,13 @@ test('GET /api/providers strips plaintext key and AppContext never hydrates entr
   assert.match(chatRoute, /enforceRateLimit/);
   assert.match(chatRoute, /getKey\(user\.email,\s*provider\)/);
 
-  const appContext = readFileSync(join(ROOT, 'web/src/prototype/context/AppContext.tsx'), 'utf8');
-  assert.equal(appContext.includes('entry.key'), false);
-  assert.equal(appContext.includes('[provider]: key'), false);
+  const contextDir = join(ROOT, 'web/src/prototype/context');
+  const contextFiles = readdirSync(contextDir).filter((f) => /\.(ts|tsx)$/.test(f));
+  assert.equal(contextFiles.includes('AppContext.tsx'), true);
+  assert.equal(contextFiles.includes('useProvidersAndBots.ts'), true);
+  for (const file of contextFiles) {
+    const content = readFileSync(join(contextDir, file), 'utf8');
+    assert.equal(content.includes('entry.key'), false, `${file} must not hydrate entry.key`);
+    assert.equal(content.includes('[provider]: key'), false, `${file} must not retain [provider]: key`);
+  }
 });
