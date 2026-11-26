@@ -555,6 +555,22 @@ const toGoogleContents = (request: ChatTurnRequest) => {
 /** Reasoning/thinking models (Gemini 2.5/3, OpenAI o-series) share this budget between internal thoughts and visible output, so 1024 truncates replies mid-sentence. */
 const CHAT_TURN_MAX_TOKENS = 4096;
 
+/**
+ * Blocks HTTP 3xx redirects when invoked on the server so a custom BYOK gateway cannot bounce
+ * server-side `fetch` onto internal/cloud-metadata addresses (`169.254.169.254`, `127.0.0.1`).
+ */
+const serverRedirectGuard = (): Pick<RequestInit, 'redirect'> =>
+  typeof window === 'undefined' ? { redirect: 'error' } : {};
+
+const rejectUnexpectedServerRedirect = (providerLabel: string, response: Response): void => {
+  if (
+    typeof window === 'undefined' &&
+    (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400))
+  ) {
+    throw new Error(`${providerLabel} redirect refused`);
+  }
+};
+
 /** Gửi request sinh phản hồi qua Anthropic Messages API và trích xuất text/handoff. */
 const requestAnthropic = async (
   credentials: Credentials,
@@ -578,8 +594,10 @@ const requestAnthropic = async (
       messages: toAnthropicMessages(request),
       ...(useTools ? { tools: [HANDOFF_TOOL] } : {}),
     }),
+    ...serverRedirectGuard(),
     signal: request.signal,
   });
+  rejectUnexpectedServerRedirect('anthropic', response);
 
   if (!response.ok) throw new Error(`anthropic ${response.status}: ${(await response.text()).slice(0, 300)}`);
   const payload = (await response.json()) as {
@@ -646,14 +664,17 @@ const requestOpenAi = async (
             }
           : baseBody
       ),
+      ...serverRedirectGuard(),
       signal: request.signal,
     });
 
   let response = await sendCompletion(useTools);
+  rejectUnexpectedServerRedirect(credentials.provider, response);
   if (!response.ok && useTools && credentials.provider !== 'openai' && response.status === 400) {
     const errText = await response.text().catch(() => '');
     if (/tool/i.test(errText)) {
       response = await sendCompletion(false);
+      rejectUnexpectedServerRedirect(credentials.provider, response);
     } else {
       throw new Error(`${credentials.provider} ${response.status}: ${errText.slice(0, 300)}`);
     }
@@ -733,9 +754,11 @@ const requestGoogle = async (
           : {}),
         generationConfig: { maxOutputTokens: CHAT_TURN_MAX_TOKENS },
       }),
+      ...serverRedirectGuard(),
       signal: request.signal,
     }
   );
+  rejectUnexpectedServerRedirect('google', response);
 
   if (!response.ok) throw new Error(`google ${response.status}: ${(await response.text()).slice(0, 300)}`);
   const payload = (await response.json()) as {
@@ -789,8 +812,10 @@ export const completeByokText = async (
         system: options.system,
         messages: [{ role: 'user', content: options.prompt }],
       }),
+      ...serverRedirectGuard(),
       signal: options.signal,
     });
+    rejectUnexpectedServerRedirect('anthropic', response);
     if (!response.ok) throw new Error(`anthropic ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = (await response.json()) as { content?: { type: string; text?: string }[] };
     return (payload.content ?? [])
@@ -815,9 +840,11 @@ export const completeByokText = async (
           contents: [{ role: 'user', parts: [{ text: options.prompt }] }],
           generationConfig: { maxOutputTokens: maxTokens },
         }),
+        ...serverRedirectGuard(),
         signal: options.signal,
       }
     );
+    rejectUnexpectedServerRedirect('google', response);
     if (!response.ok) throw new Error(`google ${response.status}: ${(await response.text()).slice(0, 300)}`);
     const payload = (await response.json()) as {
       candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] } }[];
@@ -844,8 +871,10 @@ export const completeByokText = async (
         { role: 'user', content: options.prompt },
       ],
     }),
+    ...serverRedirectGuard(),
     signal: options.signal,
   });
+  rejectUnexpectedServerRedirect(provider, response);
   if (!response.ok) throw new Error(`${provider} ${response.status}: ${(await response.text()).slice(0, 300)}`);
   const payload = (await response.json()) as {
     choices?: { message?: { content?: string | null } }[];

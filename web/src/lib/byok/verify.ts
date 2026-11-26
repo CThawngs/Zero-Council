@@ -26,7 +26,15 @@
  * by `node --test` directly (type stripping) as well as by Next.js.
  */
 
+import {
+  assertSafeRemoteUrl,
+  isPrivateProviderNetworkAllowed,
+  validateRemoteUrlLiteral,
+  type DnsLookupFn,
+} from '../security/ssrf.ts';
 import { visibleModelsForProvider } from '../../prototype/chat/modelAllowList.ts';
+
+const NATIVE_FETCH: typeof fetch | undefined = typeof fetch === 'function' ? fetch : undefined;
 
 export type VerifyProtocol = 'openai' | 'anthropic' | 'google';
 
@@ -65,6 +73,10 @@ export interface VerifyOptions {
   timeoutMs?: number;
   /** Wall-clock budget for the whole verification (all requests together). */
   totalBudgetMs?: number;
+  /** Injected DNS resolver for server SSRF tests. */
+  lookupImpl?: DnsLookupFn;
+  /** Explicit override for private-network allowance on custom endpoints. */
+  allowPrivateNetwork?: boolean;
 }
 
 export type VerifySuccess = {
@@ -219,37 +231,10 @@ export const checkKeyShape = (rawKey: unknown): 'EMPTY_KEY' | 'INVALID_KEY' | nu
   return null;
 };
 
-const PRIVATE_HOSTNAME_PATTERN = /(^localhost$|\.localhost$|\.local$|\.internal$|\.home\.arpa$)/i;
-
-const isPrivateIpv4 = (host: string): boolean => {
-  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
-  if (!match) return false;
-  const [first, second] = [Number(match[1]), Number(match[2])];
-  return (
-    first === 0 ||
-    first === 10 ||
-    first === 127 ||
-    (first === 100 && second >= 64 && second <= 127) ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    first >= 224
-  );
-};
-
-const isPrivateIpv6 = (host: string): boolean => {
-  const bare = host.replace(/^\[|\]$/g, '').toLowerCase();
-  if (!bare.includes(':')) return false;
-  if (bare === '::' || bare === '::1') return true;
-  if (bare.startsWith('fc') || bare.startsWith('fd') || bare.startsWith('fe80')) return true;
-  const mapped = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(bare);
-  return mapped ? isPrivateIpv4(mapped[1]) : false;
-};
-
 /**
- * Validates a custom provider Base URL before the SERVER calls it (SSRF guard).
- * Literal private / loopback / link-local hosts are refused unless `allowPrivateNetwork`.
- * Note: DNS names that resolve to private IPs are not resolved here (no DNS lookup).
+ * Validates a custom provider Base URL literal before calling it (SSRF guard).
+ * Literal private / loopback / link-local / hex-mapped IPv6 hosts are refused unless
+ * `allowPrivateNetwork` is enabled.
  */
 export const isAllowedProviderBaseUrl = (
   raw: unknown,
@@ -257,18 +242,35 @@ export const isAllowedProviderBaseUrl = (
 ): boolean => {
   const normalized = normalizeProviderBaseUrl(raw);
   if (!normalized) return false;
-  let url: URL;
+  return validateRemoteUrlLiteral(normalized, {
+    requireHttps: true,
+    allowPrivateNetwork: options.allowPrivateNetwork,
+  }).ok;
+};
+
+const isSafeCustomEndpointTarget = async (
+  baseUrl: string,
+  activeFetch: typeof fetch,
+  options: { lookupImpl?: DnsLookupFn; allowPrivateNetwork?: boolean }
+): Promise<boolean> => {
+  const allowPrivate = options.allowPrivateNetwork ?? isPrivateProviderNetworkAllowed();
+  if (allowPrivate) return true;
+  if (!validateRemoteUrlLiteral(baseUrl, { requireHttps: true, allowPrivateNetwork: false }).ok) {
+    return false;
+  }
+  const shouldResolveDns =
+    Boolean(options.lookupImpl) || (typeof window === 'undefined' && activeFetch === NATIVE_FETCH);
+  if (!shouldResolveDns) return true;
   try {
-    url = new URL(normalized);
+    await assertSafeRemoteUrl(baseUrl, {
+      requireHttps: true,
+      allowPrivateNetwork: false,
+      lookupImpl: options.lookupImpl,
+    });
+    return true;
   } catch {
     return false;
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return false;
-  if (url.username || url.password) return false;
-  if (options.allowPrivateNetwork) return true;
-  if (url.protocol !== 'https:') return false;
-  const host = url.hostname;
-  return !(PRIVATE_HOSTNAME_PATTERN.test(host) || isPrivateIpv4(host) || isPrivateIpv6(host));
 };
 
 type ParsedBody =
@@ -694,8 +696,17 @@ export const probeModel = async (
     timeoutMs?: number;
     authProven?: boolean;
     apiReachable?: boolean;
+    lookupImpl?: DnsLookupFn;
+    allowPrivateNetwork?: boolean;
   } = {}
 ): Promise<{ ok: true } | { ok: false; error: VerifyErrorCode }> => {
+  const activeFetch = options.fetchImpl ?? fetch;
+  if (target.providerId.startsWith('custom:')) {
+    const normalizedBase = normalizeProviderBaseUrl(target.baseUrl);
+    if (!(await isSafeCustomEndpointTarget(normalizedBase, activeFetch, options))) {
+      return { ok: false, error: 'INVALID_BASE_URL' };
+    }
+  }
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const outcome = await probeOnce(
     target,
@@ -955,6 +966,9 @@ export const verifyProviderKey = async (
   };
   const explicitModel = options.model?.trim() || undefined;
   const custom = isCustomProvider(normalizedTarget.providerId);
+  if (custom && !(await isSafeCustomEndpointTarget(baseUrl, context.fetchImpl, options))) {
+    return { ok: false, error: 'INVALID_BASE_URL' };
+  }
 
   const initial = await runSingleVerify(normalizedTarget, key, context, explicitModel);
   if (initial.result.ok) {

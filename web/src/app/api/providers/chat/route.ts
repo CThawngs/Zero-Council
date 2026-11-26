@@ -12,9 +12,10 @@ import { getKey } from '@/lib/byok/key-store';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
 import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
+import { assertSafeRemoteUrl, isPrivateProviderNetworkAllowed } from '@/lib/security/ssrf';
 import { effectivePlan } from '@/lib/store/account';
 import { listBots } from '@/lib/store/bots';
-import { isValidProviderId } from '@/lib/store/botValidation';
+import { isCustomProviderId, isValidProviderId } from '@/lib/store/botValidation';
 import { isBotDisabledForPlan, resolveRequestBotId } from '@/lib/store/planLimits';
 import { listProviderKeys, providerStoreErrorOf } from '@/lib/store/providerKeys';
 import { byokGenerator, completeByokText } from '@/prototype/chat/byok';
@@ -108,6 +109,17 @@ export async function POST(request: Request) {
   const resolved = resolveVerifyTarget({ provider, baseUrl: record.baseUrl });
   if (!resolved.ok) {
     return Response.json({ ok: false, error: resolved.error }, { status: 400 });
+  }
+
+  if (isCustomProviderId(provider) && !isPrivateProviderNetworkAllowed()) {
+    try {
+      await assertSafeRemoteUrl(resolved.target.baseUrl, {
+        requireHttps: true,
+        allowPrivateNetwork: false,
+      });
+    } catch {
+      return Response.json({ ok: false, error: 'INVALID_BASE_URL' }, { status: 400 });
+    }
   }
 
   let apiKey: string | null;

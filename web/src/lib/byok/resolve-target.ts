@@ -4,19 +4,21 @@
  * - Built-in providers ALWAYS use their canonical protocol + Base URL; whatever the client sent is
  *   ignored, so a verified provider key can never be routed to an attacker-controlled host.
  * - Custom providers take their protocol from the id (`custom:openai:*` / `custom:anthropic:*`) and
- *   their Base URL must pass the SSRF guard (no loopback / private hosts in production).
+ *   their Base URL must pass the SSRF guard (no loopback / private hosts outside local dev).
  */
 
-import { customProviderProtocolOf, isBuiltinProviderId, isCustomProviderId } from '@/lib/store/botValidation';
-import { builtinProviderById, normalizeBaseUrl } from '@/prototype/chat/byok';
+import { isPrivateProviderNetworkAllowed } from '../security/ssrf.ts';
+import {
+  customProviderProtocolOf,
+  isBuiltinProviderId,
+  isCustomProviderId,
+} from '../store/botValidation.ts';
+import { builtinProviderById, normalizeBaseUrl } from '../../prototype/chat/byok.ts';
 import { isAllowedProviderBaseUrl, type VerifyTarget } from './verify.ts';
 
 export type ResolveTargetResult =
   | { ok: true; target: VerifyTarget; label: string }
   | { ok: false; error: 'UNKNOWN_PROVIDER' | 'INVALID_PROTOCOL' | 'INVALID_BASE_URL' };
-
-const allowPrivateProviderNetwork = (): boolean =>
-  process.env.NODE_ENV !== 'production' || process.env.ZC_ALLOW_PRIVATE_PROVIDER_URLS === '1';
 
 export const resolveVerifyTarget = (input: {
   provider: unknown;
@@ -49,7 +51,11 @@ export const resolveVerifyTarget = (input: {
     if (input.protocol !== undefined && input.protocol !== protocol) {
       return { ok: false, error: 'INVALID_PROTOCOL' };
     }
-    if (!isAllowedProviderBaseUrl(input.baseUrl, { allowPrivateNetwork: allowPrivateProviderNetwork() })) {
+    if (
+      !isAllowedProviderBaseUrl(input.baseUrl, {
+        allowPrivateNetwork: isPrivateProviderNetworkAllowed(),
+      })
+    ) {
       return { ok: false, error: 'INVALID_BASE_URL' };
     }
     const label =
