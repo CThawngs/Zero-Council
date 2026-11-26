@@ -1,5 +1,6 @@
 import { adminOnly } from '@/lib/api/adminOnly';
 import { parseCouponInput } from '@/lib/api/couponInput';
+import { verifySameOrigin } from '@/lib/security/request-guard';
 import { createCoupon, listCoupons, listRedemptions, type Coupon } from '@/lib/store/account';
 
 export async function GET() {
@@ -8,8 +9,6 @@ export async function GET() {
 
   try {
     const [coupons, redemptions] = await Promise.all([listCoupons(), listRedemptions()]);
-    // Usage is counted from the redemptions rather than stored on the coupon, so the number cannot
-    // drift away from the rows that justify it.
     const usage = new Map<string, number>();
     for (const row of redemptions) usage.set(row.couponCode, (usage.get(row.couponCode) ?? 0) + 1);
     return Response.json({
@@ -22,6 +21,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const denied = await adminOnly();
   if (denied) return denied;
 
@@ -37,7 +39,10 @@ export async function POST(request: Request) {
 
   const coupon: Coupon = {
     ...parsed.value,
-    createdBy: typeof (body as { createdBy?: unknown }).createdBy === 'string' ? (body as { createdBy: string }).createdBy : null,
+    createdBy:
+      typeof (body as { createdBy?: unknown }).createdBy === 'string'
+        ? (body as { createdBy: string }).createdBy
+        : null,
     createdAt: new Date().toISOString(),
   };
 

@@ -25,27 +25,48 @@ const buckets = new Map<string, number[]>();
 const sanitiseToken = (value: string, maxLen = 160): string =>
   value.trim().toLowerCase().slice(0, maxLen) || 'unknown';
 
-export const extractClientIp = (request: Request): string => {
-  const forwarded = request.headers.get('x-forwarded-for');
-  if (forwarded) {
-    const first = forwarded.split(',')[0]?.trim();
+/**
+ * Extracts the caller's IP address with proxy-spoofing resistance:
+ * 1. `x-vercel-forwarded-for` (populated and overwritten at the Vercel edge)
+ * 2. `x-real-ip` (trusted single-IP reverse proxy header)
+ * 3. Rightmost entry of `x-forwarded-for` (the hop appended by the nearest proxy, avoiding
+ *    client-spoofed leftmost entries)
+ */
+export const getClientIp = (request: Request): string => {
+  const vercelForwarded = request.headers.get('x-vercel-forwarded-for');
+  if (vercelForwarded) {
+    const first = vercelForwarded.split(',')[0]?.trim();
     if (first) return sanitiseToken(first, 128);
   }
+
   const realIp = request.headers.get('x-real-ip')?.trim();
   if (realIp) return sanitiseToken(realIp, 128);
+
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const hops = forwarded
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    const rightmost = hops.at(-1);
+    if (rightmost) return sanitiseToken(rightmost, 128);
+  }
+
   return 'local';
 };
+
+export const extractClientIp = getClientIp;
 
 const buildBucketKey = (request: Request, options: RateLimitCheckOptions): string => {
   const scope = sanitiseToken(options.scope, 80);
   const hasSubject = typeof options.subject === 'string' && options.subject.trim().length > 0;
   if (hasSubject && options.includeIp) {
-    return `${scope}:ip:${extractClientIp(request)}:sub:${sanitiseToken(options.subject!)}`;
+    return `${scope}:ip:${getClientIp(request)}:sub:${sanitiseToken(options.subject!)}`;
   }
   if (hasSubject) {
     return `${scope}:sub:${sanitiseToken(options.subject!)}`;
   }
-  return `${scope}:ip:${extractClientIp(request)}`;
+  return `${scope}:ip:${getClientIp(request)}`;
 };
 
 const isRateLimitBypassed = (): boolean =>

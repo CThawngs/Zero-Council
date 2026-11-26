@@ -2,7 +2,7 @@ import { PLANS } from '@/prototype/data/plans';
 import { currentAccount } from '@/lib/currentUser';
 import { amountAfterCoupon, checkCoupon } from '@/lib/coupons';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 
 const MAX_BODY_BYTES = 16 * 1024;
 
@@ -12,6 +12,9 @@ const MAX_BODY_BYTES = 16 * 1024;
  * (or immediately for a 100% coupon during create-payment).
  */
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const parsedBody = await readBoundedJson<{ planId?: unknown; code?: unknown }>(
     request,
     MAX_BODY_BYTES

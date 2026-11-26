@@ -329,6 +329,7 @@ const completeByokTextViaServer = async (
     apiKey?: string;
     protocol?: 'anthropic' | 'openai' | 'google';
     baseUrl?: string;
+    botId?: string;
   },
   options: { system: string; prompt: string; maxTokens?: number; signal?: AbortSignal }
 ): Promise<string> => {
@@ -346,6 +347,7 @@ const completeByokTextViaServer = async (
       mode: 'text',
       provider: credentials.provider,
       model: credentials.model,
+      ...(credentials.botId ? { botId: credentials.botId } : {}),
       system: options.system,
       prompt: options.prompt,
       maxTokens: options.maxTokens,
@@ -392,6 +394,7 @@ const buildGenerate = (
         apiKey: resolvedKey,
         protocol: keyMeta.protocol,
         baseUrl: keyMeta.baseUrl,
+        botId: advisorId.startsWith('bot:') ? advisorId.slice(4) : undefined,
       },
       {
         system: stance
@@ -1004,7 +1007,6 @@ export const AppProvider: React.FC<{
             id: snapshot.conversationId,
             title: snapshot.title,
             mode: snapshot.mode,
-            roster: snapshot.roster,
             messages: snapshot.messages,
             turns: snapshot.turns,
             stoppedBy: snapshot.stoppedBy,
@@ -1518,6 +1520,7 @@ export const AppProvider: React.FC<{
                 mode: 'turn',
                 provider: resolvedProvider,
                 model: resolvedModel,
+                ...(isUserBot ? { botId: persona.id.slice(4) } : {}),
                 persona: botPersona,
                 turnRequest: serializableTurn,
               }),

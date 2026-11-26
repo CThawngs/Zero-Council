@@ -1,6 +1,7 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
+import { effectivePlan } from '@/lib/store/account';
 import {
   createConversation,
   deleteAllConversations,
@@ -9,6 +10,11 @@ import {
   updateConversation,
   validateCreateConversation,
 } from '@/lib/store/conversations';
+import {
+  isGroupRosterOverPlanLimit,
+  normalizeRosterIds,
+  planLimits,
+} from '@/lib/store/planLimits';
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
 
@@ -25,6 +31,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -49,6 +58,19 @@ export async function POST(request: Request) {
     return Response.json({ error: parsed.error }, { status: 400 });
   }
   try {
+    if (parsed.value.kind === 'group') {
+      const planRecord = await effectivePlan(user.email).catch(() => null);
+      const activePlanId = planRecord?.planId ?? 'free';
+      if (isGroupRosterOverPlanLimit(parsed.value.roster.length, activePlanId)) {
+        return Response.json(
+          {
+            error: 'PLAN_ADVISOR_LIMIT',
+            maxActiveAdvisors: planLimits(activePlanId).maxActiveAdvisors,
+          },
+          { status: 403 }
+        );
+      }
+    }
     const conversation = await createConversation(user.email, parsed.value);
     return Response.json({ conversation }, { status: 201 });
   } catch (error) {
@@ -58,6 +80,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -75,11 +100,31 @@ export async function PATCH(request: Request) {
 
   const payload = (body && typeof body === 'object' ? body : {}) as {
     id?: unknown;
+    roster?: unknown;
   } & Record<string, unknown>;
   if (typeof payload.id !== 'string' || !payload.id.trim()) {
     return Response.json({ error: 'CONVERSATION_ID_REQUIRED' }, { status: 400 });
   }
   try {
+    if (Array.isArray(payload.roster)) {
+      const existing = (await listConversations(user.email)).find(
+        (item) => item.id === payload.id!.toString().trim()
+      );
+      if (existing?.kind === 'group') {
+        const planRecord = await effectivePlan(user.email).catch(() => null);
+        const activePlanId = planRecord?.planId ?? 'free';
+        const nextRoster = normalizeRosterIds(payload.roster);
+        if (isGroupRosterOverPlanLimit(nextRoster.length, activePlanId)) {
+          return Response.json(
+            {
+              error: 'PLAN_ADVISOR_LIMIT',
+              maxActiveAdvisors: planLimits(activePlanId).maxActiveAdvisors,
+            },
+            { status: 403 }
+          );
+        }
+      }
+    }
     const result = await updateConversation(user.email, payload.id.trim(), payload);
     if ('error' in result) {
       const status = result.error === 'CONVERSATION_NOT_FOUND' ? 404 : 400;
@@ -93,6 +138,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
   try {

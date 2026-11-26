@@ -1,7 +1,11 @@
 import { currentAccount } from '@/lib/currentUser';
+import { enforceRateLimit } from '@/lib/security/rate-limit';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 import { effectivePlan, revokeGrants } from '@/lib/store/account';
 import { planChangeAction } from '@/lib/store/planChange';
 import type { PlanId } from '@/prototype/data/plans';
+
+const MAX_BODY_BYTES = 4 * 1024;
 
 /**
  * POST { to: 'free' | 'pro' } — the cancel / downgrade lever.
@@ -9,14 +13,24 @@ import type { PlanId } from '@/prototype/data/plans';
  * - to free: revoke the running grant(s). The account is Free from the next read.
  * - to pro (from Ultra only): revoke Ultra, then the client opens a fresh Pro checkout
  *   and pays for Pro normally. Returning `{ checkout: 'pro' }` tells it to do so.
- *
- * The rule lives in the pure helper so both the decision and this route share one truth.
  */
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const account = await currentAccount();
   if (!account) return Response.json({ error: 'NEED_LOGIN' }, { status: 401 });
 
-  const body = (await request.json().catch(() => null)) as { to?: unknown } | null;
+  const limited = enforceRateLimit(request, {
+    scope: 'plan:cancel',
+    limit: 20,
+    windowMs: 60_000,
+    subject: account.email,
+  });
+  if (limited) return limited;
+
+  const parsedBody = await readBoundedJson<{ to?: unknown }>(request, MAX_BODY_BYTES);
+  const body = parsedBody.ok ? parsedBody.data : null;
   const to = typeof body?.to === 'string' ? body.to : '';
 
   const current = (await effectivePlan(account.email).catch(() => null))?.planId ?? 'free';

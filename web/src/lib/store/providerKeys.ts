@@ -7,7 +7,6 @@ import {
   MISSING_PROVIDER_KEY_SECRET,
 } from '../crypto/providerKeys.ts';
 import { serverEnv } from '../serverEnv.ts';
-import { isBuiltinProviderId } from './botValidation.ts';
 
 export interface ProviderKeyRecord {
   provider: string;
@@ -81,10 +80,10 @@ export const providerStoreErrorOf = (
   return { code: 'STORE_UNAVAILABLE', status: 502 };
 };
 
-/** PostgreSQL foreign-key violation on the provider column (migration 0006 constraint). */
-const isProviderForeignKeyViolation = (error: unknown): boolean => {
+/** PostgreSQL foreign-key violation from an unmigrated pre-0008 schema. */
+const isLegacyProviderForeignKeyError = (error: unknown): boolean => {
   const message = error instanceof Error ? error.message : '';
-  return /23503/.test(message) && /(fk_zc_provider_keys_provider|zc_provider_keys_provider_fkey|zc_agent_providers)/.test(message);
+  return /23503/.test(message) && /(fk_zc_provider_keys_provider|zc_provider_keys_provider_fkey)/.test(message);
 };
 
 /** PostgREST / PostgreSQL "column does not exist" (database older than migration 0008). */
@@ -211,10 +210,7 @@ export const listProviderKeysWithSecrets = async (
       try {
         results.push({ ...toRecord(row), key: decryptProviderKey(row.encrypted_key ?? '') });
       } catch (error) {
-        // A missing / malformed secret is a server misconfiguration: surface it instead of
-        // pretending the user has no keys.
         if (CONFIGURATION_ERRORS.has((error as Error).message)) throw error;
-        // One row sealed with a secret that is no longer configured: skip it (re-saving fixes it).
         console.warn(
           `[store/providerKeys] skipping unreadable row for ${row.provider}: ${(error as Error).message}`
         );
@@ -259,8 +255,9 @@ export const saveProviderKey = async (
   const updatedAt = new Date().toISOString();
   const models = normalizeModels(model, meta.models);
   if (supabaseConfig()) {
-    const upsertWithMetadata = () =>
-      request('zc_provider_keys?on_conflict=user_email,provider', {
+    let rows: unknown = null;
+    try {
+      rows = await request('zc_provider_keys?on_conflict=user_email,provider', {
         method: 'POST',
         body: JSON.stringify({
           user_email: key,
@@ -274,29 +271,18 @@ export const saveProviderKey = async (
           updated_at: updatedAt,
         }),
       });
-
-    let rows: unknown = null;
-    try {
-      rows = await upsertWithMetadata();
     } catch (error) {
-      if (isProviderForeignKeyViolation(error)) {
-        // Database still carries migration 0006's provider FK (0008 drops it). Built-in ids are
-        // seeded into the public catalog and retried; custom ids are NOT written there because the
-        // catalog is world-readable and would leak user-chosen names.
-        if (!isBuiltinProviderId(provider)) throw new Error(STORE_SCHEMA_OUTDATED);
-        await request('zc_agent_providers?on_conflict=id', {
-          method: 'POST',
-          body: JSON.stringify({ id: provider, name: meta.label ?? provider }),
-        });
-        rows = await upsertWithMetadata();
-      } else if (!isMissingColumnError(error)) {
+      if (isLegacyProviderForeignKeyError(error)) {
+        // Pre-0008 schema still carrying the dropped provider FK: report schema outdated cleanly.
+        throw new Error(STORE_SCHEMA_OUTDATED);
+      }
+      if (!isMissingColumnError(error)) {
         throw error;
       }
     }
     const [savedRow] = (Array.isArray(rows) ? rows : []) as Row[];
     if (savedRow) return toRecord(savedRow);
     if (rows === null) {
-      // Pre-0008 schema without the metadata columns: store the essentials only.
       const legacyRows = await request('zc_provider_keys?on_conflict=user_email,provider', {
         method: 'POST',
         body: JSON.stringify({

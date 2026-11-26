@@ -1,9 +1,50 @@
-import { planById, type PlanId } from '../../prototype/data/plans.ts';
+import { planById, type Plan, type PlanId } from '../../prototype/data/plans.ts';
 
 export interface BotLikeForPlan {
   id: string;
   createdAt?: string;
 }
+
+/** Returns the active plan's `{ maxActiveAdvisors, maxBots }` limits (defaults to Free). */
+export const planLimits = (planId: PlanId | null | undefined): Plan =>
+  planById(planId ?? 'free');
+
+/** Deduplicates and trims a raw roster array for plan-limit evaluation. */
+export const normalizeRosterIds = (roster: unknown): string[] => {
+  if (!Array.isArray(roster)) return [];
+  return [
+    ...new Set(
+      roster
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .map((item) => item.trim())
+    ),
+  ];
+};
+
+/** True when a group conversation roster exceeds the plan's `maxActiveAdvisors` allowance. */
+export const isGroupRosterOverPlanLimit = (
+  rosterLength: number,
+  planId: PlanId | null | undefined
+): boolean => rosterLength > planLimits(planId).maxActiveAdvisors;
+
+/**
+ * Extracts a normalized user-created bot ID (stripping an optional `bot:` persona prefix) from
+ * either an explicit `botId` field or a `turnRequest.bot.id` handle.
+ */
+export const resolveRequestBotId = (
+  explicitBotId: unknown,
+  turnBotId?: unknown
+): string | null => {
+  if (typeof explicitBotId === 'string' && explicitBotId.trim()) {
+    const trimmed = explicitBotId.trim();
+    return trimmed.startsWith('bot:') ? trimmed.slice('bot:'.length) : trimmed;
+  }
+  if (typeof turnBotId === 'string' && turnBotId.startsWith('bot:')) {
+    const stripped = turnBotId.slice('bot:'.length).trim();
+    return stripped || null;
+  }
+  return null;
+};
 
 /**
  * Computes which user-created bots exceed the active plan's `maxBots` allowance.
@@ -23,6 +64,17 @@ export const disabledBotIdsForPlan = (
     return a.id.localeCompare(b.id);
   });
   return new Set(ordered.slice(cap).map((bot) => bot.id));
+};
+
+/** True when `botId` belongs to a user bot locked out by the account's current `maxBots` cap. */
+export const isBotDisabledForPlan = (
+  botId: string | null | undefined,
+  bots: readonly BotLikeForPlan[],
+  planId: PlanId | null | undefined
+): boolean => {
+  if (!botId) return false;
+  const normalized = botId.startsWith('bot:') ? botId.slice('bot:'.length) : botId;
+  return disabledBotIdsForPlan(bots, planId ?? 'free').has(normalized);
 };
 
 const rawBotIdFromPersonaId = (personaId: string): string | null =>

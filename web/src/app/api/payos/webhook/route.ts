@@ -1,4 +1,4 @@
-import { serverEnv } from '@/lib/serverEnv';
+import { getPayosCredentials } from '@/lib/payos/config';
 import { getOrder, markOrder, sweepStaleOrders, type OrderStatus } from '@/lib/payos/orders';
 import { verifySignature } from '@/lib/payos/signature';
 import { addGrant, listGrants, redeemCoupon } from '@/lib/store/account';
@@ -12,18 +12,7 @@ const STATUS_BY_CODE: Record<string, OrderStatus> = {
 };
 
 export async function POST(request: Request) {
-  const clientId =
-    serverEnv('PAYOS_CLIENT_ID') ??
-    serverEnv('PAYLOS_CLIENT_ID') ??
-    serverEnv('NEXT_PUBLIC_PAYOS_CLIENT_ID');
-  const apiKey =
-    serverEnv('PAYOS_API_KEY') ??
-    serverEnv('PAYLOS_API_KEY') ??
-    serverEnv('NEXT_PUBLIC_PAYOS_API_KEY');
-  const checksumKey =
-    serverEnv('PAYOS_CHECKSUM_KEY') ??
-    serverEnv('PAYLOS_CHECKSUM_KEY') ??
-    serverEnv('PAYOS_CHECKSUM');
+  const { clientId, apiKey, checksumKey } = getPayosCredentials();
 
   if (!checksumKey) {
     console.error('[payos] webhook rejected: PAYOS_CHECKSUM_KEY missing');
@@ -80,9 +69,7 @@ export async function POST(request: Request) {
     return new Response('amount mismatch', { status: 409 });
   }
 
-  // `code` is a sibling of `data` in the payOS envelope, not a field inside it. An unrecognised
-  // code is refused rather than defaulted, so a future payOS status can never be read as a
-  // payment we did not verify.
+  // `code` is a sibling of `data` in the payOS envelope, not a field inside it.
   const status = STATUS_BY_CODE[String(payload.code)];
   if (!status) {
     console.warn('[payos] webhook rejected: unknown code', String(payload.code));
@@ -98,20 +85,13 @@ export async function POST(request: Request) {
       : {}),
   });
 
-  // `markOrder` refuses to move an order out of PAID, but it still returns the order either way —
-  // so the guard below has to compare the state read at the top, not the fact that the write was
-  // filtered. Without this, a duplicate payOS callback would stack a second free month.
   const wasAlreadyPaid = order.status === 'PAID';
 
-  // Marking the order PAID and granting the plan are separate steps on purpose: a grant that
-  // succeeded but whose order write then failed would be far worse than the other way round.
   if (status === 'PAID' && !wasAlreadyPaid && order.userEmail) {
     const existingGrants = await listGrants(order.userEmail).catch(() => []);
     const alreadyGranted = existingGrants.some((g) => g.orderCode === orderCode);
     if (!alreadyGranted) {
       if (order.couponCode) {
-        // Null here means the account already used this code, which the unique key enforces. Not an
-        // error: the plan is still owed, and refusing to grant it would punish the buyer for a race.
         await redeemCoupon(order.couponCode, order.userEmail, order.couponPercent ?? 0, orderCode);
       }
       const grant = await addGrant({

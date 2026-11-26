@@ -1,5 +1,5 @@
 // Provider-key encryption secret resolution, key-version tags, rotation and legacy decrypt,
-// plus the store's typed errors and foreign-key handling. No network: Supabase is stubbed.
+// plus the store's typed errors and outdated-schema FK refusal. No network: Supabase is stubbed.
 import assert from 'node:assert/strict';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import test from 'node:test';
@@ -113,7 +113,7 @@ test('legacy v1 rows sealed with SHA-256(service-role key) (pre-v2 local dev) st
   });
 });
 
-test('a different service-role key can never open another project\'s rows', async () => {
+test("a different service-role key can never open another project's rows", async () => {
   let envelope = '';
   await withEnv({ VERCEL: '1', SUPABASE_SERVICE_ROLE_KEY: SERVICE_ROLE_KEY }, () => {
     envelope = encryptProviderKey('sk-project-a');
@@ -128,7 +128,6 @@ test('deployed host with no usable secret: typed errors, never a static fallback
     assert.equal(getEncryptionMode(), 'missing');
     assert.equal(isEncryptionKeyConfigured(), false);
     assert.throws(() => encryptProviderKey('sk-x'), /^Error: MISSING_PROVIDER_KEY_SECRET$/);
-    // A dev-fallback envelope must not open on a deployed host.
     assert.throws(() => decryptProviderKey(legacyEnvelope('sk-dev', 'zc-dev-only-not-a-secret')), /MISSING_PROVIDER_KEY_SECRET/);
   });
   await withEnv({ VERCEL: '1', SUPABASE_SERVICE_ROLE_KEY: 'your-service-role-key' }, () => {
@@ -202,45 +201,60 @@ const FK_VIOLATION = {
   message: 'insert or update on table "zc_provider_keys" violates foreign key constraint "fk_zc_provider_keys_provider"',
 };
 
-test('save on an old schema with the provider FK: built-in id is seeded once, then saved', async () => {
-  let keyAttempts = 0;
+test('saveProviderKey persists encrypted row directly to zc_provider_keys without touching dropped catalog tables', async () => {
   await withSupabase(
     (path, method, body) => {
       if (path.startsWith('zc_provider_keys') && method === 'POST') {
-        keyAttempts += 1;
-        if (keyAttempts === 1) return [409, FK_VIOLATION];
         return [201, [{ ...body, updated_at: body.updated_at }]];
       }
-      if (path.startsWith('zc_agent_providers')) return [201, [{ id: body.id, name: body.name }]];
       return [404, {}];
     },
     async (calls) => {
-      const saved = await saveProviderKey('User@Example.com', 'nvidia', 'meta/llama-3.1-8b-instruct', 'nvapi-real-key-123', {
-        label: 'NVIDIA NIM',
-        protocol: 'openai',
-        baseUrl: 'https://integrate.api.nvidia.com/v1',
-      });
+      const saved = await saveProviderKey(
+        'User@Example.com',
+        'nvidia',
+        'meta/llama-3.1-8b-instruct',
+        'nvapi-real-key-123',
+        {
+          label: 'NVIDIA NIM',
+          protocol: 'openai',
+          baseUrl: 'https://integrate.api.nvidia.com/v1',
+        }
+      );
       assert.equal(saved.provider, 'nvidia');
-      const catalogWrites = calls.filter((call) => call.path.startsWith('zc_agent_providers'));
-      assert.equal(catalogWrites.length, 1);
-      assert.deepEqual(catalogWrites[0].body, { id: 'nvidia', name: 'NVIDIA NIM' });
-      const stored = calls.filter((call) => call.path.startsWith('zc_provider_keys')).at(-1).body;
+      assert.equal(calls.length, 1);
+      assert.ok(calls[0].path.startsWith('zc_provider_keys'));
+      const stored = calls[0].body;
       assert.equal(stored.user_email, 'user@example.com');
-      assert.ok(stored.encrypted_key.startsWith('v2:srk1:'), 'Vercel without ZC_PROVIDER_KEY_SECRET uses the derived key');
-      assert.ok(!JSON.stringify(calls).includes('nvapi-real-key-123'), 'the plaintext key never reaches the database');
+      assert.ok(
+        stored.encrypted_key.startsWith('v2:srk1:'),
+        'Vercel without ZC_PROVIDER_KEY_SECRET uses the derived key'
+      );
+      assert.ok(
+        !JSON.stringify(calls).includes('nvapi-real-key-123'),
+        'the plaintext key never reaches the database'
+      );
     }
   );
 });
 
-test('save on an old schema with the provider FK: custom ids are refused with STORE_SCHEMA_OUTDATED, nothing leaks to the public catalog', async () => {
+test('save on an unmigrated pre-0008 schema with the provider FK fails fast with STORE_SCHEMA_OUTDATED for all providers', async () => {
   await withSupabase(
-    (path, method) => (path.startsWith('zc_provider_keys') && method === 'POST' ? [409, FK_VIOLATION] : [201, []]),
+    (path, method) =>
+      path.startsWith('zc_provider_keys') && method === 'POST' ? [409, FK_VIOLATION] : [404, {}],
     async (calls) => {
       await assert.rejects(
-        () => saveProviderKey('user@example.com', 'custom:openai:my-gateway', 'm', 'gw-key-1234567', { label: 'My secret gateway' }),
+        () => saveProviderKey('user@example.com', 'nvidia', 'meta/llama-3.1-8b-instruct', 'nvapi-real-key-123'),
         /^Error: STORE_SCHEMA_OUTDATED$/
       );
-      assert.equal(calls.filter((call) => call.path.startsWith('zc_agent_providers')).length, 0);
+      await assert.rejects(
+        () =>
+          saveProviderKey('user@example.com', 'custom:openai:my-gateway', 'm', 'gw-key-1234567', {
+            label: 'My secret gateway',
+          }),
+        /^Error: STORE_SCHEMA_OUTDATED$/
+      );
+      assert.equal(calls.every((call) => call.path.startsWith('zc_provider_keys')), true);
     }
   );
 });
@@ -254,7 +268,6 @@ test('save without any encryption secret on Vercel fails with the typed error be
   };
   try {
     await withEnv({ VERCEL: '1', SUPABASE_URL: 'https://db.example.supabase.co' }, async () => {
-      // No service-role key: Supabase is not configured either, so the store refuses first.
       await assert.rejects(() => saveProviderKey('u@example.com', 'openai', 'gpt-4o', 'sk-x-123456789'), /SUPABASE_NOT_CONFIGURED/);
     });
   } finally {
