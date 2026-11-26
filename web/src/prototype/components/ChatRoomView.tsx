@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { modelLabel, providerLabel } from '../data/mockData';
+import { modelLabel, providerLabel } from '../data/catalog';
 import { planById } from '../data/plans';
 import {
   AlertCircle,

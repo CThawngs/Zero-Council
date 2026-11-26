@@ -139,7 +139,7 @@ test('robots(), sitemap(), manifest(), and llms.txt expose complete, accurate pu
     assert.ok(rule.allow.includes('/'));
     assert.ok(rule.allow.includes('/guide'));
     assert.ok(rule.allow.includes('/legal/'));
-    for (const blocked of ['/dashboard', '/admin', '/api/', '/auth/callback', '/checkout/', '/fixture']) {
+    for (const blocked of ['/dashboard', '/admin', '/api/', '/auth/callback', '/checkout/']) {
       assert.ok(rule.disallow.includes(blocked), `robots disallow missing ${blocked}`);
     }
 
@@ -263,7 +263,7 @@ test('isPublicPath & canAccessWithoutPasswordClaim whitelist crawler routes and 
   assert.equal(isValidLegalPath('/legal'), false);
   assert.equal(isPublicPath('/legal/unknown-slug'), false);
 
-  for (const priv of ['/dashboard', '/admin', '/fixture']) {
+  for (const priv of ['/dashboard', '/admin']) {
     assert.equal(isPublicPath(priv), false, `Expected ${priv} to require auth`);
     assert.equal(canAccessWithoutPasswordClaim(priv), false);
   }

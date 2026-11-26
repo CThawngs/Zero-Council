@@ -23,24 +23,12 @@ import {
   UserBot,
   ViewType,
   cookieLanguage,
-  frameworkIdOf,
   legalDocumentOf,
 } from '../types';
-import {
-  DeliberationCancelled,
-  runDeliberation,
-  type CommunicationMode,
-  type GenerateFn,
-  type Round,
-} from '@/lib/deliberation/engine';
-import {
-  initialApiKeys,
-  initialPersonas,
-  initialSessions,
-  localizePersona,
-} from '../data/mockData';
+import type { CommunicationMode, Round } from '@/lib/deliberation/types';
+import { INITIAL_PROVIDERS, localizePersona } from '../data/catalog';
 import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
-import { copy, modeLabel, translations, type Copy } from '../i18n';
+import { copy, translations } from '../i18n';
 import { applyTheme, readTheme, resolveInitialTheme, THEME_STORAGE_KEY, type Theme } from '../theme';
 import type { ContentPanelPayload } from '../chat/content-render';
 import {
@@ -76,7 +64,6 @@ import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
 import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
 import { isVideoFile, readVideoInBrowser } from '../chat/read-video-web';
 import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storage';
-import { scriptedGenerator } from '../chat/scripted';
 import { planById, type Plan, type PlanId } from '../data/plans';
 import { disabledBotIdsForPlan, partitionRoomRosterByPlan } from '@/lib/store/planLimits';
 import { createClient, isSupabaseBrowserConfigured } from '@/lib/supabase/client';
@@ -133,15 +120,6 @@ interface AppContextType {
   currentSessionId: string;
   setCurrentSessionId: (id: string) => void;
   currentSession: DeliberationSession;
-  startNewSession: (
-    question?: string,
-    framework?: DeliberationSession['framework'],
-    advisors?: AdvisorPersona[],
-    landOn?: ViewType
-  ) => void;
-  setCurrentFramework: (framework: DeliberationSession['framework']) => void;
-  setCurrentMode: (mode: CommunicationMode) => void;
-  runRound: (prompt: string) => Promise<void>;
   cancelRound: () => void;
   isDeliberating: boolean;
   selectedRoundIndex: number;
@@ -202,9 +180,6 @@ interface AppContextType {
   getProviderSecret: (provider: ModelProvider) => string | undefined;
   removeApiKey: (provider: ModelProvider) => Promise<void>;
   revokeAllKeys: () => Promise<void>;
-  isFrameworkModalOpen: boolean;
-  openFrameworkModal: () => void;
-  closeFrameworkModal: () => void;
   contentPanel: ContentPanelPayload | null;
   openContentPanel: (payload: ContentPanelPayload) => void;
   closeContentPanel: () => void;
@@ -262,32 +237,36 @@ const nextSessionId = (() => {
   };
 })();
 
-const scenarioFixture = (t: Copy) => ({
-  good: {
-    title: t.favorableTitle,
-    subtitle: t.illustrativeOnly,
-    description: t.favorableDescription,
-    actions: [t.favorableActionOne, t.favorableActionTwo],
-  },
-  normal: {
-    title: t.baselineTitle,
-    subtitle: t.illustrativeOnly,
-    description: t.baselineDescription,
-    actions: [t.baselineActionOne, t.baselineActionTwo],
-  },
-  bad: {
-    title: t.difficultTitle,
-    subtitle: t.illustrativeOnly,
-    description: t.difficultDescription,
-    actions: [t.difficultActionOne, t.difficultActionTwo],
-  },
-});
-
-const stancesOf = (personas: AdvisorPersona[]) =>
-  personas.reduce<Record<string, string>>((map, persona) => {
-    map[persona.id] = persona.stance;
-    return map;
-  }, {});
+const emptyConcludedSession = (language: Language): DeliberationSession => {
+  const t = copy[language];
+  const round: Round = {
+    index: 1,
+    mode: 'independent',
+    framework: 'scenarios',
+    prompt: '',
+    language,
+    contributions: [],
+    chair: { summary: '', dissent: '', recommendation: '' },
+    frameworkOutput: { kind: 'scenarios', matrix: null },
+  };
+  return {
+    id: 'empty',
+    title: '',
+    summary: '',
+    framework: 'Good / Normal / Bad Scenarios',
+    mode: 'independent',
+    timestamp: new Date(0).toISOString(),
+    relativeTime: '',
+    status: 'Concluded',
+    advisors: [],
+    rounds: [round],
+    scenarios: {
+      good: { title: t.favorableTitle, subtitle: '', description: '', actions: [] },
+      normal: { title: t.baselineTitle, subtitle: '', description: '', actions: [] },
+      bad: { title: t.difficultTitle, subtitle: '', description: '', actions: [] },
+    },
+  };
+};
 
 const toChatBots = (roster: AdvisorPersona[]): ChatBot[] =>
   roster.map((persona) => ({ id: persona.id, name: persona.name }));
@@ -375,103 +354,13 @@ const completeByokTextViaServer = async (
   return payload.text;
 };
 
-const buildGenerate = (
-  personas: AdvisorPersona[],
-  keys: Record<string, string>,
-  apiKeys: ApiKeyConfig[]
-): GenerateFn | undefined => {
-  const isUsable = (item: ApiKeyConfig) =>
-    item.connected && (Boolean(keys[item.provider]) || Boolean(item.hasKey));
-  // Pick the first connected key — used as fallback for any advisor whose
-  // own provider key isn't connected.
-  const fallbackEntry = apiKeys.find(isUsable);
-  if (!fallbackEntry) return undefined; // No keys connected — use fixture.
-
-  return async (advisorId, stance, prompt, signal) => {
-    const persona = personas.find((p) => p.id === advisorId);
-
-    // Resolve which provider + key to use for this advisor.
-    let keyMeta = apiKeys.find((item) => item.provider === persona?.provider && isUsable(item));
-    if (!keyMeta) keyMeta = fallbackEntry; // Fallback to any connected key.
-
-    const resolvedKey = keys[keyMeta.provider] ?? '';
-    const resolvedModel = keyMeta.modelName;
-
-    return completeByokTextViaServer(
-      {
-        provider: keyMeta.provider,
-        model: resolvedModel,
-        apiKey: resolvedKey,
-        protocol: keyMeta.protocol,
-        baseUrl: keyMeta.baseUrl,
-        botId: advisorId.startsWith('bot:') ? advisorId.slice(4) : undefined,
-      },
-      {
-        system: stance
-          ? `You are an advisor with the following perspective: ${stance}. Be concise and insightful.`
-          : 'You are a helpful advisor. Be concise and insightful.',
-        prompt,
-        signal,
-      }
-    );
-  };
-};
-
-const createSession = async (
-  question: string,
-  framework: DeliberationSession['framework'],
-  mode: CommunicationMode,
-  personas: AdvisorPersona[],
-  language: Language,
-  generate?: GenerateFn
-): Promise<DeliberationSession> => {
-  const t = copy[language];
-  const round = await runDeliberation({
-    mode,
-    framework: frameworkIdOf(framework),
-    prompt: question,
-    language,
-    advisorIds: personas.map((persona) => persona.id),
-    advisorStances: stancesOf(personas),
-    roundIndex: 1,
-    generate,
-  });
-  return {
-    id: nextSessionId(),
-    title: question,
-    summary: t.sampleSessionSummary,
-    framework,
-    mode,
-    timestamp: new Date().toISOString(),
-    relativeTime: t.sampleNow,
-    status: 'Deliberating',
-    advisors: personas,
-    rounds: [round],
-    scenarios: scenarioFixture(t),
-  };
-};
-
 const localizeSession = (
   session: DeliberationSession,
   language: Language
-): DeliberationSession => {
-  const t = copy[language];
-  const localizedTitles: Record<string, string> = {
-    'project-proposal': t.initialProjectTitle,
-    'team-priority': t.initialTeamTitle,
-    'process-change': t.initialProcessTitle,
-  };
-  const isSample = ['project-proposal', 'team-priority', 'process-change'].includes(session.id);
-  const localizedAdvisors = session.advisors.map((persona) => localizePersona(persona, language));
-  return {
-    ...session,
-    title: session.titlePinned ? session.title : localizedTitles[session.id] ?? session.title,
-    summary: isSample ? t.sampleSessionSummary : session.summary,
-    relativeTime: isSample ? t.sample : session.relativeTime,
-    advisors: localizedAdvisors,
-    scenarios: isSample ? scenarioFixture(t) : session.scenarios,
-  };
-};
+): DeliberationSession => ({
+  ...session,
+  advisors: session.advisors.map((persona) => localizePersona(persona, language)),
+});
 
 const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
 
@@ -581,16 +470,15 @@ export const AppProvider: React.FC<{
     setTheme(next);
   };
 
-  const [sessions, setSessions] = useState<DeliberationSession[]>(initialSessions);
+  const [sessions, setSessions] = useState<DeliberationSession[]>([]);
   const [contentPanel, setContentPanel] = useState<ContentPanelPayload | null>(null);
-  const [currentSessionId, setCurrentSessionId] = useState(initialSessions[0].id);
-  const [personas, setPersonas] = useState<AdvisorPersona[]>(initialPersonas);
+  const [currentSessionId, setCurrentSessionId] = useState('');
+  const [personas, setPersonas] = useState<AdvisorPersona[]>([]);
   const [bots, setBots] = useState<UserBot[]>([]);
   const [botsReady, setBotsReady] = useState(false);
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
-  const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(initialApiKeys);
-  const [isFrameworkModalOpen, setIsFrameworkModalOpen] = useState(false);
+  const [apiKeys, setApiKeys] = useState<ApiKeyConfig[]>(INITIAL_PROVIDERS);
   const [isDeliberating, setIsDeliberating] = useState(false);
   const [conclusionError, setConclusionError] = useState<{
     reason: TurnFailureReason;
@@ -598,7 +486,6 @@ export const AppProvider: React.FC<{
   } | null>(null);
   const clearConclusionError = useCallback(() => setConclusionError(null), []);
   const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
-  const [currentMode, setCurrentModeState] = useState<CommunicationMode>('independent');
   const abortRef = useRef<AbortController | null>(null);
   const [isJoinRoomOpen, setIsJoinRoomOpen] = useState(false);
   const [authUser, setAuthUser] = useState<{ id: string; email: string } | null>(
@@ -672,13 +559,6 @@ export const AppProvider: React.FC<{
     const pathname = window.location.pathname;
     if (pathname === '/admin') {
       document.title = copy[language].adminPageTitle;
-      return;
-    }
-    if (pathname === '/fixture') {
-      document.title = copy[language].fixturePageTitle;
-      document
-        .querySelector('meta[name="description"]')
-        ?.setAttribute('content', copy[language].fixtureDescription);
       return;
     }
     document.title = copy[language].documentTitle;
@@ -831,14 +711,10 @@ export const AppProvider: React.FC<{
     requestAnimationFrame(() => requestAnimationFrame(scroll));
   };
 
-  const localizedSessions = useMemo(() => {
-    const visible = authUser
-      ? sessions.filter(
-          (session) => !['project-proposal', 'team-priority', 'process-change'].includes(session.id)
-        )
-      : sessions;
-    return visible.map((session) => localizeSession(session, language));
-  }, [language, sessions, authUser]);
+  const localizedSessions = useMemo(
+    () => sessions.map((session) => localizeSession(session, language)),
+    [language, sessions]
+  );
 
   const localizedPersonas = useMemo(
     () => personas.map((persona) => localizePersona(persona, language)),
@@ -851,129 +727,8 @@ export const AppProvider: React.FC<{
     toastTimer.current = setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const localizedTitles: Record<string, string> = {
-    'project-proposal': copy[language].initialProjectTitle,
-    'team-priority': copy[language].initialTeamTitle,
-    'process-change': copy[language].initialProcessTitle,
-  };
-
-  const startNewSession = (
-    question: string = copy[language].initialProjectTitle,
-    framework: DeliberationSession['framework'] = 'Good / Normal / Bad Scenarios',
-    advisors: AdvisorPersona[] = localizedPersonas,
-    landOn: ViewType = 'session-concluded'
-  ) => {
-    const rawQuestion = (question ?? '').trim() || copy[language].initialProjectTitle;
-    const normalizedQuestion = rawQuestion.toLowerCase();
-    const seatingOf = (list: AdvisorPersona[]) =>
-      list
-        .map((persona) => persona.id)
-        .sort()
-        .join('|');
-    const existing = sessions.find((session) => {
-      const originalTitle = localizedTitles[session.id] ?? session.title;
-      return (
-        originalTitle.toLowerCase() === normalizedQuestion &&
-        seatingOf(session.advisors) === seatingOf(advisors)
-      );
-    });
-    if (existing) {
-      setCurrentSessionId(existing.id);
-      setSelectedRoundIndex(existing.rounds.length);
-      setCurrentView(landOn);
-      return;
-    }
-    void (async () => {
-      setIsDeliberating(true);
-      try {
-        let session: DeliberationSession;
-        try {
-          session = await createSession(
-            rawQuestion,
-            framework,
-            currentMode,
-            advisors,
-            language,
-            buildGenerate(advisors, keys, apiKeys)
-          );
-        } catch (genError) {
-          console.warn('[deliberation] real generation failed, falling back to fixture:', genError);
-          session = await createSession(
-            rawQuestion,
-            framework,
-            currentMode,
-            advisors,
-            language,
-            undefined
-          );
-        }
-        setSessions((value) => [session, ...value]);
-        setCurrentSessionId(session.id);
-        setSelectedRoundIndex(1);
-        setCurrentView(landOn);
-      } catch (err) {
-        console.error('[deliberation] failed to start session:', err);
-      } finally {
-        setIsDeliberating(false);
-      }
-    })();
-  };
-
-  const setCurrentFramework = (framework: DeliberationSession['framework']) => {
-    setSessions((value) =>
-      value.map((session) =>
-        session.id === currentSessionId ? { ...session, framework } : session
-      )
-    );
-  };
-
-  const setCurrentMode = (mode: CommunicationMode) => {
-    setCurrentModeState(mode);
-    setSessions((value) =>
-      value.map((session) => (session.id === currentSessionId ? { ...session, mode } : session))
-    );
-    showToast('toastModeChanged', { mode: modeLabel(mode, language) });
-  };
-
   const cancelRound = () => {
     abortRef.current?.abort();
-  };
-
-  const runRound = async (prompt: string) => {
-    const question = prompt.trim();
-    if (!question || isDeliberating) return;
-    const session = sessions.find((item) => item.id === currentSessionId);
-    if (!session) return;
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-    setIsDeliberating(true);
-    try {
-      const round: Round = await runDeliberation({
-        mode: session.mode,
-        framework: frameworkIdOf(session.framework),
-        prompt: question,
-        language,
-        advisorIds: session.advisors.map((persona) => persona.id),
-        advisorStances: stancesOf(session.advisors),
-        roundIndex: session.rounds.length + 1,
-        signal: controller.signal,
-        generate: buildGenerate(session.advisors, keys, apiKeys),
-      });
-      setSessions((value) =>
-        value.map((item) =>
-          item.id === currentSessionId ? { ...item, rounds: [...item.rounds, round] } : item
-        )
-      );
-      setSelectedRoundIndex(round.index);
-      showToast('toastRoundAdded', { round: String(round.index) });
-    } catch (error) {
-      if (error instanceof DeliberationCancelled) showToast('toastRoundCancelled');
-      else throw error;
-    } finally {
-      abortRef.current = null;
-      setIsDeliberating(false);
-    }
   };
 
   const selectRound = (index: number) => setSelectedRoundIndex(index);
@@ -1493,36 +1248,20 @@ export const AppProvider: React.FC<{
         generate: (request) => {
           const persona = active.find((p) => p.id === request.bot.id);
           if (!persona) {
-            return scriptedGenerator(activeBots, {
-              lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '',
-            })(request);
+            throw new Error('PROVIDER_NOT_CONNECTED');
           }
           const isUserBot = persona.id.startsWith('bot:');
-          let resolvedProvider: ModelProvider | undefined = persona.provider;
-          let resolvedKey = keys[persona.provider];
-          let keyMeta = apiKeys.find((item) => item.provider === persona.provider);
-          let hasServerKey = Boolean(keyMeta?.connected && keyMeta?.hasKey);
-          let resolvedModel = isUserBot
+          const resolvedProvider: ModelProvider | undefined = persona.provider;
+          const resolvedKey = keys[persona.provider];
+          const keyMeta = apiKeys.find((item) => item.provider === persona.provider);
+          const hasServerKey = Boolean(keyMeta?.connected && keyMeta?.hasKey);
+          const resolvedModel = isUserBot
             ? persona.model
             : keyMeta?.connected
               ? keyMeta.modelName
               : persona.model;
-          if (!resolvedKey && !hasServerKey && !isUserBot) {
-            const fallbackConnected = apiKeys.find(
-              (item) => item.connected && (Boolean(keys[item.provider]) || Boolean(item.hasKey))
-            );
-            if (fallbackConnected) {
-              resolvedProvider = fallbackConnected.provider;
-              resolvedKey = keys[fallbackConnected.provider];
-              hasServerKey = Boolean(fallbackConnected.hasKey);
-              resolvedModel = fallbackConnected.modelName;
-              keyMeta = fallbackConnected;
-            }
-          }
           if (!resolvedProvider || (!resolvedKey && !hasServerKey)) {
-            return scriptedGenerator(activeBots, {
-              lensOf: (bot) => active.find((p) => p.id === bot.id)?.stance ?? '',
-            })(request);
+            throw new Error('PROVIDER_NOT_CONNECTED');
           }
           if (!resolvedKey) {
             const { signal: turnSignal, ...serializableTurn } = request;
@@ -1730,7 +1469,6 @@ export const AppProvider: React.FC<{
         setCurrentView('session-concluded');
       } catch (err) {
         if (
-          err instanceof DeliberationCancelled ||
           controller.signal.aborted ||
           (err as { name?: string } | null)?.name === 'AbortError'
         ) {
@@ -1775,7 +1513,7 @@ export const AppProvider: React.FC<{
           const saved = new Map(body.providers.map((entry) => [entry.provider, entry]));
           setKeys({});
           setApiKeys(() => {
-            const builtinUpdated = initialApiKeys.map((item) => {
+            const builtinUpdated = INITIAL_PROVIDERS.map((item) => {
               const entry = saved.get(item.provider);
               if (!entry) return item;
               return {
@@ -1790,7 +1528,7 @@ export const AppProvider: React.FC<{
                     : [entry.model, ...(item.models ?? [])],
               };
             });
-            const builtinIds = new Set(initialApiKeys.map((item) => item.provider));
+            const builtinIds = new Set(INITIAL_PROVIDERS.map((item) => item.provider));
             const customEntries: ApiKeyConfig[] = body.providers!
               .filter((entry) => !builtinIds.has(entry.provider))
               .map((entry) => ({
@@ -2151,7 +1889,7 @@ export const AppProvider: React.FC<{
     );
     setKeys({});
     setApiKeys(
-      initialApiKeys.map((item) => ({
+      INITIAL_PROVIDERS.map((item) => ({
         ...item,
         connected: false,
         hasKey: false,
@@ -2164,7 +1902,7 @@ export const AppProvider: React.FC<{
   const currentSession =
     localizedSessions.find((session) => session.id === currentSessionId) ||
     localizedSessions[0] ||
-    localizeSession(initialSessions[0], language);
+    emptyConcludedSession(language);
 
   const presetPersonaCount = personas.filter((p) => !p.id.startsWith('bot:')).length;
 
@@ -2182,10 +1920,6 @@ export const AppProvider: React.FC<{
         currentSessionId,
         setCurrentSessionId,
         currentSession,
-        startNewSession,
-        setCurrentFramework,
-        setCurrentMode,
-        runRound,
         cancelRound,
         isDeliberating,
         selectedRoundIndex,
@@ -2225,9 +1959,6 @@ export const AppProvider: React.FC<{
         getProviderSecret,
         removeApiKey,
         revokeAllKeys,
-        isFrameworkModalOpen,
-        openFrameworkModal: () => setIsFrameworkModalOpen(true),
-        closeFrameworkModal: () => setIsFrameworkModalOpen(false),
         contentPanel,
         openContentPanel: (payload) => setContentPanel(payload),
         closeContentPanel: () => setContentPanel(null),

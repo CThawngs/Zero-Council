@@ -1,6 +1,6 @@
 ﻿import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { modelLabel, providerLabel } from '../data/mockData';
+import { modelLabel, providerLabel } from '../data/catalog';
 import { extractReadableSummary, matchPersonaId } from '../chat/conclusion';
 import {
   Copy,

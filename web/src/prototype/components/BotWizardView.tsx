@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { modelLabel, providerLabel } from '../data/mockData';
+import { modelLabel, providerLabel } from '../data/catalog';
 import { visibleModelsForProvider } from '../chat/modelAllowList';
 import { planById } from '../data/plans';
 import { Check, Loader2, Lock } from 'lucide-react';

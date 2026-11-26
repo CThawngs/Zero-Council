@@ -24,10 +24,38 @@
  * deliberation room.
  */
 
-// Relative with the explicit `.ts`, not the `@/` alias: this file is imported by `node --test`,
-// and a value import through an alias does not resolve outside a bundler. Same reason
-// `lib/deliberation/engine-v2.ts` imports './plan.ts'.
-import { rosterProblems } from '../../lib/deliberation/plan.ts';
+export const rosterProblems = (request: {
+  prompt: string;
+  advisorIds: readonly string[];
+  attachments?: readonly { id: string; kind: string; name: string; href: string }[];
+  roundIndex: number;
+}): string[] => {
+  const problems: string[] = [];
+  if (typeof request.prompt !== 'string' || !request.prompt.trim()) {
+    problems.push('prompt is empty');
+  }
+  const ids = request.advisorIds;
+  if (!Array.isArray(ids) || ids.length === 0) {
+    problems.push('no advisors to ask');
+  } else {
+    if (ids.some((id) => typeof id !== 'string' || !id.trim())) problems.push('advisor id is empty');
+    if (new Set(ids).size !== ids.length) problems.push('advisor ids repeat');
+  }
+  if (!Number.isInteger(request.roundIndex) || request.roundIndex < 1) {
+    problems.push(`round index ${String(request.roundIndex)} is not a whole round`);
+  }
+  const attachments = request.attachments ?? [];
+  if (!Array.isArray(attachments)) {
+    problems.push('attachments is not a list');
+  } else {
+    attachments.forEach((attachment, index) => {
+      if (!attachment?.id?.trim()) problems.push(`attachment ${index + 1} has no id`);
+      if (!attachment?.name?.trim()) problems.push(`attachment ${index + 1} has no name`);
+      if (!attachment?.href?.trim()) problems.push(`attachment ${index + 1} has nothing to open`);
+    });
+  }
+  return problems;
+};
 
 export const USER_HANDLE = 'user';
 

@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { ModelProvider } from '../types';
-import { providerLabel } from '../data/mockData';
+import { providerLabel } from '../data/catalog';
 import {
   builtinProviderById,
   normalizeBaseUrl,

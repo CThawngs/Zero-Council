@@ -1,4 +1,4 @@
-import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
+import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/types';
 import type { ChatMessage, ChatMode, TurnFailure, WhyStop } from './chat/engine';
 
 export type ViewType =

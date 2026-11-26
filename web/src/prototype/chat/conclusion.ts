@@ -12,7 +12,7 @@ import type {
   Language,
   ScenarioBranch,
 } from '../types.ts';
-import type { Contribution } from '../../lib/deliberation/engine.ts';
+import type { Contribution } from '../../lib/deliberation/types.ts';
 
 /** Structured error thrown when live AI conclusion synthesis cannot complete. */
 export class ConclusionAnalysisError extends Error {

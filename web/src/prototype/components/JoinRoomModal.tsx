@@ -4,7 +4,7 @@ import { planById } from '../data/plans';
 import { Bot, Check, Eye, Lock, MessagesSquare } from 'lucide-react';
 import type { ChatMode } from '../chat/engine';
 import type { AdvisorPersona, SavedConversation } from '../types';
-import type { CommunicationMode } from '@/lib/deliberation/engine';
+import type { CommunicationMode } from '@/lib/deliberation/types';
 import { Modal } from './Modal';
 
 export const JoinRoomModal: React.FC = () => {
@@ -39,7 +39,7 @@ const JoinRoomDialog: React.FC<{ editingGroup?: SavedConversation }> = ({ editin
   const plan = planById(currentPlanId);
   const cap = plan.maxActiveAdvisors;
 
-  // Chỉ lấy bot do người dùng tạo, không lấy cố vấn mặc định từ mockData.
+  // Chỉ lấy bot do người dùng tạo trên tài khoản.
   const userBots = useMemo(
     () => personas.filter((persona) => persona.id.startsWith('bot:')),
     [personas]

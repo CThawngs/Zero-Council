@@ -1,6 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { providerLabel } from '../data/mockData';
+import { providerLabel } from '../data/catalog';
 import { copy } from '../i18n';
 import { ModelProvider } from '../types';
 import { CheckCircle2 } from 'lucide-react';

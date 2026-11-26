@@ -1,11 +1,14 @@
-import type { BotGenerator, BotTurn, ChatBot, ChatTurnRequest } from './engine.ts';
-import { SILENT_TOKEN, USER_HANDLE } from './engine.ts';
+import type {
+  BotGenerator,
+  BotTurn,
+  ChatBot,
+  ChatTurnRequest,
+} from '../../web/src/prototype/chat/engine.ts';
+import { SILENT_TOKEN, USER_HANDLE } from '../../web/src/prototype/chat/engine.ts';
 
 /**
- * Offline preview generator that needs no model and no network.
- *
- * Exercises the exact structured `BotTurn.handoffs` routing rules end-to-end and keeps
- * preview replies 100% localized in both English ('en') and Vietnamese ('vi').
+ * Test-only deterministic generator for exercising structured `BotTurn.handoffs` routing
+ * and bilingual ('en' | 'vi') turn mechanics without network calls.
  */
 
 const DEFAULT_LENS = {
@@ -57,8 +60,6 @@ export const scriptedGenerator =
     const rawLens = lensOf?.(bot)?.trim() ?? '';
     const resolvedLens = rawLens || DEFAULT_LENS[lang];
     const opener = OPENERS[lang](resolvedLens);
-    // Scope peer lookup to the current round (messages after the latest user turn) so debate
-    // prefixes reference the advisor who just spoke rather than someone from an earlier round.
     const lastUserIndex = history.map((message) => message.authorId).lastIndexOf(USER_HANDLE);
     const lastUser = lastUserIndex >= 0 ? history[lastUserIndex] : undefined;
     const echo = lastUser ? ECHO_PREFIX[lang](lastUser.body.slice(0, 120)) : '';
@@ -68,8 +69,6 @@ export const scriptedGenerator =
         : undefined;
     const prevName = displayName(roster, lastBotInRound?.authorId ?? null);
 
-    // Independent (`panel`): never hand off or mention peers, and only append `@user` on the final
-    // advisor (`isClosing`) so `runTurn` lets every seated advisor finish their turn.
     if (mode === 'panel') {
       const body = `${echo}${opener}`;
       return {
@@ -84,16 +83,12 @@ export const scriptedGenerator =
         : `Countering ${prevName}'s angle, `
       : '';
 
-    // `waiting` first (the round's own order), then anyone the engine will still accept a handoff to —
-    // which is what lets two scripted advisors keep passing the floor back and forth.
     const next = waiting[0] ?? handoffTargets?.[0] ?? null;
     const nextName = displayName(roster, next?.id ?? null);
 
-    // Closing hands back to the user: no handoff, and the prose names them so the UI can mark it.
     if (isClosing || !nextName) {
       return { text: `${echo}${debatePrefix}${opener} ${CLOSERS[lang]} @${USER_HANDLE}`, handoffs: [] };
     }
-    // A STRUCTURED handoff. The `@name` in the prose is display only — the engine routes on the id.
     return {
       text: `${echo}${debatePrefix}${opener} ${HANDOFF_LINES[lang](nextName)}`,
       handoffs: [next.id],

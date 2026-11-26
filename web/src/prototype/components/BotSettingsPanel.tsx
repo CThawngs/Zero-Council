@@ -10,7 +10,7 @@ import React, {
 } from 'react';
 import { Check, KeyRound, Loader2, Lock, Plus, RotateCcw, Settings2, Trash2, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { localizePersona, modelLabel, providerLabel } from '../data/mockData';
+import { localizePersona, modelLabel, providerLabel } from '../data/catalog';
 import { planById } from '../data/plans';
 import type { ChatMode } from '../chat/engine';
 import type { Copy } from '../i18n';
