@@ -59,10 +59,14 @@ test('a room survives a write and a read', () => {
   );
 });
 
-test('clearing the room really clears it', () => {
+test('clearing the room removes the transcript key and is idempotent when already empty', () => {
   writeStoredRoom(ROOM);
+  assert.ok(globalThis.window.sessionStorage.getItem('zero-council:room'), 'precondition: room is stored');
   clearStoredRoom();
+  assert.equal(globalThis.window.sessionStorage.getItem('zero-council:room'), null, 'key must be gone');
   assert.equal(readStoredRoom(), null, 'a deleted room must not come back on reload');
+  clearStoredRoom();
+  assert.equal(readStoredRoom(), null, 'clearing an already-empty store is harmless');
 });
 
 test('nothing written reads as no room', () => {
