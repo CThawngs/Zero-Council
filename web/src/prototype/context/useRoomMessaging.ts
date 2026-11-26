@@ -1,20 +1,16 @@
 /**
- * Domain hook managing active room message dispatch, turn retries, attachments (links, files,
- * images, video keyframes), live web search, and AI Chair conclusion synthesis (`sessions`).
+ * Domain hook orchestrating room message dispatch, turn retries, attachments, and AI Chair conclusion.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   AdvisorPersona,
   ApiKeyConfig,
-  DeliberationSession,
   Language,
   ModelProvider,
   SavedConversation,
   ViewType,
 } from '../types';
-import type { CommunicationMode, Round } from '@/lib/deliberation/types';
-import { deleteSessionFromList, renameSessionInList } from '../sessions-crud';
 import { copy } from '../i18n';
 import {
   COUNCIL_ROUNDS,
@@ -32,29 +28,15 @@ import {
   type ChatBot,
   type ChatMessage,
   type ChatMode,
-  type TurnFailureReason,
 } from '../chat/engine';
 import { byokGenerator } from '../chat/byok';
-import {
-  ConclusionAnalysisError,
-  analyzeChatRoomConclusion,
-  matchPersonaId,
-} from '../chat/conclusion';
-import { UnreadableLinkError, readLinkInBrowser } from '../chat/read-link-web';
-import { UnreadableFileError, readFileInBrowser } from '../chat/read-file-web';
-import { MAX_IMAGES_PER_MESSAGE, isImageFile, readImageInBrowser } from '../chat/read-image-web';
-import { isVideoFile, readVideoInBrowser } from '../chat/read-video-web';
-import { clearStoredRoom } from '../chat/storage';
+import { matchPersonaId } from '../chat/conclusion';
 import type { PlanId } from '../data/plans';
 import { partitionRoomRosterByPlan } from '@/lib/store/planLimits';
-import {
-  completeByokTextViaServer,
-  emptyConcludedSession,
-  localizeSession,
-  nextSessionId,
-  toChatBots,
-} from './helpers';
+import { toChatBots } from './helpers';
 import type { ChatRoom, ToastKey, ToastValues } from './types';
+import { useRoomAttachments } from './useRoomAttachments';
+import { useRoomConclusion } from './useRoomConclusion';
 
 export function useRoomMessaging({
   authUser,
@@ -95,165 +77,31 @@ export function useRoomMessaging({
   setCurrentView: (view: ViewType) => void;
   showToast: (key: ToastKey, values?: ToastValues) => void;
 }) {
-  const [sessions, setSessions] = useState<DeliberationSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState('');
-  const [isDeliberating, setIsDeliberating] = useState(false);
-  const [conclusionError, setConclusionError] = useState<{
-    reason: TurnFailureReason;
-    message: string;
-  } | null>(null);
-  const clearConclusionError = useCallback(() => setConclusionError(null), []);
-  const [selectedRoundIndex, setSelectedRoundIndex] = useState(0);
-  const abortRef = useRef<AbortController | null>(null);
-
   const [isRoomBusy, setIsRoomBusy] = useState(false);
-  const [isReadingLink, setIsReadingLink] = useState(false);
-  const [isReadingFile, setIsReadingFile] = useState(false);
-  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
-  const [isSearchingWeb, setIsSearchingWeb] = useState(false);
   const openingQuestionRef = useRef<string | null>(null);
 
-  const localizedSessions = useMemo(
-    () => sessions.map((session) => localizeSession(session, language)),
-    [language, sessions]
-  );
+  const attachments = useRoomAttachments({
+    authUser,
+    language,
+    currentRoom,
+    setCurrentRoom,
+  });
 
-  const currentSession =
-    localizedSessions.find((session) => session.id === currentSessionId) ||
-    localizedSessions[0] ||
-    emptyConcludedSession(language);
-
-  const cancelRound = () => {
-    abortRef.current?.abort();
-  };
-
-  const selectRound = (index: number) => setSelectedRoundIndex(index);
-
-  const purgeSessions = () => {
-    setSessions([]);
-    setConversations([]);
-    setCurrentRoom(null);
-    clearStoredRoom();
-    if (authUser) {
-      void fetch('/api/conversations', { method: 'DELETE', credentials: 'same-origin' }).catch(
-        () => undefined
-      );
-    }
-    showToast('toastSessionsReset');
-  };
-
-  const renameSession = (id: string, title: string) => {
-    setSessions((value) => renameSessionInList(value, id, title));
-  };
-
-  const deleteSession = (id: string) => {
-    setSessions((value) => deleteSessionFromList(value, id));
-  };
-
-  const attachLink = async (url: string) => {
-    const href = url.trim();
-    if (!href) return;
-    setIsReadingLink(true);
-    const attachment: ChatAttachment = {
-      id: `att-${Date.now()}`,
-      kind: 'link',
-      name: href,
-      href,
-    };
-    try {
-      const reading = await readLinkInBrowser(href, { language });
-      attachment.text = reading.text;
-    } catch (error) {
-      let resolvedViaServer = false;
-      if (authUser) {
-        try {
-          const res = await fetch('/api/read-link', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: href }),
-          });
-          if (res.ok) {
-            const data = (await res.json()) as {
-              title?: string;
-              text?: string;
-              truncated?: boolean;
-            };
-            if (data.text) {
-              attachment.text = data.text;
-              attachment.truncated = Boolean(data.truncated);
-              if (data.title) attachment.name = data.title;
-              resolvedViaServer = true;
-            }
-          }
-        } catch {
-          // Server link reader failed; record original browser error below.
-        }
-      }
-      if (!resolvedViaServer) {
-        attachment.problem = error instanceof UnreadableLinkError ? error.reason : String(error);
-      }
-    } finally {
-      setIsReadingLink(false);
-      setCurrentRoom((room) =>
-        room ? { ...room, pending: [...room.pending, attachment] } : room
-      );
-    }
-  };
-
-  const attachFiles = async (files: File[]) => {
-    if (files.length === 0) return;
-    setIsReadingFile(true);
-    let images = (currentRoom?.pending ?? []).filter(
-      (item) => item.kind === 'image' && !item.problem
-    ).length;
-    try {
-      for (const file of files) {
-        const video = isVideoFile(file);
-        const image = !video && isImageFile(file);
-        const kind: ChatAttachment['kind'] = video ? 'video' : image ? 'image' : 'file';
-        const attachment: ChatAttachment = {
-          id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          kind,
-          name: file.name,
-          href: `${kind}:${file.name}`,
-        };
-        try {
-          if (video) {
-            const videoReading = await readVideoInBrowser(file, { language });
-            attachment.previewUrl = videoReading.previewUrl;
-            attachment.frames = videoReading.frames;
-            attachment.text = videoReading.summary;
-          } else if (image) {
-            if (images >= MAX_IMAGES_PER_MESSAGE * 2) {
-              throw new UnreadableFileError(
-                copy[language].chatMaxImagesError.replace('{max}', String(MAX_IMAGES_PER_MESSAGE * 2))
-              );
-            }
-            attachment.dataUrl = (await readImageInBrowser(file, { language })).dataUrl;
-            images += 1;
-          } else {
-            const reading = await readFileInBrowser(file, { language });
-            attachment.text = reading.text;
-            if (reading.truncated) attachment.truncated = true;
-          }
-        } catch (error) {
-          attachment.problem = error instanceof UnreadableFileError ? error.reason : String(error);
-        }
-        setCurrentRoom((room) =>
-          room ? { ...room, pending: [...room.pending, attachment] } : room
-        );
-      }
-    } finally {
-      setIsReadingFile(false);
-    }
-  };
-
-  const removePending = (id: string) => {
-    setCurrentRoom((room) =>
-      room ? { ...room, pending: room.pending.filter((item) => item.id !== id) } : room
-    );
-  };
+  const conclusion = useRoomConclusion({
+    authUser,
+    language,
+    personaCap,
+    personas,
+    localizedPersonas,
+    apiKeys,
+    keys,
+    currentRoom,
+    setCurrentRoom,
+    setConversations,
+    roomAbortRef,
+    setCurrentView,
+    showToast,
+  });
 
   const executeRoomTurn = async ({
     parked,
@@ -414,12 +262,13 @@ export function useRoomMessaging({
 
     const turnAttachments: ChatAttachment[] = [...currentRoom.pending];
 
-    if (webSearchEnabled && !stopping) {
-      setIsSearchingWeb(true);
+    if (attachments.webSearchEnabled && !stopping) {
+      attachments.setIsSearchingWeb(true);
       try {
-        const searchRes = await fetch(`/api/web-search?q=${encodeURIComponent(body.slice(0, 260))}`, {
-          credentials: 'same-origin',
-        });
+        const searchRes = await fetch(
+          `/api/web-search?q=${encodeURIComponent(body.slice(0, 260))}`,
+          { credentials: 'same-origin' }
+        );
         if (searchRes.ok) {
           const searchPayload = (await searchRes.json()) as {
             results?: { title: string; url: string; snippet: string }[];
@@ -439,7 +288,7 @@ export function useRoomMessaging({
       } catch {
         // Best-effort live search; proceed with turn even if offline.
       } finally {
-        setIsSearchingWeb(false);
+        attachments.setIsSearchingWeb(false);
       }
     }
 
@@ -598,141 +447,19 @@ export function useRoomMessaging({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentRoom]);
 
-  const wrapUpRoom = () => {
-    const wasRunning = roomAbortRef.current !== null;
-    roomAbortRef.current?.abort();
-    if (wasRunning) {
-      setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
-    }
-    setCurrentView('room-summary');
-  };
-
-  const openRoomConclusion = () => {
-    if (!currentRoom || isDeliberating) return;
-    const wasRunning = roomAbortRef.current !== null;
-    roomAbortRef.current?.abort();
-    if (wasRunning) {
-      setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
-    }
-    let seated = currentRoom.roster
-      .map((id) => localizedPersonas.find((persona) => matchPersonaId(persona, id)))
-      .filter((persona): persona is AdvisorPersona => Boolean(persona));
-    if (seated.length === 0) {
-      seated = currentRoom.roster
-        .map((id) => personas.find((persona) => matchPersonaId(persona, id)))
-        .filter((persona): persona is AdvisorPersona => Boolean(persona));
-    }
-    if (seated.length === 0) {
-      seated = localizedPersonas.slice(0, personaCap);
-    }
-    if (seated.length === 0) return;
-
-    const firstUserMessage = currentRoom.messages.find(
-      (message) => message.authorId === USER_HANDLE && message.body.trim().length > 0
-    )?.body;
-    const topic = (currentRoom.title || firstUserMessage || copy[language].initialProjectTitle).trim();
-    const promptText = (firstUserMessage || topic).trim();
-    const roomMessages = [...currentRoom.messages];
-    const mode: CommunicationMode = currentRoom.mode === 'panel' ? 'independent' : 'debate';
-
-    void (async () => {
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setConclusionError(null);
-      setIsDeliberating(true);
-      try {
-        const { analysis, contributions } = await analyzeChatRoomConclusion({
-          topic,
-          messages: roomMessages,
-          seated,
-          allPersonas: [...localizedPersonas, ...personas],
-          apiKeys,
-          keys,
-          language,
-          signal: controller.signal,
-          completeFn: completeByokTextViaServer,
-        });
-
-        const round: Round = {
-          index: 1,
-          mode,
-          framework: 'scenarios',
-          prompt: promptText,
-          language,
-          contributions,
-          chair: analysis.chair,
-          frameworkOutput: {
-            kind: 'scenarios',
-            matrix: null,
-          },
-        };
-
-        const session: DeliberationSession = {
-          id: nextSessionId(),
-          title: topic,
-          summary: analysis.chair.summary,
-          framework: 'Good / Normal / Bad Scenarios',
-          mode,
-          timestamp: new Date().toISOString(),
-          relativeTime: copy[language].sampleNow,
-          status: 'Concluded',
-          advisors: seated,
-          rounds: [round],
-          scenarios: analysis.scenarios,
-        };
-
-        setSessions((value) => [session, ...value]);
-        setCurrentSessionId(session.id);
-        setSelectedRoundIndex(1);
-        setCurrentView('session-concluded');
-      } catch (err) {
-        if (
-          controller.signal.aborted ||
-          (err as { name?: string } | null)?.name === 'AbortError'
-        ) {
-          return;
-        }
-        if (err instanceof ConclusionAnalysisError) {
-          setConclusionError({ reason: err.reason, message: err.message });
-        } else {
-          const message = err instanceof Error ? err.message : 'PROVIDER_ERROR';
-          setConclusionError({ reason: 'provider-error', message });
-        }
-        console.error('[conclusion] failed to open room conclusion:', err);
-      } finally {
-        if (abortRef.current === controller) abortRef.current = null;
-        setIsDeliberating(false);
-      }
-    })();
-  };
-
   return {
-    sessions: localizedSessions,
-    currentSessionId,
-    setCurrentSessionId,
-    currentSession,
-    cancelRound,
-    isDeliberating,
-    selectedRoundIndex,
-    selectRound,
-    purgeSessions,
-    renameSession,
-    deleteSession,
-    conclusionError,
-    clearConclusionError,
+    ...conclusion,
     isRoomBusy,
-    isReadingLink,
-    isReadingFile,
-    webSearchEnabled,
-    setWebSearchEnabled,
-    isSearchingWeb,
-    attachLink,
-    attachFiles,
-    removePending,
+    isReadingLink: attachments.isReadingLink,
+    isReadingFile: attachments.isReadingFile,
+    webSearchEnabled: attachments.webSearchEnabled,
+    setWebSearchEnabled: attachments.setWebSearchEnabled,
+    isSearchingWeb: attachments.isSearchingWeb,
+    attachLink: attachments.attachLink,
+    attachFiles: attachments.attachFiles,
+    removePending: attachments.removePending,
     sendMessage,
     retryLastTurn,
     startCouncilChat,
-    wrapUpRoom,
-    openRoomConclusion,
   };
 }

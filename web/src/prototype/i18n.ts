@@ -1,6 +1,5 @@
 /**
- * Bilingual i18n entrypoint (English & Vietnamese) for Zero Council.
- *
+ * Bilingual i18n entrypoint (English & Vietnamese) for Zero Council.\n *
  * Re-exports modular translation tables, legal copy, type contracts, and runtime error localizers
  * from `./i18n/*` so all existing callers continue importing `@/prototype/i18n`.
  */
@@ -15,7 +14,7 @@ import {
   type ModeLabelKey,
 } from './i18n/types.ts';
 
-export type { Copy, CopyStringKey, ModeLabelKey };
+export type { Copy, CopyStringKey, Language, ModeLabelKey };
 export { localizeAttachmentProblem, localizeAuthError } from './i18n/localize.ts';
 
 export const translations = {

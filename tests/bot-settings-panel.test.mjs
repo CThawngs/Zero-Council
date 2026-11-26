@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const logic = await import('../web/src/prototype/bot-settings-panel-logic.ts');
 const {
@@ -27,7 +29,20 @@ const {
   writePanelPref,
 } = logic;
 
-const src = (rel) => readFileSync(new URL(`../web/src/${rel}`, import.meta.url), 'utf8');
+const webSrcRoot = fileURLToPath(new URL('../web/src', import.meta.url));
+const src = (rel) => readFileSync(path.join(webSrcRoot, rel), 'utf8');
+const srcWithDir = (entryRel, dirRel) => {
+  const parts = [src(entryRel)];
+  const dirPath = path.join(webSrcRoot, dirRel);
+  if (existsSync(dirPath)) {
+    for (const file of readdirSync(dirPath).sort()) {
+      if (file.endsWith('.ts') || file.endsWith('.tsx')) {
+        parts.push(readFileSync(path.join(dirPath, file), 'utf8'));
+      }
+    }
+  }
+  return parts.join('\n');
+};
 
 const bot = (id, over = {}) => ({
   id,
@@ -218,9 +233,13 @@ test('panel preference defaults open, persists closed, survives broken storage',
 /* ---------------- component contracts (source-level) ---------------- */
 
 test('BotSettingsPanel wires the required AppContext actions and bot fields', () => {
-  const panel = src('prototype/components/BotSettingsPanel.tsx');
-  assert.match(panel, /export const BotSettingsPanel\b/);
-  assert.match(panel, /export const useBotSettingsPanel\b/);
+  const panelEntry = src('prototype/components/BotSettingsPanel.tsx');
+  const panel = srcWithDir(
+    'prototype/components/BotSettingsPanel.tsx',
+    'prototype/components/bot-settings'
+  );
+  assert.match(panelEntry, /export const BotSettingsPanel\b/);
+  assert.match(panelEntry, /\buseBotSettingsPanel\b/);
   for (const hook of ['updateBot', 'deleteBot', 'updateGroupChat', 'openEditGroup', 'apiKeys', 'currentRoom', 'bots']) {
     assert.match(panel, new RegExp(`\\b${hook}\\b`), `uses ${hook} from useApp()`);
   }
@@ -239,7 +258,7 @@ test('BotSettingsPanel wires the required AppContext actions and bot fields', ()
   assert.match(panel, /aria-modal="true"/);
   assert.match(panel, /overflow-x-hidden/);
   assert.match(panel, /w-\[min\(92vw,400px\)\]/);
-  // Theme: only design tokens, no hard-coded palette colours.
+  // Theme: only design tokens, no hard-coded palette colours across entry + submodules.
   assert.doesNotMatch(panel, /#[0-9a-fA-F]{3,8}\b/);
   assert.doesNotMatch(panel, /\b(bg|border)-(white|gray|slate|zinc|neutral)\b/);
   assert.doesNotMatch(panel, /\btext-(white|black|gray|slate|zinc|neutral)\b/);
@@ -248,7 +267,10 @@ test('BotSettingsPanel wires the required AppContext actions and bot fields', ()
 });
 
 test('Sidebar keeps every data-* hook the existing sidebar group tests rely on', () => {
-  const sidebar = src('prototype/components/Sidebar.tsx');
+  const sidebar = srcWithDir(
+    'prototype/components/Sidebar.tsx',
+    'prototype/components/sidebar'
+  );
   for (const hook of ['data-sidebar-group', 'data-sidebar-pinned', 'data-group-menu-trigger', 'data-sidebar-popover="group"', 'data-group-menu-delete', 'id="sidebar-new-group-btn"']) {
     assert.ok(sidebar.includes(hook), `kept ${hook}`);
   }
@@ -291,16 +313,18 @@ test('i18n.ts defines all workspace keys in EN/VI parity and components avoid te
     }
   }
 
-  for (const rel of [
-    'prototype/components/BotSettingsPanel.tsx',
-    'prototype/components/Sidebar.tsx',
-    'prototype/components/OverviewView.tsx',
-    'prototype/components/Header.tsx',
+  for (const [label, content] of [
+    ['BotSettingsPanel', srcWithDir('prototype/components/BotSettingsPanel.tsx', 'prototype/components/bot-settings')],
+    ['Sidebar', srcWithDir('prototype/components/Sidebar.tsx', 'prototype/components/sidebar')],
+    ['OverviewView.tsx', src('prototype/components/OverviewView.tsx')],
+    ['Header.tsx', src('prototype/components/Header.tsx')],
   ]) {
-    const content = src(rel);
-    assert.doesNotMatch(content, /\btext-white\b/, `${rel} must use semantic text-accent-ink instead of text-white`);
+    assert.doesNotMatch(content, /\btext-white\b/, `${label} must use semantic text-accent-ink instead of text-white`);
   }
-  assert.doesNotMatch(src('prototype/components/Sidebar.tsx'), /\blanguage\s*[!=]==/);
+  assert.doesNotMatch(
+    srcWithDir('prototype/components/Sidebar.tsx', 'prototype/components/sidebar'),
+    /\blanguage\s*[!=]==/
+  );
 });
 
 test('globals.css defines --color-accent-ink in @theme and WCAG AA >= 4.5:1 tokens for light and dark', () => {

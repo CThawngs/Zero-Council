@@ -34,6 +34,19 @@ function loadQrModule() {
 
 const { encodeQrMatrix, encodeQrSvg, encodeQrDataUri } = loadQrModule();
 
+function readComponentTree(entryRel, dirRel) {
+  const parts = [fs.readFileSync(path.resolve(entryRel), 'utf8')];
+  const fullDir = path.resolve(dirRel);
+  if (fs.existsSync(fullDir)) {
+    for (const file of fs.readdirSync(fullDir).sort()) {
+      if (file.endsWith('.ts') || file.endsWith('.tsx')) {
+        parts.push(fs.readFileSync(path.join(fullDir, file), 'utf8'));
+      }
+    }
+  }
+  return parts.join('\n');
+}
+
 function assertFinderPattern(matrix, topRow, leftCol) {
   for (let r = 0; r < 7; r++) {
     for (let c = 0; c < 7; c++) {
@@ -92,9 +105,9 @@ test('encodeQrMatrix handles multi-block Version 10+ payloads cleanly', () => {
 });
 
 test('Phase 2A Commit 8 UI/UX & security guardrails hold across source files', () => {
-  const checkoutSrc = fs.readFileSync(
-    path.resolve('web/src/prototype/components/CheckoutDrawer.tsx'),
-    'utf8'
+  const checkoutSrc = readComponentTree(
+    'web/src/prototype/components/CheckoutDrawer.tsx',
+    'web/src/prototype/components/checkout'
   );
   assert.ok(!checkoutSrc.includes('qrserver.com'), 'CheckoutDrawer must not leak QR to qrserver.com');
   assert.ok(!checkoutSrc.includes('isDevSimulation'), 'CheckoutDrawer must not render dev simulation UI');
@@ -104,16 +117,16 @@ test('Phase 2A Commit 8 UI/UX & security guardrails hold across source files', (
   const reducedMotionIdx = globalsCss.indexOf('@media (prefers-reduced-motion: reduce)');
   assert.ok(reducedMotionIdx !== -1, 'globals.css must include prefers-reduced-motion media query');
   const reducedMotionBlock = globalsCss.slice(reducedMotionIdx, reducedMotionIdx + 450);
-  const universalRuleMatch = reducedMotionBlock.match(/\*,\s*\*::before,\s*\*::after\s*\{([^}]*)\}/);
+  const universalRuleMatch = reducedMotionBlock.match(/\*,?\s*\*::before,\s*\*::after\s*\{([^}]*)\}/);
   assert.ok(universalRuleMatch, 'prefers-reduced-motion must include universal transition/animation reset');
   assert.ok(
     !universalRuleMatch[1].includes('transform:'),
     'prefers-reduced-motion universal selector must not nuke fixed positioning via transform: none !important'
   );
 
-  const chatRoomSrc = fs.readFileSync(
-    path.resolve('web/src/prototype/components/ChatRoomView.tsx'),
-    'utf8'
+  const chatRoomSrc = readComponentTree(
+    'web/src/prototype/components/ChatRoomView.tsx',
+    'web/src/prototype/components/chat-room'
   );
   assert.ok(chatRoomSrc.includes('id="chat-turn-error-card"'), 'ChatRoomView must render inline turn error card');
   assert.ok(chatRoomSrc.includes('id="confirm-clear-room-btn"'), 'ChatRoomView must confirm before clearing room');

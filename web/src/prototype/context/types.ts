@@ -45,6 +45,8 @@ export interface ChatRoom {
   held: string[];
 }
 
+export type ChatRoomState = ChatRoom;
+
 export interface ConnectProviderMeta {
   models?: string[];
   label?: string;

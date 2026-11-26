@@ -1,24 +1,21 @@
 'use client';
 
+/**
+ * Left-hand workspace navigation sidebar (group chats, solo bots, API keys, and settings).
+ */
+
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useApp } from '../context/AppContext';
-import { modelLabel, providerLabel } from '../data/catalog';
 import type { SavedConversation, ViewType } from '../types';
 import {
   Check,
-  ChevronDown,
-  Download,
   KeyRound,
   Lock,
   LogOut,
   MoreHorizontal,
-  Pencil,
   Pin,
-  PinOff,
   Plus,
   Settings,
-  Settings2,
-  Trash2,
   Users,
   UserStar,
   X,
@@ -34,82 +31,27 @@ import {
   type SidebarOrgState,
 } from '../sidebar-organization';
 import { fill } from '../bot-settings-panel-logic';
+import {
+  GroupActionMenu,
+  SectionHeader,
+  computeMenuPosition,
+  type GroupPopoverState,
+} from './sidebar/GroupActionMenu';
+import { SidebarBotsSection } from './sidebar/SidebarBotsSection';
 
 interface SidebarProps {
   mobile?: boolean;
   onClose?: () => void;
 }
 
-interface GroupPopoverState {
-  groupId: string;
-  top: number;
-  left: number;
-}
-
-const POPOVER_WIDTH = 224;
-const POPOVER_ESTIMATED_HEIGHT = 236;
-
-const computeMenuPosition = (trigger: HTMLElement): { top: number; left: number } => {
-  const rect = trigger.getBoundingClientRect();
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const margin = 10;
-
-  let left = rect.right - POPOVER_WIDTH;
-  left = Math.max(margin, Math.min(left, vw - POPOVER_WIDTH - margin));
-
-  let top = rect.bottom + 6;
-  if (top + POPOVER_ESTIMATED_HEIGHT > vh - margin) {
-    top = Math.max(margin, rect.top - POPOVER_ESTIMATED_HEIGHT - 6);
-  }
-
-  return { top, left };
-};
-
-/** Collapsible section header used by "Group chats" and "My bots". */
-const SectionHeader: React.FC<{
-  label: string;
-  meta?: string;
-  open: boolean;
-  onToggle: () => void;
-  controls: string;
-  toggleLabel: string;
-}> = ({ label, meta, open, onToggle, controls, toggleLabel }) => (
-  <button
-    type="button"
-    onClick={onToggle}
-    aria-expanded={open}
-    aria-controls={controls}
-    title={toggleLabel}
-    className="group flex min-h-11 w-full items-center justify-between gap-2 rounded-md px-2 text-left lg:min-h-9"
-  >
-    <span className="nav-group-label">{label}</span>
-    <span className="flex items-center gap-1 text-[10px] font-semibold text-ink-muted">
-      {meta}
-      <ChevronDown
-        className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`}
-        aria-hidden="true"
-      />
-    </span>
-  </button>
-);
-
-export const Sidebar: React.FC<SidebarProps> = ({
-  mobile = false,
-  onClose,
-}) => {
+export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => {
   const {
-    apiKeys,
     authUser,
-    bots,
-    botCap,
-    isBotDisabled,
     conversations,
     currentRoom,
     currentView,
     deleteConversationById,
     isAdmin,
-    openBotChat,
     openEditGroup,
     openGroupChat,
     openJoinRoom,
@@ -257,7 +199,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ? groupChats.find((g) => g.id === menu.groupId) ?? null
     : null;
 
-  // 44px touch targets on mobile / coarse pointers, compact on desktop.
   const rowHeight = mobile ? 'min-h-11' : 'min-h-10';
   const footerButton =
     'flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold transition hover:border-brass/60 hover:text-ink';
@@ -315,7 +256,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="grid min-w-0 grid-cols-1 content-start gap-4 overflow-y-auto overflow-x-hidden pr-0.5"
           aria-label={t.workspaceNavigation}
         >
-          {/* Multi-Bot Group Chats (>= 2 bots) */}
           <div className="min-w-0 w-full">
             <SectionHeader
               label={t.groupChatsTitle}
@@ -445,73 +385,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               ))}
           </div>
 
-          {/* Solo 1-on-1 AI Bots */}
-          <div className="min-w-0 w-full">
-            <SectionHeader
-              label={t.botsTitle}
-              meta={`${bots.length}/${botCap}`}
-              open={botsOpen}
-              onToggle={() => setBotsOpen((v) => !v)}
-              controls="sidebar-bots-list"
-              toggleLabel={botsOpen ? t.wsCollapse : t.wsExpand}
-            />
-            {botsOpen &&
-              (bots.length === 0 ? (
-                <p className="px-3 py-1 text-xs leading-relaxed text-ink-muted">{t.botsEmpty}</p>
-              ) : (
-                <ul id="sidebar-bots-list" className="grid grid-cols-1 gap-1">
-                  {bots.map((bot) => {
-                    const locked = isBotDisabled(bot.id);
-                    const isActive =
-                      currentView === 'chat-room' &&
-                      currentRoom?.kind === 'solo' &&
-                      currentRoom?.botId === bot.id;
-                    const keyMeta = apiKeys.find((key) => key.provider === bot.provider);
-                    return (
-                      <li key={bot.id}>
-                        <button
-                          type="button"
-                          data-sidebar-bot={bot.id}
-                          aria-current={isActive ? 'page' : undefined}
-                          onClick={() => {
-                            onClose?.();
-                            openBotChat(bot.id);
-                          }}
-                          className={`flex ${rowHeight} w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm transition-colors ${
-                            isActive
-                              ? 'bg-surface font-semibold text-ink shadow-sm ring-1 ring-brass/40'
-                              : 'text-ink-muted hover:bg-surface/60 hover:text-ink'
-                          }`}
-                        >
-                          <span
-                            aria-hidden="true"
-                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brass/15 text-xs font-bold uppercase text-brass"
-                          >
-                            {(bot.name.trim()[0] ?? '?').toUpperCase()}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate">{bot.name}</span>
-                            <span className="block truncate text-[11px] font-normal text-ink-muted">
-                              {providerLabel(bot.provider, keyMeta?.label)} · {modelLabel(bot.model)}
-                            </span>
-                          </span>
-                          {locked && (
-                            <Lock
-                              className="h-3.5 w-3.5 shrink-0 text-brass"
-                              aria-label={t.botDisabledBadge}
-                            />
-                          )}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ))}
-          </div>
+          <SidebarBotsSection
+            open={botsOpen}
+            onToggle={() => setBotsOpen((v) => !v)}
+            rowHeight={rowHeight}
+            onClose={onClose}
+          />
         </nav>
       </div>
 
-      {/* QUICK ACCESS: API keys / Settings */}
       <div className="flex flex-col gap-2 border-t border-border pt-3">
         {isAdmin ? (
           <a
@@ -573,99 +455,32 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </p>
       </div>
 
-      {/* Floating '...' Action Menu for Group Chats */}
       {menu && activeGroupForMenu && (
-        <div
-          ref={menuRef}
-          role="menu"
-          data-sidebar-popover="group"
-          style={{ top: `${menu.top}px`, left: `${menu.left}px`, width: `${POPOVER_WIDTH}px` }}
-          className="fixed z-[80] rounded-2xl border border-border bg-surface p-1.5 shadow-2xl"
-        >
-          <div className="flex flex-col gap-0.5">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => handleStartRename(activeGroupForMenu)}
-              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink transition hover:bg-surface-2"
-            >
-              <Pencil className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-              <span>{t.sidebarActionRename}</span>
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                closeMenu();
-                onClose?.();
-                openEditGroup(activeGroupForMenu.id);
-              }}
-              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink transition hover:bg-surface-2"
-            >
-              <Settings2 className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-              <span>{t.sidebarActionEditGroup}</span>
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                updateOrg((cur) => togglePinConversation(cur, activeGroupForMenu.id));
-                closeMenu();
-              }}
-              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink transition hover:bg-surface-2"
-            >
-              {pinnedSet.has(activeGroupForMenu.id) ? (
-                <PinOff className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-              ) : (
-                <Pin className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-              )}
-              <span>
-                {pinnedSet.has(activeGroupForMenu.id)
-                  ? t.sidebarActionUnpin
-                  : t.sidebarActionPin}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => handleExportGroup(activeGroupForMenu)}
-              className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink transition hover:bg-surface-2"
-            >
-              <Download className="h-4 w-4 shrink-0 text-ink-muted" aria-hidden="true" />
-              <span>{t.sidebarActionExport}</span>
-            </button>
-
-            <div className="my-1 border-t border-border" />
-
-            <button
-              type="button"
-              role="menuitem"
-              data-group-menu-delete={activeGroupForMenu.id}
-              onClick={() => {
-                if (confirmDeleteId !== activeGroupForMenu.id) {
-                  setConfirmDeleteId(activeGroupForMenu.id);
-                  return;
-                }
-                void handleDeleteGroup(activeGroupForMenu.id);
-              }}
-              className={`flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold transition ${
-                confirmDeleteId === activeGroupForMenu.id
-                  ? 'bg-terracotta text-accent-ink'
-                  : 'text-terracotta hover:bg-terracotta/10'
-              }`}
-            >
-              <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>
-                {confirmDeleteId === activeGroupForMenu.id
-                  ? t.sidebarConfirmDelete
-                  : t.sidebarActionDelete}
-              </span>
-            </button>
-          </div>
-        </div>
+        <GroupActionMenu
+          menu={menu}
+          group={activeGroupForMenu}
+          menuRef={menuRef}
+          isPinned={pinnedSet.has(activeGroupForMenu.id)}
+          confirmDeleteId={confirmDeleteId}
+          onRename={handleStartRename}
+          onEditGroup={(groupId) => {
+            closeMenu();
+            onClose?.();
+            openEditGroup(groupId);
+          }}
+          onTogglePin={(groupId) => {
+            updateOrg((cur) => togglePinConversation(cur, groupId));
+            closeMenu();
+          }}
+          onExport={handleExportGroup}
+          onConfirmOrDelete={(groupId) => {
+            if (confirmDeleteId !== groupId) {
+              setConfirmDeleteId(groupId);
+              return;
+            }
+            void handleDeleteGroup(groupId);
+          }}
+        />
       )}
     </aside>
   );
