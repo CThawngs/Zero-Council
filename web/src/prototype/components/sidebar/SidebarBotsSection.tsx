@@ -12,7 +12,6 @@ import { useApp } from '../../context/AppContext';
 import { modelLabel, providerLabel } from '../../data/catalog';
 import { fill } from '../../bot-settings-panel-logic';
 import type { UserBot } from '../../types';
-import { useBotSettingsPanel } from '../BotSettingsPanel';
 import { Modal } from '../Modal';
 import { POPOVER_WIDTH, SectionHeader, computeMenuPosition } from './GroupActionMenu';
 
@@ -147,12 +146,12 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
     currentView,
     openBotChat,
     createSoloThread,
+    openEditBot,
     deleteBot,
     openFirstBotOrWizard,
     t,
   } = useApp();
 
-  const panel = useBotSettingsPanel();
   const [botMenu, setBotMenu] = useState<BotMenuState | null>(null);
   const [creatingForBotId, setCreatingForBotId] = useState<string | null>(null);
   const [pendingDeleteBot, setPendingDeleteBot] = useState<UserBot | null>(null);
@@ -208,11 +207,19 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
     };
     const onResize = () => closeBotMenu(false);
 
+    const menuEl = botMenuRef.current;
+    const stopInsidePointerDown = (event: PointerEvent) => {
+      // Keep window-level outside-click listeners (e.g. mobile drawer) from
+      // dismissing the drawer before a portaled menu item click fires.
+      event.stopPropagation();
+    };
+    menuEl?.addEventListener('pointerdown', stopInsidePointerDown);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('resize', onResize);
     return () => {
       cancelAnimationFrame(frame);
+      menuEl?.removeEventListener('pointerdown', stopInsidePointerDown);
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', onResize);
@@ -274,10 +281,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
   const handleEditBot = (botId: string) => {
     closeBotMenu(false);
     onClose?.();
-    openBotChat(botId);
-    if (!panel.visible) {
-      panel.toggle();
-    }
+    openEditBot(botId);
   };
 
   const handleConfirmDeleteBot = async () => {

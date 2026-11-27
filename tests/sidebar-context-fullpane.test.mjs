@@ -24,6 +24,7 @@ test('Group sidebar rows support right-click context menu only on app rows while
   assert.match(sidebar, /event\.key === 'ContextMenu'/);
   assert.match(sidebar, /event\.shiftKey && event\.key === 'F10'/);
   assert.match(sidebar, /createPortal\(renderedGroupMenu,\s*document\.body\)/);
+  assert.match(sidebar, /menuEl\?\.addEventListener\('pointerdown', stopInsidePointerDown\)/);
   assert.match(sidebar, /clampMenuToViewport\(/);
   assert.match(sidebar, /adjustMenuRectToViewport\(/);
   assert.match(sidebar, /handleFloatingMenuKeyDown\(/);
@@ -61,14 +62,17 @@ test('SidebarBotsSection adds per-bot fresh-thread (+) button and accessible rig
   assert.match(botsSection, /data-bot-menu-trigger=\{bot\.id\}/);
   assert.match(botsSection, /data-sidebar-popover="bot"/);
 
-  // Bot menu includes New chat, Edit bot (opens right inspector), and Delete bot (opens explicit confirmation modal).
+  // Bot menu includes New chat, Edit bot (direct edit modal without creating/selecting a chat), and Delete bot (explicit confirmation modal).
   assert.match(botsSection, /data-bot-menu-new-chat=\{activeBotForMenu\.id\}/);
   assert.match(botsSection, /data-bot-menu-edit=\{activeBotForMenu\.id\}/);
   assert.match(botsSection, /data-bot-menu-delete=\{activeBotForMenu\.id\}/);
-  assert.match(
-    botsSection,
-    /const handleEditBot = \(botId: string\) => \{[\s\S]*?openBotChat\(botId\);[\s\S]*?if \(!panel\.visible\) \{[\s\S]*?panel\.toggle\(\);/
+  const editHandlerMatch = botsSection.match(
+    /const handleEditBot = \(botId: string\) => \{[\s\S]*?\};/
   );
+  assert.ok(editHandlerMatch, 'handleEditBot should exist in SidebarBotsSection');
+  assert.match(editHandlerMatch[0], /openEditBot\(botId\);/);
+  assert.doesNotMatch(editHandlerMatch[0], /openBotChat\(/);
+  assert.doesNotMatch(editHandlerMatch[0], /createSoloThread\(/);
 
   // Delete menu item opens a confirmation modal instead of calling deleteBot directly.
   assert.match(botsSection, /setPendingDeleteBot\(target\)/);
@@ -77,6 +81,7 @@ test('SidebarBotsSection adds per-bot fresh-thread (+) button and accessible rig
     /<Modal[\s\S]*?isOpen=\{Boolean\(pendingDeleteBot\)\}[\s\S]*?data-bot-delete-cancel[\s\S]*?data-bot-delete-confirm/
   );
   assert.match(botsSection, /createPortal\(renderedBotMenu,\s*document\.body\)/);
+  assert.match(botsSection, /menuEl\?\.addEventListener\('pointerdown', stopInsidePointerDown\)/);
 });
 
 test('ChatRoomView renders full-pane without nested card borders, rounding, shadow, or max-w-4xl cap', () => {
@@ -119,4 +124,84 @@ test('Bilingual sidebar bot menu strings exist and are non-empty in EN and VI', 
   assert.ok(i18n.copy.vi.sidebarBotNewChatWith.includes('{name}'));
   assert.ok(i18n.copy.en.sidebarBotMoreActions.includes('{name}'));
   assert.ok(i18n.copy.vi.sidebarBotMoreActions.includes('{name}'));
+});
+
+test('Edit bot opens target bot editor directly without creating or selecting a conversation', () => {
+  const appContext = read('web/src/prototype/context/AppContext.tsx');
+  const contextTypes = read('web/src/prototype/context/types.ts');
+  const personasView = read('web/src/prototype/components/PersonasView.tsx');
+
+  // Context contract exposes editingBotId + openEditBot + closeEditBot.
+  assert.match(contextTypes, /editingBotId: string \| null;/);
+  assert.match(contextTypes, /openEditBot: \(botId: string\) => void;/);
+  assert.match(contextTypes, /closeEditBot: \(\) => void;/);
+
+  // openEditBot switches to personas view and sets editingBotId without touching conversations or openBotChat.
+  const openEditMatch = appContext.match(
+    /const openEditBot = useCallback\([\s\S]*?\[setCurrentView\]\r?\n  \);/
+  );
+  assert.ok(openEditMatch, 'openEditBot callback should exist in AppContext');
+  assert.match(openEditMatch[0], /setEditingBotId\(botId\);/);
+  assert.match(openEditMatch[0], /setCurrentView\('personas'\);/);
+  assert.doesNotMatch(openEditMatch[0], /openBotChat/);
+  assert.doesNotMatch(openEditMatch[0], /createSoloThread/);
+  assert.doesNotMatch(openEditMatch[0], /conversations/);
+
+  // Navigating away from personas or deleting the edited bot clears editingBotId.
+  assert.match(
+    appContext,
+    /if \(next !== 'personas'\) \{[\s\S]*?setEditingBotId\(null\);/
+  );
+  assert.match(
+    appContext,
+    /setEditingBotId\(\(current\) => \(current === id \? null : current\)\);/
+  );
+
+  // PersonasView derives editingBot from editingBotId and renders keyed EditBotModal for that target bot.
+  assert.match(
+    personasView,
+    /const editingBot = editingBotId \? bots\.find\(\(b\) => b\.id === editingBotId\) \?\? null : null;/
+  );
+  assert.match(
+    personasView,
+    /<EditBotModal[\s\S]*?key=\{editingBot\.id\}[\s\S]*?bot=\{editingBot\}[\s\S]*?onClose=\{closeEditBot\}/
+  );
+  assert.match(personasView, /data-edit-bot-modal=\{bot\.id\}/);
+  assert.match(personasView, /id="edit-bot-name"/);
+  assert.match(personasView, /id="edit-bot-instruction"/);
+  assert.match(personasView, /id="edit-bot-save-btn"/);
+
+  // Behavioral simulation: bot with zero conversations -> openEditBot(bot.id) -> editor resolves target bot, conversations unchanged.
+  const bots = [
+    { id: 'bot-with-chat', name: 'Alpha', instruction: 'Alpha prompt', provider: 'openai', model: 'gpt-4o' },
+    { id: 'bot-zero-chats', name: 'Zero-Chat Bot', instruction: 'Never auto-create thread on edit', provider: 'anthropic', model: 'claude-sonnet' },
+  ];
+  const conversations = [
+    { id: 'solo-alpha-1', kind: 'solo', botId: 'bot-with-chat', title: 'Alpha', messages: [] },
+  ];
+  let currentView = 'chat-room';
+  let editingBotId = null;
+  let createdConversations = 0;
+
+  const openEditBot = (botId) => {
+    editingBotId = botId;
+    currentView = 'personas';
+  };
+  const closeEditBot = () => {
+    editingBotId = null;
+  };
+
+  assert.equal(conversations.filter((c) => c.botId === 'bot-zero-chats').length, 0);
+  openEditBot('bot-zero-chats');
+
+  const resolvedBot = editingBotId ? bots.find((b) => b.id === editingBotId) ?? null : null;
+  assert.equal(currentView, 'personas');
+  assert.equal(resolvedBot?.id, 'bot-zero-chats');
+  assert.equal(resolvedBot?.name, 'Zero-Chat Bot');
+  assert.equal(createdConversations, 0);
+  assert.equal(conversations.length, 1);
+  assert.equal(conversations.filter((c) => c.botId === 'bot-zero-chats').length, 0);
+
+  closeEditBot();
+  assert.equal(editingBotId, null);
 });

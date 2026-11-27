@@ -103,6 +103,9 @@ export interface AppContextType {
     input: { name: string; instruction: string; provider: ModelProvider; model: string }
   ) => Promise<UserBot | null>;
   deleteBot: (id: string) => Promise<void>;
+  editingBotId: string | null;
+  openEditBot: (botId: string) => void;
+  closeEditBot: () => void;
   openBotChat: (botId: string, conversationId?: string) => void;
   openFirstBotOrWizard: (excludeBotId?: string) => void;
   createSoloThread: (botId: string, title?: string) => Promise<void>;

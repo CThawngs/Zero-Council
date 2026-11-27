@@ -54,7 +54,7 @@ Truthful capability and verification inventory for **Zero Council** on `feat/pro
 | Live web search grounding | ✅ Shipped | Composer globe toggle + `POST /api/web-search` |
 | Content Render Panel (Markdown, syntax-highlighted code, collapsible tree graph) | ✅ Shipped | `prototype/chat/content-render.ts` + `components/ContentRenderPanel.tsx` (`tests/content-render.test.mjs`) |
 | Sidebar department organization, pinning & JSON export/import | ✅ Shipped | `prototype/sidebar-organization.ts` + `components/Sidebar.tsx` (`tests/sidebar-organization.test.mjs`) |
-| Sidebar right-click context menus (groups & bots), per-bot `+` fresh solo thread & full-pane chat workspace | ✅ Shipped | `components/Sidebar.tsx`, `components/sidebar/SidebarBotsSection.tsx`, `components/ChatRoomView.tsx` (`tests/sidebar-context-fullpane.test.mjs`) |
+| Sidebar right-click context menus (groups & bots with direct edit modal), per-bot `+` fresh solo thread & full-pane chat workspace | ✅ Shipped | `components/Sidebar.tsx`, `components/sidebar/SidebarBotsSection.tsx`, `components/PersonasView.tsx`, `components/ChatRoomView.tsx` (`tests/sidebar-context-fullpane.test.mjs`) |
 
 ---
 

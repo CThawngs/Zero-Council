@@ -172,11 +172,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     const onResize = () => {
       closeMenu(false);
     };
+    const menuEl = menuRef.current;
+    const stopInsidePointerDown = (event: PointerEvent) => {
+      // Keep window-level outside-click listeners (e.g. mobile drawer) from
+      // dismissing the drawer before a portaled menu item click fires.
+      event.stopPropagation();
+    };
+    menuEl?.addEventListener('pointerdown', stopInsidePointerDown);
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('resize', onResize);
     return () => {
       cancelAnimationFrame(frame);
+      menuEl?.removeEventListener('pointerdown', stopInsidePointerDown);
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', onResize);

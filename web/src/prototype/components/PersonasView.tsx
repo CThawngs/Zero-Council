@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import type { AppContextType } from '../context/types';
 import {
   Bot,
   Check,
@@ -14,50 +15,33 @@ import {
 import { modelLabel, providerLabel } from '../data/catalog';
 import { visibleModelsForProvider } from '../chat/modelAllowList';
 import { planById } from '../data/plans';
-import type { ModelProvider, UserBot } from '../types';
+import type { ApiKeyConfig, ModelProvider, UserBot } from '../types';
 import { Modal } from './Modal';
 
-export const PersonasView: React.FC = () => {
-  const {
-    bots,
-    botCap,
-    canCreateBot,
-    isBotDisabled,
-    updateBot,
-    deleteBot,
-    openBotChat,
-    openJoinRoom,
-    apiKeys,
-    currentPlanId,
-    goToPricing,
-    setCurrentView,
-    t,
-  } = useApp();
+interface EditBotModalProps {
+  bot: UserBot;
+  connectedKeys: ApiKeyConfig[];
+  updateBot: AppContextType['updateBot'];
+  onClose: () => void;
+  t: AppContextType['t'];
+}
 
-  const [editingBot, setEditingBot] = useState<UserBot | null>(null);
-  const [editName, setEditName] = useState('');
-  const [editInstruction, setEditInstruction] = useState('');
-  const [editProvider, setEditProvider] = useState<ModelProvider>('openai');
-  const [editModel, setEditModel] = useState('');
+const EditBotModal: React.FC<EditBotModalProps> = ({
+  bot,
+  connectedKeys,
+  updateBot,
+  onClose,
+  t,
+}) => {
+  const [editName, setEditName] = useState(bot.name);
+  const [editInstruction, setEditInstruction] = useState(bot.instruction);
+  const [editProvider, setEditProvider] = useState<ModelProvider>(bot.provider);
+  const [editModel, setEditModel] = useState(bot.model);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState('');
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [botToDelete, setBotToDelete] = useState<UserBot | null>(null);
-
-  const connectedKeys = apiKeys.filter((k) => k.provider && k.connected);
-  const plan = planById(currentPlanId);
-
-  const startEditBot = (bot: UserBot) => {
-    setEditingBot(bot);
-    setEditName(bot.name);
-    setEditInstruction(bot.instruction);
-    setEditProvider(bot.provider);
-    setEditModel(bot.model);
-    setEditError('');
-  };
 
   const saveEditBot = async () => {
-    if (!editingBot || editSaving) return;
+    if (editSaving) return;
     if (!editName.trim()) {
       setEditError(t.botErrorName);
       return;
@@ -67,7 +51,7 @@ export const PersonasView: React.FC = () => {
       return;
     }
     setEditSaving(true);
-    const updated = await updateBot(editingBot.id, {
+    const updated = await updateBot(bot.id, {
       name: editName.trim(),
       instruction: editInstruction.trim(),
       provider: editProvider,
@@ -78,12 +62,7 @@ export const PersonasView: React.FC = () => {
       setEditError(t.botErrorSave);
       return;
     }
-    setEditingBot(null);
-  };
-
-  const confirmDeleteBot = (bot: UserBot) => {
-    setBotToDelete(bot);
-    setDeleteConfirmOpen(true);
+    onClose();
   };
 
   const selectedEditProviderKey = connectedKeys.find((k) => k.provider === editProvider);
@@ -94,6 +73,144 @@ export const PersonasView: React.FC = () => {
         editModel || selectedEditProviderKey.modelName
       )
     : [editModel].filter(Boolean);
+
+  return (
+    <Modal
+      isOpen={true}
+      onClose={onClose}
+      title={t.botEditTitle}
+      closeLabel={t.close}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            className="button-secondary min-h-11 justify-center"
+          >
+            {t.cancel}
+          </button>
+          <button
+            type="button"
+            id="edit-bot-save-btn"
+            onClick={() => void saveEditBot()}
+            disabled={editSaving}
+            className="button-primary min-h-11 justify-center"
+          >
+            {editSaving ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Check className="h-4 w-4" aria-hidden="true" />
+            )}
+            {t.save}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-4" data-edit-bot-modal={bot.id}>
+        <label className="field">
+          <span className="field-label">{t.botNameLabel}</span>
+          <input
+            id="edit-bot-name"
+            type="text"
+            value={editName}
+            maxLength={80}
+            onChange={(e) => setEditName(e.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span className="field-label">{t.botInstructionLabel}</span>
+          <textarea
+            id="edit-bot-instruction"
+            rows={5}
+            maxLength={4000}
+            value={editInstruction}
+            onChange={(e) => setEditInstruction(e.target.value)}
+          />
+        </label>
+
+        {connectedKeys.length > 0 && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="field">
+              <span className="field-label">{t.providersTitle}</span>
+              <select
+                id="edit-bot-provider"
+                value={editProvider}
+                onChange={(e) => {
+                  const nextProv = e.target.value as ModelProvider;
+                  setEditProvider(nextProv);
+                  const found = connectedKeys.find((k) => k.provider === nextProv);
+                  if (found) setEditModel(found.modelName || found.models?.[0] || '');
+                }}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
+              >
+                {connectedKeys.map((k) => (
+                  <option key={k.provider} value={k.provider}>
+                    {k.label || providerLabel(k.provider)}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field">
+              <span className="field-label">{t.botModelLabel}</span>
+              <select
+                id="edit-bot-model"
+                value={editModel}
+                onChange={(e) => setEditModel(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
+              >
+                {editProviderModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        {editError && (
+          <p role="alert" className="text-sm font-medium text-terracotta">
+            {editError}
+          </p>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+export const PersonasView: React.FC = () => {
+  const {
+    bots,
+    botCap,
+    canCreateBot,
+    isBotDisabled,
+    updateBot,
+    deleteBot,
+    editingBotId,
+    openEditBot,
+    closeEditBot,
+    openBotChat,
+    openJoinRoom,
+    apiKeys,
+    currentPlanId,
+    goToPricing,
+    setCurrentView,
+    t,
+  } = useApp();
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [botToDelete, setBotToDelete] = useState<UserBot | null>(null);
+
+  const connectedKeys = apiKeys.filter((k) => k.provider && k.connected);
+  const plan = planById(currentPlanId);
+  const editingBot = editingBotId ? bots.find((b) => b.id === editingBotId) ?? null : null;
+
+  const confirmDeleteBot = (bot: UserBot) => {
+    setBotToDelete(bot);
+    setDeleteConfirmOpen(true);
+  };
 
   return (
     <div className="content-shell space-y-8">
@@ -210,7 +327,7 @@ export const PersonasView: React.FC = () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => startEditBot(bot)}
+                      onClick={() => openEditBot(bot.id)}
                       aria-label={`${t.botEditTitle}: ${bot.name}`}
                       className="icon-button min-h-10 min-w-10"
                     >
@@ -233,108 +350,16 @@ export const PersonasView: React.FC = () => {
       </section>
 
       {/* Edit Bot Modal */}
-      <Modal
-        isOpen={editingBot !== null}
-        onClose={() => setEditingBot(null)}
-        title={t.botEditTitle}
-        closeLabel={t.close}
-        footer={
-          <>
-            <button
-              type="button"
-              onClick={() => setEditingBot(null)}
-              className="button-secondary min-h-11 justify-center"
-            >
-              {t.cancel}
-            </button>
-            <button
-              type="button"
-              id="edit-bot-save-btn"
-              onClick={() => void saveEditBot()}
-              disabled={editSaving}
-              className="button-primary min-h-11 justify-center"
-            >
-              {editSaving ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Check className="h-4 w-4" aria-hidden="true" />
-              )}
-              {t.save}
-            </button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <label className="field">
-            <span className="field-label">{t.botNameLabel}</span>
-            <input
-              id="edit-bot-name"
-              type="text"
-              value={editName}
-              maxLength={80}
-              onChange={(e) => setEditName(e.target.value)}
-            />
-          </label>
-
-          <label className="field">
-            <span className="field-label">{t.botInstructionLabel}</span>
-            <textarea
-              id="edit-bot-instruction"
-              rows={5}
-              maxLength={4000}
-              value={editInstruction}
-              onChange={(e) => setEditInstruction(e.target.value)}
-            />
-          </label>
-
-          {connectedKeys.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="field">
-                <span className="field-label">{t.providersTitle}</span>
-                <select
-                  id="edit-bot-provider"
-                  value={editProvider}
-                  onChange={(e) => {
-                    const nextProv = e.target.value as ModelProvider;
-                    setEditProvider(nextProv);
-                    const found = connectedKeys.find((k) => k.provider === nextProv);
-                    if (found) setEditModel(found.modelName || found.models?.[0] || '');
-                  }}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
-                >
-                  {connectedKeys.map((k) => (
-                    <option key={k.provider} value={k.provider}>
-                      {k.label || providerLabel(k.provider)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="field">
-                <span className="field-label">{t.botModelLabel}</span>
-                <select
-                  id="edit-bot-model"
-                  value={editModel}
-                  onChange={(e) => setEditModel(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-ink outline-none focus:border-brass"
-                >
-                  {editProviderModels.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-
-          {editError && (
-            <p role="alert" className="text-sm font-medium text-terracotta">
-              {editError}
-            </p>
-          )}
-        </div>
-      </Modal>
+      {editingBot ? (
+        <EditBotModal
+          key={editingBot.id}
+          bot={editingBot}
+          connectedKeys={connectedKeys}
+          updateBot={updateBot}
+          onClose={closeEditBot}
+          t={t}
+        />
+      ) : null}
 
       {/* Delete Bot confirmation */}
       <Modal
