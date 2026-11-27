@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Left-hand workspace navigation sidebar (group chats, solo bots, API keys, and settings).
+ * Left-hand workspace navigation sidebar (group chats, solo bots, recent solo sessions, API keys, and settings).
  */
 
 import React, {
@@ -35,8 +35,10 @@ import {
   getSidebarOrgSnapshot,
   mutateSidebarOrg,
   pruneRemovedConversations,
+  reconcilePendingConversationPrunes,
   subscribeSidebarOrg,
   togglePinConversation,
+  type PendingPruneStatus,
   type SidebarOrgState,
 } from '../sidebar-organization';
 import { fill } from '../bot-settings-panel-logic';
@@ -53,6 +55,7 @@ import {
   clampMenuToViewport,
   handleFloatingMenuKeyDown,
 } from './sidebar/SidebarBotsSection';
+import { SidebarSessionsSection } from './sidebar/SidebarSessionsSection';
 
 const GROUP_POPOVER_ESTIMATED_HEIGHT = 248;
 
@@ -92,16 +95,50 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   const [renameDraft, setRenameDraft] = useState('');
   const [groupsOpen, setGroupsOpen] = useState(true);
   const [botsOpen, setBotsOpen] = useState(true);
+  const [sessionsOpen, setSessionsOpen] = useState(true);
+  const [pruneReconcileTick, setPruneReconcileTick] = useState(0);
 
+  const navRef = useRef<HTMLElement | null>(null);
+  const navScrollTopAtOpenRef = useRef<number>(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLElement | null>(null);
   const closeBotMenuRef = useRef<(() => void) | null>(null);
+  const closeSessionMenuRef = useRef<(() => void) | null>(null);
+  const pendingPruneIdsRef = useRef<Map<string, PendingPruneStatus>>(new Map());
+
+  const recordNavScrollAtMenuOpen = useCallback(() => {
+    navScrollTopAtOpenRef.current = navRef.current?.scrollTop ?? 0;
+  }, []);
 
   const updateOrg = useCallback(
     (updater: (current: SidebarOrgState) => SidebarOrgState) => {
       mutateSidebarOrg(userKey, updater);
     },
     [userKey]
+  );
+
+  useEffect(() => {
+    if (pendingPruneIdsRef.current.size === 0) return;
+    const liveIds = new Set(conversations.map((conv) => conv.id));
+    if (reconcilePendingConversationPrunes(pendingPruneIdsRef.current, liveIds)) {
+      updateOrg((cur) => pruneRemovedConversations(cur, liveIds));
+    }
+  }, [conversations, pruneReconcileTick, updateOrg]);
+
+  const deleteConversationAndPruneOrg = useCallback(
+    async (conversationId: string) => {
+      pendingPruneIdsRef.current.set(conversationId, 'inflight');
+      try {
+        await deleteConversationById(conversationId);
+        if (pendingPruneIdsRef.current.has(conversationId)) {
+          pendingPruneIdsRef.current.set(conversationId, 'settled');
+          setPruneReconcileTick((tick) => tick + 1);
+        }
+      } catch {
+        pendingPruneIdsRef.current.delete(conversationId);
+      }
+    },
+    [deleteConversationById]
   );
 
   const pinnedSet = useMemo(() => new Set(org.pinnedIds), [org.pinnedIds]);
@@ -126,13 +163,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     const focusTarget = restoreFocus ? menuTriggerRef.current : null;
     menuTriggerRef.current = null;
     if (focusTarget && focusTarget.isConnected) {
-      requestAnimationFrame(() => focusTarget.focus());
+      requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
     }
   }, []);
 
-  const go = (view: ViewType) => {
+  const closeAllMenus = useCallback(() => {
     closeMenu(false);
     closeBotMenuRef.current?.();
+    closeSessionMenuRef.current?.();
+  }, [closeMenu]);
+
+  const go = (view: ViewType) => {
+    closeAllMenus();
     onClose?.();
     setCurrentView(view);
     window.scrollTo(0, 0);
@@ -156,7 +198,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   useEffect(() => {
     if (!menu) return;
     const frame = requestAnimationFrame(() => {
-      menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+      menuRef.current
+        ?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')
+        ?.focus({ preventScroll: true });
     });
     const onKeyDown = (event: KeyboardEvent) => {
       handleFloatingMenuKeyDown(event, menuRef.current, closeMenu);
@@ -197,6 +241,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
       return;
     }
     closeBotMenuRef.current?.();
+    closeSessionMenuRef.current?.();
+    recordNavScrollAtMenuOpen();
     setConfirmDeleteId(null);
     menuTriggerRef.current = trigger;
     const pos = computeMenuPosition(trigger);
@@ -210,6 +256,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     focusAnchor: HTMLElement
   ) => {
     closeBotMenuRef.current?.();
+    closeSessionMenuRef.current?.();
+    recordNavScrollAtMenuOpen();
     setConfirmDeleteId(null);
     menuTriggerRef.current = focusAnchor;
     const pos = clampMenuToViewport(
@@ -231,6 +279,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     setRenamingGroupId(null);
     if (!clean) return;
     await renameConversation(groupId, clean);
+  };
+
+  const handleCancelGroupRename = (groupId: string, restoreFocus = false) => {
+    setRenamingGroupId(null);
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        const triggers = navRef.current?.querySelectorAll<HTMLElement>('[data-group-menu-trigger]');
+        if (!triggers) return;
+        for (const el of triggers) {
+          if (el.getAttribute('data-group-menu-trigger') === groupId) {
+            el.focus({ preventScroll: true });
+            break;
+          }
+        }
+      });
+    }
   };
 
   const handleExportGroup = (group: SavedConversation) => {
@@ -259,9 +323,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
 
   const handleDeleteGroup = async (groupId: string) => {
     closeMenu(false);
-    await deleteConversationById(groupId);
-    const remaining = new Set(groupChats.filter((g) => g.id !== groupId).map((g) => g.id));
-    updateOrg((cur) => pruneRemovedConversations(cur, remaining));
+    await deleteConversationAndPruneOrg(groupId);
   };
 
   const activeGroupForMenu = menu
@@ -269,6 +331,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     : null;
 
   const rowHeight = mobile ? 'min-h-11' : 'min-h-10';
+  const groupTriggerSizeClass = mobile
+    ? 'h-11 w-11'
+    : 'h-9 w-9 [@media(hover:none)]:h-10 [@media(hover:none)]:w-10';
   const footerButton =
     'flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold transition hover:border-brass/60 hover:text-ink';
 
@@ -332,8 +397,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
               type="button"
               id="sidebar-new-group-btn"
               onClick={() => {
-                closeMenu(false);
-                closeBotMenuRef.current?.();
+                closeAllMenus();
                 onClose?.();
                 openJoinRoom();
               }}
@@ -353,9 +417,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
         </div>
 
         <nav
-          onScroll={() => {
-            if (menu) closeMenu(false);
-            closeBotMenuRef.current?.();
+          ref={navRef}
+          onScroll={(event) => {
+            if (Math.abs(event.currentTarget.scrollTop - navScrollTopAtOpenRef.current) <= 4) {
+              return;
+            }
+            closeAllMenus();
           }}
           className="grid min-w-0 grid-cols-1 content-start gap-4 overflow-y-auto overflow-x-hidden pr-0.5"
           aria-label={t.workspaceNavigation}
@@ -393,6 +460,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           <input
                             type="text"
                             autoFocus
+                            data-group-rename-input={group.id}
                             value={renameDraft}
                             maxLength={100}
                             onChange={(event) => setRenameDraft(event.target.value)}
@@ -401,7 +469,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                                 event.preventDefault();
                                 void handleCommitRename(group.id);
                               } else if (event.key === 'Escape') {
-                                setRenamingGroupId(null);
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleCancelGroupRename(group.id, true);
                               }
                             }}
                             aria-label={t.sidebarActionRename}
@@ -417,7 +487,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           </button>
                           <button
                             type="button"
-                            onClick={() => setRenamingGroupId(null)}
+                            onClick={() => handleCancelGroupRename(group.id, false)}
                             aria-label={t.cancel}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
                           >
@@ -435,6 +505,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                         onContextMenu={(event) => {
                           event.preventDefault();
                           event.stopPropagation();
+                          if (event.button !== 2 || (event.clientX === 0 && event.clientY === 0)) {
+                            const kbAnchor =
+                              event.target instanceof HTMLElement
+                                ? event.target
+                                : event.currentTarget;
+                            openGroupMenu(group.id, kbAnchor, false);
+                            return;
+                          }
                           const focusAnchor =
                             event.currentTarget.querySelector<HTMLElement>(
                               `[data-group-menu-trigger="${group.id}"]`
@@ -451,8 +529,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           type="button"
                           aria-current={isActive ? 'page' : undefined}
                           onClick={() => {
-                            closeMenu(false);
-                            closeBotMenuRef.current?.();
+                            closeAllMenus();
                             onClose?.();
                             openGroupChat(group.id);
                           }}
@@ -494,10 +571,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           aria-label={t.sidebarMoreActions}
                           aria-haspopup="menu"
                           aria-expanded={isMenuOpen}
-                          className={`flex ${mobile ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink focus-visible:opacity-100 ${
+                          className={`flex ${groupTriggerSizeClass} shrink-0 items-center justify-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink focus-visible:opacity-100 ${
                             isMenuOpen || mobile
                               ? 'bg-surface text-ink opacity-100'
-                              : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
+                              : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100'
                           }`}
                         >
                           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -516,7 +593,32 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
             mobile={mobile}
             onClose={onClose}
             closeMenuRef={closeBotMenuRef}
-            onBeforeOpenMenu={() => closeMenu(false)}
+            onBeforeOpenMenu={() => {
+              closeMenu(false);
+              closeSessionMenuRef.current?.();
+              recordNavScrollAtMenuOpen();
+            }}
+            onBeforeNavigate={closeAllMenus}
+          />
+
+          <SidebarSessionsSection
+            open={sessionsOpen}
+            onToggle={() => setSessionsOpen((v) => !v)}
+            rowHeight={rowHeight}
+            mobile={mobile}
+            onClose={onClose}
+            pinnedIds={org.pinnedIds}
+            onTogglePin={(sessionId) => {
+              updateOrg((cur) => togglePinConversation(cur, sessionId));
+            }}
+            onDeleteSession={deleteConversationAndPruneOrg}
+            closeMenuRef={closeSessionMenuRef}
+            onBeforeOpenMenu={() => {
+              closeMenu(false);
+              closeBotMenuRef.current?.();
+              recordNavScrollAtMenuOpen();
+            }}
+            onBeforeNavigate={closeAllMenus}
           />
         </nav>
       </div>

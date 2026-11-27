@@ -3,16 +3,23 @@ import test from 'node:test';
 
 const {
   EMPTY_SIDEBAR_ORG,
+  RECENT_SOLO_SESSIONS_LIMIT,
+  SIDEBAR_SESSION_COPY,
   addDepartment,
   assignConversationDepartment,
+  canDeleteSoloSession,
   deleteDepartment,
   exportGroupChatJson,
   formatRelativeTime,
   parseImportedGroupPayload,
+  partitionBoundedSessions,
   pruneRemovedConversations,
   readSidebarOrg,
+  reconcilePendingConversationPrunes,
   renameDepartment,
+  resolveSoloSessionBotId,
   sanitizeSidebarOrg,
+  selectOrderedSoloSessions,
   toggleCollapseDepartment,
   togglePinConversation,
   writeSidebarOrg,
@@ -51,21 +58,128 @@ test('department lifecycle: add, deduplicate case-insensitively, rename, delete 
   assert.equal(s5.collapsedDepartmentIds.length, 0);
 });
 
-test('pin toggle and pruneRemovedConversations keep org state clean', () => {
+test('pin toggle and pruneRemovedConversations keep org state clean across groups and solo sessions', () => {
   const { state: s1, department: tech } = addDepartment(EMPTY_SIDEBAR_ORG, 'Tech');
   let state = assignConversationDepartment(s1, 'g1', tech.id);
   state = assignConversationDepartment(state, 'g2', tech.id);
   state = togglePinConversation(state, 'g1');
+  state = togglePinConversation(state, 'solo-1');
   state = togglePinConversation(state, 'g2');
-  assert.deepEqual(state.pinnedIds, ['g2', 'g1']);
+  assert.deepEqual(state.pinnedIds, ['g2', 'solo-1', 'g1']);
 
   state = togglePinConversation(state, 'g1');
-  assert.deepEqual(state.pinnedIds, ['g2']);
+  assert.deepEqual(state.pinnedIds, ['g2', 'solo-1']);
 
-  const pruned = pruneRemovedConversations(state, new Set(['g1']));
-  assert.deepEqual(pruned.pinnedIds, []);
+  // Deleting g2 while solo-1 and g1 stay live preserves solo-1 pin.
+  const pruned = pruneRemovedConversations(state, new Set(['g1', 'solo-1']));
+  assert.deepEqual(pruned.pinnedIds, ['solo-1']);
   assert.equal(pruned.assignments.g2, undefined);
   assert.equal(pruned.assignments.g1, tech.id);
+});
+
+test('async delete pending-prune lifetime: keeps ID pending across await microtask until passive effect runs, and clears without pruning on API failure', async () => {
+  const map = new Map();
+  const storage = {
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => map.set(k, v),
+  };
+  const userId = 'user-async-prune';
+
+  let org = EMPTY_SIDEBAR_ORG;
+  org = togglePinConversation(org, 'solo-surviving');
+  org = togglePinConversation(org, 'solo-delete-target');
+  org = togglePinConversation(org, 'group-surviving');
+  writeSidebarOrg(storage, userId, org);
+  assert.deepEqual(readSidebarOrg(storage, userId).pinnedIds, [
+    'group-surviving',
+    'solo-delete-target',
+    'solo-surviving',
+  ]);
+
+  let conversations = [
+    { id: 'group-surviving' },
+    { id: 'solo-delete-target' },
+    { id: 'solo-surviving' },
+  ];
+  const pending = new Map();
+
+  const runPassiveEffect = () => {
+    if (pending.size === 0) return;
+    const liveIds = new Set(conversations.map((c) => c.id));
+    if (reconcilePendingConversationPrunes(pending, liveIds)) {
+      const current = readSidebarOrg(storage, userId);
+      writeSidebarOrg(storage, userId, pruneRemovedConversations(current, liveIds));
+    }
+  };
+
+  // 1) Soft API failure (HTTP 500): deleteConversationById resolves without removing the item from `conversations`.
+  const runDeleteWithLifecycle = async (conversationId, deleteImpl) => {
+    pending.set(conversationId, 'inflight');
+    try {
+      await deleteImpl(conversationId);
+      if (pending.has(conversationId)) {
+        pending.set(conversationId, 'settled');
+      }
+    } catch {
+      pending.delete(conversationId);
+    }
+  };
+
+  await runDeleteWithLifecycle('solo-delete-target', async () => {
+    // Intermediate render while HTTP DELETE is still in flight (e.g., menu closing).
+    runPassiveEffect();
+    assert.equal(pending.get('solo-delete-target'), 'inflight');
+    await Promise.resolve();
+    // Server returned 500 -> conversations unchanged.
+  });
+  // Effect runs after settle -> sees ID still present in `conversations`, clears pending WITHOUT pruning.
+  runPassiveEffect();
+  assert.equal(pending.size, 0);
+  assert.deepEqual(readSidebarOrg(storage, userId).pinnedIds, [
+    'group-surviving',
+    'solo-delete-target',
+    'solo-surviving',
+  ]);
+
+  // 2) Thrown rejection from delete helper -> clears pending immediately without pruning.
+  await runDeleteWithLifecycle('solo-delete-target', async () => {
+    await Promise.resolve();
+    throw new Error('NETWORK_ABORT');
+  });
+  assert.equal(pending.size, 0);
+  assert.deepEqual(readSidebarOrg(storage, userId).pinnedIds, [
+    'group-surviving',
+    'solo-delete-target',
+    'solo-surviving',
+  ]);
+
+  // 3) Successful async delete: microtask settles BEFORE passive effect macrotask fires.
+  let passiveEffectScheduled = null;
+  await runDeleteWithLifecycle('solo-delete-target', async (id) => {
+    // Menu closes before network completes -> effect runs while still inflight.
+    runPassiveEffect();
+    assert.equal(pending.get(id), 'inflight');
+    await Promise.resolve();
+    // State update removes `id` and schedules passive `useEffect` for macrotask turn.
+    conversations = conversations.filter((c) => c.id !== id);
+    passiveEffectScheduled = new Promise((resolve) => {
+      setTimeout(() => {
+        runPassiveEffect();
+        resolve();
+      }, 0);
+    });
+  });
+
+  // Immediately after `await deleteImpl` microtask (before macrotask effect runs), candidate MUST still be pending!
+  assert.equal(pending.get('solo-delete-target'), 'settled');
+
+  await passiveEffectScheduled;
+  assert.equal(pending.size, 0);
+  assert.deepEqual(
+    readSidebarOrg(storage, userId).pinnedIds,
+    ['group-surviving', 'solo-surviving'],
+    'Deleted pinned ID is pruned from storage once effect confirms removal from conversations'
+  );
 });
 
 test('storage round-trip and corrupt storage resilience', () => {
@@ -115,6 +229,103 @@ test('formatRelativeTime formats EN and VI cleanly', () => {
   assert.equal(formatRelativeTime('invalid', 'en', now), '');
 });
 
+test('solo session selection, bounded slicing, and last-session delete protection', () => {
+  const items = [
+    {
+      id: 'group-1',
+      kind: 'group',
+      title: 'Council Group',
+      roster: ['bot:bot-a', 'bot:bot-b'],
+      createdAt: '2026-11-20T00:00:00Z',
+      updatedAt: '2026-11-27T12:00:00Z',
+    },
+    {
+      id: 'solo-old',
+      kind: 'solo',
+      botId: 'bot-a',
+      title: 'Old Alpha Spec',
+      roster: ['bot:bot-a'],
+      createdAt: '2026-11-20T00:00:00Z',
+      updatedAt: '2026-11-21T10:00:00Z',
+    },
+    {
+      id: 'solo-newest',
+      kind: 'solo',
+      botId: 'bot-a',
+      title: 'Newest Alpha Spec',
+      roster: ['bot:bot-a'],
+      createdAt: '2026-11-26T00:00:00Z',
+      updatedAt: '2026-11-27T11:00:00Z',
+    },
+    {
+      id: 'solo-roster-fallback',
+      kind: 'solo',
+      title: 'Beta Only Thread',
+      roster: ['bot:bot-b'],
+      createdAt: '2026-11-25T00:00:00Z',
+      updatedAt: '2026-11-26T09:00:00Z',
+    },
+    {
+      id: 'solo-orphan',
+      kind: 'solo',
+      botId: 'bot-deleted',
+      title: 'Deleted Bot Thread',
+      roster: ['bot:bot-deleted'],
+      createdAt: '2026-11-27T00:00:00Z',
+      updatedAt: '2026-11-27T11:59:00Z',
+    },
+  ];
+
+  assert.equal(resolveSoloSessionBotId(items[0]), undefined);
+  assert.equal(resolveSoloSessionBotId(items[1]), 'bot-a');
+  assert.equal(resolveSoloSessionBotId(items[3]), 'bot-b');
+
+  // Filters out group conversations and orphaned bots, orders pinned first then updatedAt desc.
+  const ordered = selectOrderedSoloSessions(
+    items,
+    ['solo-old'],
+    new Set(['bot-a', 'bot-b'])
+  );
+  assert.deepEqual(
+    ordered.map((s) => s.id),
+    ['solo-old', 'solo-newest', 'solo-roster-fallback']
+  );
+
+  // Titles stay exact (never sequential #N fabrication).
+  assert.deepEqual(
+    ordered.map((s) => s.title),
+    ['Old Alpha Spec', 'Newest Alpha Spec', 'Beta Only Thread']
+  );
+
+  // Last-session protection: bot-a has 2 threads -> deletable; bot-b has 1 thread -> protected.
+  assert.equal(canDeleteSoloSession(items, 'solo-old'), true);
+  assert.equal(canDeleteSoloSession(items, 'solo-newest'), true);
+  assert.equal(canDeleteSoloSession(items, 'solo-roster-fallback'), false);
+  assert.equal(canDeleteSoloSession(items, 'group-1'), false);
+  assert.equal(canDeleteSoloSession(items, 'non-existent'), false);
+
+  // Bounded density defaults to RECENT_SOLO_SESSIONS_LIMIT (5) and expands cleanly.
+  assert.equal(RECENT_SOLO_SESSIONS_LIMIT, 5);
+  const seven = Array.from({ length: 7 }, (_, i) => ({ id: `s-${i}` }));
+  const collapsed = partitionBoundedSessions(seven, false);
+  assert.equal(collapsed.canExpand, true);
+  assert.equal(collapsed.visible.length, 5);
+  assert.equal(collapsed.hiddenCount, 2);
+
+  const expanded = partitionBoundedSessions(seven, true);
+  assert.equal(expanded.canExpand, true);
+  assert.equal(expanded.visible.length, 7);
+  assert.equal(expanded.hiddenCount, 0);
+
+  // Bilingual session copy parity.
+  for (const key of Object.keys(SIDEBAR_SESSION_COPY.en)) {
+    assert.equal(typeof SIDEBAR_SESSION_COPY.en[key], 'string');
+    assert.equal(typeof SIDEBAR_SESSION_COPY.vi[key], 'string');
+    assert.ok(SIDEBAR_SESSION_COPY.en[key].trim().length > 0);
+    assert.ok(SIDEBAR_SESSION_COPY.vi[key].trim().length > 0);
+  }
+});
+
 test('export and import round-trip + malformed payload rejection', () => {
   const exported = exportGroupChatJson({
     title: 'Zero Council',
@@ -143,6 +354,7 @@ test('export and import round-trip + malformed payload rejection', () => {
   );
   assert.equal(batch.ok, true);
   if (batch.ok) {
+    assert.equal(parsed.groups.length, 1);
     assert.equal(batch.groups.length, 2);
     assert.deepEqual(batch.departments.sort(), ['Design', 'Tech']);
   }
