@@ -937,7 +937,6 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   position: relative;
   perspective: 1200px;
   perspective-origin: 50% 45%;
-  overflow-x: clip;
 }
 
 .stage-3d {
@@ -945,70 +944,255 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   will-change: transform;
 }
 
-/* Soft coloured blob used behind hero tiles. Purely decorative. */
-.blob {
-  position: absolute;
-  z-index: 0;
-  border-radius: 50%;
-  filter: blur(48px);
-  opacity: 0.5;
+/* ---------------------------------------------------------------------------
+   Atmospheric Editorial Chamber — Full-bleed Ambient & Scroll-Story System
+
+   Replaces narrow blurred blobs inside the hero column with viewport-wide
+   multi-stop radial washes that fade to transparent well before any edge,
+   eliminating rectangular clipping while keeping WCAG AA text contrast.
+--------------------------------------------------------------------------- */
+
+.zc-story-root {
+  --story-progress: 0;
+  --hero-p: 0;
+  --flow-p: 0.34;
+  --ambient-alpha-primary: 0.13;
+  --ambient-alpha-secondary: 0.095;
+  --ambient-alpha-accent: 0.075;
+}
+
+[data-theme='dark'] .zc-story-root {
+  --ambient-alpha-primary: 0.21;
+  --ambient-alpha-secondary: 0.15;
+  --ambient-alpha-accent: 0.11;
+}
+
+.ambient-field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   pointer-events: none;
-  animation: blob-drift 16s ease-in-out infinite alternate;
+  overflow: hidden;
 }
 
-.blob--blue {
-  background: var(--tint-blue);
+.ambient-field__wash {
+  position: absolute;
+  border-radius: 999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+  transition: transform 950ms var(--ease-out), opacity 850ms var(--ease-out);
 }
 
-.blob--orange {
-  background: var(--tint-orange);
-  animation-delay: -5s;
+.ambient-field__wash--primary {
+  top: -18vh;
+  right: -12vw;
+  width: min(82vw, 940px);
+  height: min(82vw, 940px);
+  opacity: var(--ambient-alpha-primary);
+  background: radial-gradient(
+    closest-side,
+    var(--tint-violet) 0%,
+    color-mix(in srgb, var(--tint-blue) 62%, transparent) 44%,
+    transparent 100%
+  );
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
-.blob--green {
-  background: var(--tint-green);
-  animation-delay: -9s;
+.ambient-field__wash--secondary {
+  bottom: -24vh;
+  right: 4vw;
+  width: min(74vw, 820px);
+  height: min(74vw, 820px);
+  opacity: var(--ambient-alpha-secondary);
+  background: radial-gradient(
+    closest-side,
+    var(--tint-orange) 0%,
+    color-mix(in srgb, var(--tint-pink) 42%, transparent) 48%,
+    transparent 100%
+  );
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
-@keyframes blob-drift {
+.ambient-field__wash--accent {
+  top: 26vh;
+  left: -18vw;
+  width: min(68vw, 760px);
+  height: min(68vw, 760px);
+  opacity: var(--ambient-alpha-accent);
+  background: radial-gradient(
+    closest-side,
+    var(--tint-green) 0%,
+    color-mix(in srgb, var(--tint-blue) 45%, transparent) 46%,
+    transparent 100%
+  );
+  transform: translate3d(0, 0, 0) scale(0.95);
+}
+
+/* Section-tinted atmospheric choreography across acts (desktop only) */
+@media (min-width: 1024px) {
+  .zc-story-root[data-story-act='how-it-works'] .ambient-field__wash--primary {
+    transform: translate3d(-18vw, 12vh, 0) scale(1.06);
+  }
+
+  .zc-story-root[data-story-act='how-it-works'] .ambient-field__wash--secondary {
+    opacity: calc(var(--ambient-alpha-secondary) * 0.65);
+    transform: translate3d(-12vw, -10vh, 0) scale(0.92);
+  }
+
+  .zc-story-root[data-story-act='how-it-works'] .ambient-field__wash--accent {
+    opacity: calc(var(--ambient-alpha-accent) * 1.18);
+    transform: translate3d(14vw, -8vh, 0) scale(1.06);
+  }
+
+  .zc-story-root[data-story-act='frameworks'] .ambient-field__wash--primary {
+    opacity: calc(var(--ambient-alpha-primary) * 0.85);
+    transform: translate3d(-6vw, 18vh, 0) scale(0.98);
+  }
+
+  .zc-story-root[data-story-act='frameworks'] .ambient-field__wash--secondary {
+    opacity: calc(var(--ambient-alpha-secondary) * 1.25);
+    transform: translate3d(-24vw, -16vh, 0) scale(1.1);
+  }
+
+  .zc-story-root[data-story-act='why'] .ambient-field__wash--primary {
+    opacity: calc(var(--ambient-alpha-primary) * 0.78);
+    transform: translate3d(4vw, 24vh, 0) scale(0.94);
+  }
+
+  .zc-story-root[data-story-act='why'] .ambient-field__wash--accent {
+    opacity: calc(var(--ambient-alpha-accent) * 1.38);
+    transform: translate3d(26vw, -12vh, 0) scale(1.12);
+  }
+
+  .zc-story-root[data-story-act='pricing'] .ambient-field__wash--primary {
+    opacity: calc(var(--ambient-alpha-primary) * 1.08);
+    transform: translate3d(-14vw, 8vh, 0) scale(1.08);
+  }
+
+  .zc-story-root[data-story-act='pricing'] .ambient-field__wash--secondary {
+    opacity: calc(var(--ambient-alpha-secondary) * 1.15);
+    transform: translate3d(-8vw, -22vh, 0) scale(1.04);
+  }
+
+  .zc-story-root[data-story-act='faq'] .ambient-field__wash--primary {
+    opacity: calc(var(--ambient-alpha-primary) * 0.75);
+    transform: translate3d(-10vw, 10vh, 0) scale(0.96);
+  }
+
+  .zc-story-root[data-story-act='faq'] .ambient-field__wash--secondary {
+    opacity: calc(var(--ambient-alpha-secondary) * 0.55);
+  }
+}
+
+/* Mobile fallback: 2 static washes only for steady 60fps & zero GPU churn */
+@media (max-width: 1023px) {
+  .ambient-field__wash {
+    transition: none;
+  }
+
+  .ambient-field__wash--primary {
+    top: -10vh;
+    right: -24vw;
+    width: 115vw;
+    height: 115vw;
+  }
+
+  .ambient-field__wash--secondary {
+    bottom: -16vh;
+    left: -26vw;
+    right: auto;
+    width: 110vw;
+    height: 110vw;
+  }
+
+  .ambient-field__wash--accent {
+    display: none;
+  }
+}
+
+/* Subtle top scroll-progress hairline anchored below the 75px fixed header */
+.story-progress-track {
+  position: fixed;
+  inset-inline: 0;
+  top: 75px;
+  z-index: 30;
+  height: 2px;
+  pointer-events: none;
+  background: transparent;
+}
+
+.story-progress-bar {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  transform: scaleX(var(--story-progress, 0));
+  background: linear-gradient(90deg, var(--tint-violet), var(--tint-blue), var(--tint-green));
+  opacity: 0.75;
+  will-change: transform;
+}
+
+/* Subtle hero eyebrow entrance without gating H1 LCP */
+.hero-enter {
+  animation: hero-enter 520ms var(--ease-out) both;
+}
+
+.hero-enter--1 {
+  animation-delay: 40ms;
+}
+
+@keyframes hero-enter {
   from {
-    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.01;
+    transform: translate3d(0, 8px, 0);
   }
   to {
-    transform: translate3d(1.5rem, -1.25rem, 0) scale(1.12);
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
   }
 }
 
-/* A tile that lifts off the page on hover. `--tilt-x`/`--tilt-y` are set per
-   card by the caller to fake a light source from the upper left. */
+/* Desktop scroll-linked depth for hero orb & floating pills */
+@media (min-width: 1024px) {
+  .hero-orb-rig {
+    transform: translate3d(0, calc(var(--hero-p, 0) * -26px), 0)
+      scale(calc(1 - var(--hero-p, 0) * 0.055));
+    will-change: transform;
+  }
+
+  .float-card--top {
+    translate: 0 calc(var(--hero-p, 0) * -16px);
+  }
+
+  .float-card--bottom {
+    translate: 0 calc(var(--hero-p, 0) * 14px);
+  }
+}
+
+/* A tile that lifts crisply on hover without blurring text on 1x DPR screens. */
 .lift {
-  transform-style: preserve-3d;
-  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg))
-    translateZ(0);
   transition: transform var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
 }
 
 .lift:hover {
-  transform: perspective(900px) rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg))
-    translateZ(26px);
+  transform: translate3d(0, -4px, 0);
 }
 
 /* Slow idle float, used by decorative hero tiles only. */
 .float-slow {
-  animation: float-slow 7s ease-in-out infinite alternate;
+  animation: float-slow 7.5s ease-in-out infinite alternate;
 }
 
 .float-slower {
   animation: float-slow 9.5s ease-in-out infinite alternate;
-  animation-delay: -2.5s;
+  animation-delay: -2.8s;
 }
 
 @keyframes float-slow {
   from {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
   to {
-    transform: translateY(-14px);
+    transform: translate3d(0, -10px, 0);
   }
 }
 
@@ -1055,16 +1239,29 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   transform: translateX(1.375rem);
 }
 
-/* Pill tile that floats in the hero collage. */
+/* Frosted glass pill tile that floats around the volumetric hero orb. */
 .float-card {
   border-radius: 1.5rem;
-  background: var(--color-surface);
+  background: color-mix(in srgb, var(--color-surface) 86%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow-lift);
-  border: 1.5px solid var(--color-border);
+  border: 1.5px solid color-mix(in srgb, var(--color-border) 88%, transparent);
+  transition: border-color var(--dur) var(--ease-out), box-shadow var(--dur) var(--ease-out);
 }
+
+[data-theme='dark'] .float-card {
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
+  border-color: color-mix(in srgb, var(--color-ink) 12%, var(--color-border));
+}
+
+/* ---------------------------------------------------------------------------
+   Volumetric 3D Council Orb (camera-facing counter-rotated spheres)
+--------------------------------------------------------------------------- */
 
 .council-orb {
   --orb-size: clamp(11rem, 22vw, 15rem);
+  --orb-tilt-x: 12deg;
   position: relative;
   display: grid;
   place-items: center;
@@ -1072,10 +1269,47 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   perspective: 900px;
 }
 
-.council-orb__scene {
+.council-orb--hero {
+  --orb-size: clamp(12.25rem, 23vw, 16.5rem);
+}
+
+.council-orb__aura {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: calc(var(--orb-size) * 1.85);
+  height: calc(var(--orb-size) * 1.85);
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--tint-violet) 20%, transparent) 0%,
+    color-mix(in srgb, var(--tint-blue) 10%, transparent) 44%,
+    transparent 100%
+  );
+}
+
+[data-theme='dark'] .council-orb__aura {
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--tint-violet) 30%, transparent) 0%,
+    color-mix(in srgb, var(--tint-blue) 14%, transparent) 46%,
+    transparent 100%
+  );
+}
+
+.council-orb__tilt {
   position: relative;
   width: var(--orb-size);
   height: var(--orb-size);
+  transform-style: preserve-3d;
+  transform: rotateX(var(--orb-tilt-x));
+}
+
+.council-orb__scene {
+  position: relative;
+  width: 100%;
+  height: 100%;
   transform-style: preserve-3d;
   animation: council-orb-spin 24s linear infinite;
 }
@@ -1086,73 +1320,423 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   margin: auto;
   width: 100%;
   height: 100%;
-  border: 2px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
+  border: 1.25px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
   border-radius: 999px;
 }
 
+[data-theme='dark'] .council-orb__ring {
+  border-color: color-mix(in srgb, var(--color-ink) 16%, transparent);
+}
+
 .council-orb__ring--x {
-  transform: rotateX(78deg);
+  transform: rotateX(76deg);
 }
 
 .council-orb__ring--y {
   transform: rotateY(78deg);
 }
 
+.council-orb__ring--tilt {
+  width: 86%;
+  height: 86%;
+  border-color: color-mix(in srgb, var(--color-accent) 18%, transparent);
+  transform: rotateX(62deg) rotateY(-28deg);
+}
+
 .council-orb__core {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 22%;
-  height: 22%;
+  width: 23%;
+  height: 23%;
   border-radius: 999px;
-  background: linear-gradient(150deg, var(--tint-violet), var(--tint-blue));
-  box-shadow: 0 0 1.5rem color-mix(in srgb, var(--tint-violet) 55%, transparent);
+  background: radial-gradient(
+    circle at 32% 28%,
+    color-mix(in srgb, #ffffff 62%, var(--tint-violet)) 0%,
+    var(--tint-violet) 48%,
+    var(--tint-blue) 100%
+  );
+  box-shadow:
+    inset -0.25rem -0.25rem 0.55rem color-mix(in srgb, #000000 26%, transparent),
+    0 0 1.85rem color-mix(in srgb, var(--tint-violet) 46%, transparent);
+  animation: council-orb-counter-spin 24s linear infinite;
 }
 
-/* Each advisor keeps its own persona hue, so the ring and core stay in the
-   accent family — those are the scene, not the people. */
-.council-orb__node {
+/* Each advisor sphere orbits in 3D space while counter-rotating to face the camera. */
+.council-orb__orbit-arm {
   position: absolute;
   inset: 0;
   margin: auto;
-  width: 12%;
-  height: 12%;
-  border-radius: 999px;
-  background: var(--node-color);
-  box-shadow: 0 0 1.1rem color-mix(in srgb, var(--node-color) 65%, transparent);
+  width: 12.5%;
+  height: 12.5%;
+  transform-style: preserve-3d;
   transform: rotateY(var(--node-angle)) translateZ(calc(var(--orb-size) * 0.42));
 }
 
+.council-orb__node-anchor {
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateY(calc(-1 * var(--node-angle)));
+}
+
+.council-orb__node {
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  background: radial-gradient(
+    circle at 32% 28%,
+    color-mix(in srgb, #ffffff 58%, var(--node-color)) 0%,
+    var(--node-color) 52%,
+    color-mix(in srgb, var(--node-color) 72%, #000000) 100%
+  );
+  box-shadow:
+    inset -0.15rem -0.15rem 0.35rem color-mix(in srgb, #000000 24%, transparent),
+    0 0 1.05rem color-mix(in srgb, var(--node-color) 55%, transparent);
+  animation: council-orb-counter-spin 24s linear infinite;
+}
+
+.council-orb[data-in-view='false'] .council-orb__scene,
+.council-orb[data-in-view='false'] .council-orb__core,
+.council-orb[data-in-view='false'] .council-orb__node {
+  animation-play-state: paused;
+}
+
 @keyframes council-orb-spin {
-  from {
-    transform: rotateY(0deg) rotateX(10deg);
+  0% {
+    transform: rotateY(0deg);
   }
-  to {
-    transform: rotateY(360deg) rotateX(10deg);
+  50% {
+    transform: rotateY(180deg);
+  }
+  100% {
+    transform: rotateY(360deg);
   }
 }
 
-/* Header brand mark: the hero orb at mark size, driven by the same --orb-size. */
+@keyframes council-orb-counter-spin {
+  0% {
+    transform: rotateY(0deg) rotateX(calc(-1 * var(--orb-tilt-x)));
+  }
+  50% {
+    transform: rotateY(-180deg) rotateX(calc(-1 * var(--orb-tilt-x)));
+  }
+  100% {
+    transform: rotateY(-360deg) rotateX(calc(-1 * var(--orb-tilt-x)));
+  }
+}
+
+/* Header & Footer brand mark: crisp 24px static logo sharing the exact geometry. */
 .brand-mark {
   flex: none;
 }
 
 .brand-mark .council-orb {
   --orb-size: 1.5rem;
+  --orb-tilt-x: 10deg;
   padding: 0;
+}
+
+.brand-mark .council-orb__aura,
+.brand-mark .council-orb__ring--tilt {
+  display: none;
+}
+
+.brand-mark .council-orb__ring {
+  border-width: 1.5px;
 }
 
 .brand-mark .council-orb__scene {
   animation: none;
+  transform: rotateY(22deg);
+}
+
+.brand-mark .council-orb__core {
+  animation: none;
+  transform: rotateY(-22deg) rotateX(-10deg);
+  box-shadow: 0 0 0.35rem color-mix(in srgb, var(--tint-violet) 45%, transparent);
 }
 
 .brand-mark .council-orb__node {
+  animation: none;
+  transform: rotateY(-22deg) rotateX(-10deg);
   box-shadow: 0 0 0.25rem color-mix(in srgb, var(--node-color) 55%, transparent);
-  transform: rotateY(var(--node-angle)) translateZ(calc(var(--orb-size) * 0.42)) rotateY(calc(-1 * var(--node-angle)));
 }
 
 /* ---------------------------------------------------------------------------
-   Scroll reveal
+   Sticky Split-Story Chamber, Progress Rail & Editorial Story Cards
+--------------------------------------------------------------------------- */
+
+.story-chamber {
+  background: color-mix(in srgb, var(--color-surface) 88%, transparent);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-card);
+}
+
+.story-chamber__glow {
+  position: absolute;
+  inset: -30% -20% auto -20%;
+  height: 15rem;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--chamber-tint, var(--tint-blue)) 18%, transparent) 0%,
+    transparent 100%
+  );
+  transition: background 500ms var(--ease-out);
+}
+
+.story-chamber__stage {
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  background: color-mix(in srgb, var(--color-surface-2) 65%, transparent);
+  overflow: hidden;
+}
+
+.story-chamber__scene {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transform: translate3d(0, 10px, 0) scale(0.96);
+  pointer-events: none;
+  transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out);
+}
+
+.story-chamber__scene[data-active='true'] {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+}
+
+.story-chamber__ring {
+  position: absolute;
+  border-radius: 999px;
+  border: 1px dashed color-mix(in srgb, var(--tint-blue) 36%, transparent);
+}
+
+.story-chamber__ring--outer {
+  width: 9.25rem;
+  height: 9.25rem;
+  animation: chamber-spin 22s linear infinite;
+}
+
+.story-chamber__ring--inner {
+  width: 6.25rem;
+  height: 6.25rem;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--tint-violet) 26%, transparent);
+}
+
+.story-chamber__core {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 3.75rem;
+  height: 3.75rem;
+  border-radius: 1.125rem;
+  background: var(--core-tint, var(--tint-blue));
+  box-shadow: 0 12px 26px -10px color-mix(in srgb, var(--core-tint, var(--tint-blue)) 65%, transparent);
+}
+
+.story-chamber__dot {
+  position: absolute;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 999px;
+  animation: chamber-pulse 3.2s ease-in-out infinite;
+}
+
+.story-chamber__dot--1 {
+  top: 22%;
+  left: 26%;
+  background: var(--color-persona-rose);
+}
+
+.story-chamber__dot--2 {
+  top: 24%;
+  right: 26%;
+  background: var(--color-persona-sage);
+  animation-delay: -0.8s;
+}
+
+.story-chamber__dot--3 {
+  bottom: 28%;
+  left: 28%;
+  background: var(--color-persona-slate);
+  animation-delay: -1.6s;
+}
+
+.story-chamber__dot--4 {
+  bottom: 26%;
+  right: 28%;
+  background: var(--color-persona-ochre);
+  animation-delay: -2.4s;
+}
+
+.story-chamber__arcs {
+  padding-bottom: 1.5rem;
+}
+
+.story-chamber__pill {
+  position: absolute;
+  bottom: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 0.3rem 0.8rem;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  color: var(--color-ink);
+  box-shadow: var(--shadow-card);
+}
+
+@keyframes chamber-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes chamber-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.16);
+  }
+}
+
+/* Desktop vertical progress rail beside How It Works steps */
+.story-rail {
+  position: absolute;
+  top: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.45rem;
+  width: 3px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-border) 90%, transparent);
+  overflow: hidden;
+}
+
+.story-rail__fill {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  transform-origin: top center;
+  transform: scaleY(var(--flow-p, 0.34));
+  background: linear-gradient(180deg, var(--tint-blue), var(--tint-violet), var(--tint-green));
+  will-change: transform;
+}
+
+/* Editorial story cards: subtle hairline top accent + fine-pointer spotlight */
+.story-card {
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.story-card__accent-line {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2.5px;
+  opacity: 0.45;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--card-tint, var(--color-accent)) 50%,
+    transparent 100%
+  );
+  transition: opacity var(--dur) var(--ease-out);
+}
+
+.story-card:hover .story-card__accent-line,
+.story-step-card[data-active='true'] .story-card__accent-line {
+  opacity: 1;
+}
+
+@media (min-width: 1024px) {
+  .story-step-card[data-active='true'] {
+    border-color: color-mix(in srgb, var(--card-tint, var(--color-accent)) 55%, var(--color-border));
+    box-shadow: var(--shadow-lift);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .story-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0;
+    background: radial-gradient(
+      340px circle at var(--spot-x, 50%) var(--spot-y, 20%),
+      color-mix(in srgb, var(--card-tint, var(--color-accent)) 9%, transparent),
+      transparent 70%
+    );
+    transition: opacity 280ms var(--ease-out);
+  }
+
+  .story-card:hover::before {
+    opacity: 1;
+  }
+}
+
+.story-mini-visual {
+  height: 4.25rem;
+  width: 100%;
+  border-radius: 0.875rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 85%, transparent);
+  background: color-mix(in srgb, var(--visual-tint, var(--color-accent)) 6%, var(--color-surface-2));
+  color: var(--visual-tint, var(--color-accent));
+  padding: 0.25rem;
+  transition: transform var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+}
+
+.story-card:hover .story-mini-visual {
+  transform: translate3d(0, -2px, 0);
+  border-color: color-mix(in srgb, var(--visual-tint, var(--color-accent)) 35%, var(--color-border));
+}
+
+.pricing-card--popular {
+  box-shadow:
+    0 2px 6px color-mix(in srgb, var(--color-shadow) 8%, transparent),
+    0 24px 54px -20px color-mix(in srgb, var(--tint-violet) 32%, transparent);
+}
+
+.faq-item[open] {
+  border-color: color-mix(in srgb, var(--color-accent) 38%, var(--color-border));
+}
+
+.faq-item[open] .faq-item__answer {
+  animation: faq-reveal 260ms var(--ease-out) both;
+}
+
+@keyframes faq-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -4px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Scroll reveal (additive — never hides SSR HTML or above-the-fold content)
 --------------------------------------------------------------------------- */
 
 .reveal {
@@ -1162,12 +1746,12 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
 
 .reveal[data-armed='true'] {
   opacity: 0;
-  transform: translateY(1.5rem);
+  transform: translate3d(0, 1rem, 0) scale(0.985);
 }
 
 .reveal[data-armed='true'][data-visible='true'] {
   opacity: 1;
-  transform: translateY(0);
+  transform: translate3d(0, 0, 0) scale(1);
 }
 
 .toast-enter {
@@ -1208,15 +1792,48 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
 
   .zc-modal,
   .zc-modal::backdrop,
-  .toast-enter {
+  .toast-enter,
+  .hero-enter,
+  .faq-item[open] .faq-item__answer {
     animation: none !important;
   }
 
-  .blob,
   .float-slow,
   .float-slower,
+  .story-chamber__ring--outer,
+  .story-chamber__dot {
+    animation: none !important;
+  }
+
+  .hero-orb-rig {
+    transform: none !important;
+  }
+
+  .float-card--top,
+  .float-card--bottom {
+    translate: none !important;
+  }
+
+  .ambient-field__wash {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .story-progress-track {
+    display: none !important;
+  }
+
+  /* Keep the 3D council orb frozen at a balanced front-facing composition
+     with round spheres when reduced motion is enabled. */
   .council-orb__scene {
     animation: none !important;
+    transform: rotateY(32deg) !important;
+  }
+
+  .council-orb__core,
+  .council-orb__node {
+    animation: none !important;
+    transform: rotateY(-32deg) rotateX(calc(-1 * var(--orb-tilt-x))) !important;
   }
 }
 
