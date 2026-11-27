@@ -4,7 +4,16 @@
  * Left-hand workspace navigation sidebar (group chats, solo bots, API keys, and settings).
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../context/AppContext';
 import type { SavedConversation, ViewType } from '../types';
 import {
@@ -33,11 +42,19 @@ import {
 import { fill } from '../bot-settings-panel-logic';
 import {
   GroupActionMenu,
+  POPOVER_WIDTH,
   SectionHeader,
   computeMenuPosition,
   type GroupPopoverState,
 } from './sidebar/GroupActionMenu';
-import { SidebarBotsSection } from './sidebar/SidebarBotsSection';
+import {
+  SidebarBotsSection,
+  adjustMenuRectToViewport,
+  clampMenuToViewport,
+  handleFloatingMenuKeyDown,
+} from './sidebar/SidebarBotsSection';
+
+const GROUP_POPOVER_ESTIMATED_HEIGHT = 248;
 
 interface SidebarProps {
   mobile?: boolean;
@@ -77,6 +94,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   const [botsOpen, setBotsOpen] = useState(true);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLElement | null>(null);
+  const closeBotMenuRef = useRef<(() => void) | null>(null);
 
   const updateOrg = useCallback(
     (updater: (current: SidebarOrgState) => SidebarOrgState) => {
@@ -101,58 +120,108 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     });
   }, [conversations, org.pinnedIds]);
 
+  const closeMenu = useCallback((restoreFocus = false) => {
+    setMenu(null);
+    setConfirmDeleteId(null);
+    const focusTarget = restoreFocus ? menuTriggerRef.current : null;
+    menuTriggerRef.current = null;
+    if (focusTarget && focusTarget.isConnected) {
+      requestAnimationFrame(() => focusTarget.focus());
+    }
+  }, []);
+
   const go = (view: ViewType) => {
+    closeMenu(false);
+    closeBotMenuRef.current?.();
     onClose?.();
     setCurrentView(view);
     window.scrollTo(0, 0);
   };
 
-  const closeMenu = () => {
-    setMenu(null);
-    setConfirmDeleteId(null);
-  };
+  useLayoutEffect(() => {
+    if (!menu || !menuRef.current) return;
+    const rect = menuRef.current.getBoundingClientRect();
+    const clamped = adjustMenuRectToViewport(
+      { top: menu.top, left: menu.left },
+      {
+        width: rect.width || POPOVER_WIDTH,
+        height: rect.height || GROUP_POPOVER_ESTIMATED_HEIGHT,
+      },
+      { width: window.innerWidth, height: window.innerHeight }
+    );
+    menuRef.current.style.top = `${clamped.top}px`;
+    menuRef.current.style.left = `${clamped.left}px`;
+  }, [menu, confirmDeleteId]);
 
   useEffect(() => {
     if (!menu) return;
+    const frame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+    });
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setMenu(null);
-        setConfirmDeleteId(null);
-      }
+      handleFloatingMenuKeyDown(event, menuRef.current, closeMenu);
     };
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target;
-      if (target instanceof Node && !menuRef.current?.contains(target)) {
-        setMenu(null);
-        setConfirmDeleteId(null);
+      if (target instanceof Node) {
+        if (menuRef.current?.contains(target)) return;
+        if (event.button === 0 && menuTriggerRef.current?.contains(target)) return;
       }
+      closeMenu(false);
     };
     const onResize = () => {
-      setMenu(null);
-      setConfirmDeleteId(null);
+      closeMenu(false);
     };
-    window.addEventListener('keydown', onKeyDown);
+    const menuEl = menuRef.current;
+    const stopInsidePointerDown = (event: PointerEvent) => {
+      // Keep window-level outside-click listeners (e.g. mobile drawer) from
+      // dismissing the drawer before a portaled menu item click fires.
+      event.stopPropagation();
+    };
+    menuEl?.addEventListener('pointerdown', stopInsidePointerDown);
+    window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('resize', onResize);
     return () => {
-      window.removeEventListener('keydown', onKeyDown);
+      cancelAnimationFrame(frame);
+      menuEl?.removeEventListener('pointerdown', stopInsidePointerDown);
+      window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('resize', onResize);
     };
-  }, [menu]);
+  }, [menu, closeMenu]);
 
-  const openGroupMenu = (groupId: string, trigger: HTMLElement) => {
-    if (menu?.groupId === groupId) {
-      closeMenu();
+  const openGroupMenu = (groupId: string, trigger: HTMLElement, toggle = true) => {
+    if (toggle && menu?.groupId === groupId) {
+      closeMenu(false);
       return;
     }
+    closeBotMenuRef.current?.();
     setConfirmDeleteId(null);
+    menuTriggerRef.current = trigger;
     const pos = computeMenuPosition(trigger);
     setMenu({ groupId, ...pos });
   };
 
+  const openGroupContextMenu = (
+    groupId: string,
+    clientX: number,
+    clientY: number,
+    focusAnchor: HTMLElement
+  ) => {
+    closeBotMenuRef.current?.();
+    setConfirmDeleteId(null);
+    menuTriggerRef.current = focusAnchor;
+    const pos = clampMenuToViewport(
+      { x: clientX, y: clientY },
+      { width: POPOVER_WIDTH, height: GROUP_POPOVER_ESTIMATED_HEIGHT },
+      { width: window.innerWidth, height: window.innerHeight }
+    );
+    setMenu({ groupId, ...pos });
+  };
+
   const handleStartRename = (group: SavedConversation) => {
-    closeMenu();
+    closeMenu(false);
     setRenamingGroupId(group.id);
     setRenameDraft(group.title);
   };
@@ -165,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   };
 
   const handleExportGroup = (group: SavedConversation) => {
-    closeMenu();
+    closeMenu(false);
     const json = exportGroupChatJson({
       title: group.title,
       mode: group.mode,
@@ -189,7 +258,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   };
 
   const handleDeleteGroup = async (groupId: string) => {
-    closeMenu();
+    closeMenu(false);
     await deleteConversationById(groupId);
     const remaining = new Set(groupChats.filter((g) => g.id !== groupId).map((g) => g.id));
     updateOrg((cur) => pruneRemovedConversations(cur, remaining));
@@ -202,6 +271,35 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   const rowHeight = mobile ? 'min-h-11' : 'min-h-10';
   const footerButton =
     'flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 text-sm font-semibold transition hover:border-brass/60 hover:text-ink';
+
+  const renderedGroupMenu =
+    menu && activeGroupForMenu ? (
+      <GroupActionMenu
+        menu={menu}
+        group={activeGroupForMenu}
+        menuRef={menuRef}
+        isPinned={pinnedSet.has(activeGroupForMenu.id)}
+        confirmDeleteId={confirmDeleteId}
+        onRename={handleStartRename}
+        onEditGroup={(groupId) => {
+          closeMenu(false);
+          onClose?.();
+          openEditGroup(groupId);
+        }}
+        onTogglePin={(groupId) => {
+          updateOrg((cur) => togglePinConversation(cur, groupId));
+          closeMenu(false);
+        }}
+        onExport={handleExportGroup}
+        onConfirmOrDelete={(groupId) => {
+          if (confirmDeleteId !== groupId) {
+            setConfirmDeleteId(groupId);
+            return;
+          }
+          void handleDeleteGroup(groupId);
+        }}
+      />
+    ) : null;
 
   return (
     <aside
@@ -234,6 +332,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
               type="button"
               id="sidebar-new-group-btn"
               onClick={() => {
+                closeMenu(false);
+                closeBotMenuRef.current?.();
                 onClose?.();
                 openJoinRoom();
               }}
@@ -253,6 +353,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
         </div>
 
         <nav
+          onScroll={() => {
+            if (menu) closeMenu(false);
+            closeBotMenuRef.current?.();
+          }}
           className="grid min-w-0 grid-cols-1 content-start gap-4 overflow-y-auto overflow-x-hidden pr-0.5"
           aria-label={t.workspaceNavigation}
         >
@@ -328,6 +432,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                         key={group.id}
                         data-sidebar-group={group.id}
                         data-sidebar-pinned={isPinned ? 'true' : undefined}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          const focusAnchor =
+                            event.currentTarget.querySelector<HTMLElement>(
+                              `[data-group-menu-trigger="${group.id}"]`
+                            ) ?? event.currentTarget;
+                          openGroupContextMenu(group.id, event.clientX, event.clientY, focusAnchor);
+                        }}
                         className={`group flex min-w-0 items-center gap-1 rounded-lg px-1 transition-colors ${
                           isActive
                             ? 'bg-surface shadow-sm ring-1 ring-brass/40'
@@ -338,8 +451,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           type="button"
                           aria-current={isActive ? 'page' : undefined}
                           onClick={() => {
+                            closeMenu(false);
+                            closeBotMenuRef.current?.();
                             onClose?.();
                             openGroupChat(group.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === 'ContextMenu' ||
+                              (event.shiftKey && event.key === 'F10')
+                            ) {
+                              event.preventDefault();
+                              openGroupMenu(group.id, event.currentTarget, false);
+                            }
                           }}
                           className={`flex ${rowHeight} min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 text-left text-sm ${
                             isActive ? 'font-semibold text-ink' : 'text-ink-muted hover:text-ink'
@@ -365,7 +489,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           data-group-menu-trigger={group.id}
                           onClick={(event) => {
                             event.stopPropagation();
-                            openGroupMenu(group.id, event.currentTarget);
+                            openGroupMenu(group.id, event.currentTarget, true);
                           }}
                           aria-label={t.sidebarMoreActions}
                           aria-haspopup="menu"
@@ -373,7 +497,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           className={`flex ${mobile ? 'h-11 w-11' : 'h-9 w-9'} shrink-0 items-center justify-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink focus-visible:opacity-100 ${
                             isMenuOpen || mobile
                               ? 'bg-surface text-ink opacity-100'
-                              : 'opacity-0 group-hover:opacity-100'
+                              : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
                           }`}
                         >
                           <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
@@ -389,7 +513,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
             open={botsOpen}
             onToggle={() => setBotsOpen((v) => !v)}
             rowHeight={rowHeight}
+            mobile={mobile}
             onClose={onClose}
+            closeMenuRef={closeBotMenuRef}
+            onBeforeOpenMenu={() => closeMenu(false)}
           />
         </nav>
       </div>
@@ -455,33 +582,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
         </p>
       </div>
 
-      {menu && activeGroupForMenu && (
-        <GroupActionMenu
-          menu={menu}
-          group={activeGroupForMenu}
-          menuRef={menuRef}
-          isPinned={pinnedSet.has(activeGroupForMenu.id)}
-          confirmDeleteId={confirmDeleteId}
-          onRename={handleStartRename}
-          onEditGroup={(groupId) => {
-            closeMenu();
-            onClose?.();
-            openEditGroup(groupId);
-          }}
-          onTogglePin={(groupId) => {
-            updateOrg((cur) => togglePinConversation(cur, groupId));
-            closeMenu();
-          }}
-          onExport={handleExportGroup}
-          onConfirmOrDelete={(groupId) => {
-            if (confirmDeleteId !== groupId) {
-              setConfirmDeleteId(groupId);
-              return;
-            }
-            void handleDeleteGroup(groupId);
-          }}
-        />
-      )}
+      {renderedGroupMenu && typeof document !== 'undefined'
+        ? createPortal(renderedGroupMenu, document.body)
+        : renderedGroupMenu}
     </aside>
   );
 };

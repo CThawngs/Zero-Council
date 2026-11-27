@@ -274,8 +274,11 @@ test('Sidebar keeps every data-* hook the existing sidebar group tests rely on',
   for (const hook of ['data-sidebar-group', 'data-sidebar-pinned', 'data-group-menu-trigger', 'data-sidebar-popover="group"', 'data-group-menu-delete', 'id="sidebar-new-group-btn"']) {
     assert.ok(sidebar.includes(hook), `kept ${hook}`);
   }
-  // Popover still exposes exactly 5 menu items.
-  assert.equal((sidebar.match(/role="menuitem"/g) ?? []).length, 5);
+  // Group popover still exposes exactly 5 menu items; bot popover adds 3 (New chat, Edit, Delete).
+  const groupMenuSrc = src('prototype/components/sidebar/GroupActionMenu.tsx');
+  const botsSectionSrc = src('prototype/components/sidebar/SidebarBotsSection.tsx');
+  assert.equal((groupMenuSrc.match(/role="menuitem"/g) ?? []).length, 5);
+  assert.equal((botsSectionSrc.match(/(?<!\[)role="menuitem"/g) ?? []).length, 3);
   // Legacy clutter the earlier driver asserts is gone must stay gone.
   for (const gone of ['sidebar-search-input', 'sidebar-create-menu-btn', 'sidebar-select-threads-btn']) {
     assert.ok(!sidebar.includes(gone), `${gone} must not return`);

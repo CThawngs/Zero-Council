@@ -17,7 +17,249 @@ import { clearStoredRoom, readStoredRoom, writeStoredRoom } from '../chat/storag
 import type { PlanId } from '../data/plans';
 import { partitionRoomRosterByPlan } from '@/lib/store/planLimits';
 import { botPersonaId, botToPersona, useIsomorphicLayoutEffect } from './helpers';
-import type { ChatRoom } from './types';
+import type { ChatRoom, ToastKey, ToastValues } from './types';
+
+/** Returns true strictly when `conv` is a 1-on-1 (`solo`) conversation owned by `botId`. */
+export function isSoloConversationForBot(conv: SavedConversation, botId: string): boolean {
+  if (conv.kind !== 'solo') return false;
+  return conv.botId === botId || conv.roster.includes(botPersonaId(botId));
+}
+
+/** Captures a deduplicated snapshot of all solo conversation IDs belonging to `botId`. */
+export function snapshotBotSoloConversationIds(
+  conversations: readonly SavedConversation[],
+  botId: string
+): string[] {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const conv of conversations) {
+    if (isSoloConversationForBot(conv, botId) && !seen.has(conv.id)) {
+      seen.add(conv.id);
+      ids.push(conv.id);
+    }
+  }
+  return ids;
+}
+
+/** Returns true when `room` is an active solo room for `botId` or points to one of `purgedIds`. */
+export function isSoloRoomForBot(
+  room: Pick<ChatRoom, 'kind' | 'botId' | 'conversationId' | 'roster'> | null | undefined,
+  botId: string,
+  purgedIds?: ReadonlySet<string>
+): boolean {
+  if (!room) return false;
+  if (room.conversationId && purgedIds?.has(room.conversationId)) return true;
+  if (room.kind !== 'solo') return false;
+  return room.botId === botId || room.roster.includes(botPersonaId(botId));
+}
+
+/** FIFO async queue preventing concurrent `DELETE /api/conversations` file-store writes. */
+export function createSerialQueue() {
+  let tail: Promise<void> = Promise.resolve();
+  return <T>(task: () => Promise<T>): Promise<T> => {
+    const run = tail.then(task, task);
+    tail = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  };
+}
+
+/**
+ * Deletes a single conversation on the server when authenticated and persisted (`!local-*`),
+ * preserving immediate local deletion for unauthenticated or `local-*` conversations.
+ */
+export async function executeDeleteRemoteConversation(
+  id: string,
+  isAuthenticated: boolean,
+  fetchImpl: typeof fetch = fetch
+): Promise<boolean> {
+  if (!isAuthenticated || id.startsWith('local-')) {
+    return true;
+  }
+  try {
+    const res = await fetchImpl(`/api/conversations?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      credentials: 'same-origin',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export interface BotSoloPurgeDeps {
+  botId: string;
+  isAuthenticated: boolean;
+  getConversations: () => SavedConversation[];
+  updateConversations: (updater: (prev: SavedConversation[]) => SavedConversation[]) => void;
+  getCurrentRoom: () => ChatRoom | null;
+  updateCurrentRoom: (updater: (prev: ChatRoom | null) => ChatRoom | null) => void;
+  abortActiveTurn: () => void;
+  clearStoredRoomFn: () => void;
+  markConversationDeleted: (id: string) => void;
+  purgingBotIds: Set<string>;
+  enqueueDelete: <T>(task: () => Promise<T>) => Promise<T>;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Deterministically purges all solo conversations for `botId`:
+ * - Snapshots target solo conversation IDs and serializes/awaits each server `DELETE`.
+ * - Removes deleted entries via functional state updates without clobbering concurrent changes.
+ * - Aborts/clears an active target-bot solo room at most once and never triggers `sameBotNext`.
+ * - Throws if a remote `DELETE` fails so callers do not silently report success.
+ */
+export async function executeBotSoloConversationPurge({
+  botId,
+  isAuthenticated,
+  getConversations,
+  updateConversations,
+  getCurrentRoom,
+  updateCurrentRoom,
+  abortActiveTurn,
+  clearStoredRoomFn,
+  markConversationDeleted,
+  purgingBotIds,
+  enqueueDelete,
+  fetchImpl = fetch,
+}: BotSoloPurgeDeps): Promise<void> {
+  purgingBotIds.add(botId);
+  try {
+    const initialIds = snapshotBotSoloConversationIds(getConversations(), botId);
+    const initialSet = new Set(initialIds);
+
+    let abortedActiveBotRoom = false;
+    if (isSoloRoomForBot(getCurrentRoom(), botId, initialSet)) {
+      abortActiveTurn();
+      abortedActiveBotRoom = true;
+    }
+
+    const purgedIds = new Set<string>();
+    const processedIds = new Set<string>();
+    let pendingIds = initialIds;
+
+    while (pendingIds.length > 0) {
+      for (const convId of pendingIds) {
+        processedIds.add(convId);
+        const ok = await enqueueDelete(() =>
+          executeDeleteRemoteConversation(convId, isAuthenticated, fetchImpl)
+        );
+        if (!ok) {
+          const activeRoom = getCurrentRoom();
+          if (activeRoom?.conversationId && purgedIds.has(activeRoom.conversationId)) {
+            clearStoredRoomFn();
+            updateCurrentRoom((room) =>
+              room?.conversationId && purgedIds.has(room.conversationId) ? null : room
+            );
+          }
+          throw new Error(`CONVERSATION_PURGE_FAILED:${convId}`);
+        }
+        purgedIds.add(convId);
+        markConversationDeleted(convId);
+        updateConversations((prev) => prev.filter((item) => item.id !== convId));
+      }
+      pendingIds = snapshotBotSoloConversationIds(getConversations(), botId).filter(
+        (id) => !processedIds.has(id)
+      );
+    }
+
+    if (isSoloRoomForBot(getCurrentRoom(), botId, purgedIds)) {
+      if (!abortedActiveBotRoom) {
+        abortActiveTurn();
+      }
+      clearStoredRoomFn();
+      updateCurrentRoom((room) =>
+        room && isSoloRoomForBot(room, botId, purgedIds) ? null : room
+      );
+    }
+  } finally {
+    purgingBotIds.delete(botId);
+  }
+}
+
+export interface SingleConversationDeleteDeps {
+  id: string;
+  isAuthenticated: boolean;
+  getConversations: () => SavedConversation[];
+  updateConversations: (updater: (prev: SavedConversation[]) => SavedConversation[]) => void;
+  getCurrentRoom: () => ChatRoom | null;
+  updateCurrentRoom: (updater: (prev: ChatRoom | null) => ChatRoom | null) => void;
+  abortActiveTurn: () => void;
+  clearStoredRoomFn: () => void;
+  markConversationDeleted: (id: string) => void;
+  purgingBotIds: ReadonlySet<string>;
+  deletedBotIds: ReadonlySet<string>;
+  loadConversationIntoRoom: (conv: SavedConversation) => void;
+  openFirstBotOrWizard: (excludeBotId?: string) => void;
+  enqueueDelete: <T>(task: () => Promise<T>) => Promise<T>;
+  onFailure?: () => void;
+  fetchImpl?: typeof fetch;
+}
+
+/**
+ * Deletes a single conversation safely using serialized server `DELETE` and functional state
+ * updates, refusing to mutate client state on remote failure or resurrect deleted bots.
+ */
+export async function executeSingleConversationDelete({
+  id,
+  isAuthenticated,
+  getConversations,
+  updateConversations,
+  getCurrentRoom,
+  updateCurrentRoom,
+  abortActiveTurn,
+  clearStoredRoomFn,
+  markConversationDeleted,
+  purgingBotIds,
+  deletedBotIds,
+  loadConversationIntoRoom,
+  openFirstBotOrWizard,
+  enqueueDelete,
+  onFailure,
+  fetchImpl = fetch,
+}: SingleConversationDeleteDeps): Promise<boolean> {
+  const existsInClient =
+    getConversations().some((item) => item.id === id) ||
+    getCurrentRoom()?.conversationId === id;
+  if (!existsInClient) {
+    return true;
+  }
+
+  const ok = await enqueueDelete(() =>
+    executeDeleteRemoteConversation(id, isAuthenticated, fetchImpl)
+  );
+  if (!ok) {
+    onFailure?.();
+    return false;
+  }
+
+  markConversationDeleted(id);
+  updateConversations((prev) => prev.filter((item) => item.id !== id));
+  const remaining = getConversations();
+
+  const activeRoom = getCurrentRoom();
+  if (activeRoom?.conversationId === id) {
+    abortActiveTurn();
+    clearStoredRoomFn();
+    const activeBotId = activeRoom.kind === 'solo' ? activeRoom.botId : undefined;
+    const isBotBeingRemoved =
+      Boolean(activeBotId) &&
+      (purgingBotIds.has(activeBotId!) || deletedBotIds.has(activeBotId!));
+    const sameBotNext =
+      activeBotId && !isBotBeingRemoved
+        ? remaining.find((c) => c.kind === 'solo' && c.botId === activeBotId)
+        : undefined;
+    if (sameBotNext) {
+      loadConversationIntoRoom(sameBotNext);
+    } else {
+      updateCurrentRoom((room) => (room?.conversationId === id ? null : room));
+      openFirstBotOrWizard(isBotBeingRemoved ? activeBotId : undefined);
+    }
+  }
+  return true;
+}
 
 export function useConversations({
   authUser,
@@ -29,6 +271,7 @@ export function useConversations({
   personas,
   setCurrentView,
   setCurrentViewState,
+  showToast,
 }: {
   authUser: { id: string; email: string } | null;
   language: Language;
@@ -39,6 +282,7 @@ export function useConversations({
   personas: AdvisorPersona[];
   setCurrentView: (view: ViewType) => void;
   setCurrentViewState: (view: ViewType) => void;
+  showToast?: (key: ToastKey, values?: ToastValues) => void;
 }) {
   const [conversations, setConversations] = useState<SavedConversation[]>([]);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -46,10 +290,82 @@ export function useConversations({
   const [currentRoom, setCurrentRoom] = useState<ChatRoom | null>(null);
   const roomAbortRef = useRef<AbortController | null>(null);
 
+  const conversationsRef = useRef<SavedConversation[]>(conversations);
+  const currentRoomRef = useRef<ChatRoom | null>(currentRoom);
+  const botsRef = useRef<UserBot[]>(bots);
+
+  useIsomorphicLayoutEffect(() => {
+    conversationsRef.current = conversations;
+    currentRoomRef.current = currentRoom;
+    botsRef.current = bots;
+  }, [conversations, currentRoom, bots]);
+
+  const deletedConversationIdsRef = useRef<Set<string>>(new Set());
+  const purgingBotIdsRef = useRef<Set<string>>(new Set());
+  const deletedBotIdsRef = useRef<Set<string>>(new Set());
+  const enqueueDeleteRef = useRef(createSerialQueue());
+
+  useEffect(() => {
+    for (const bot of bots) {
+      deletedBotIdsRef.current.delete(bot.id);
+    }
+  }, [bots]);
+
+  const isBlockedRoom = useCallback((candidate: ChatRoom | null): boolean => {
+    if (!candidate) return false;
+    if (
+      candidate.conversationId &&
+      deletedConversationIdsRef.current.has(candidate.conversationId)
+    ) {
+      return true;
+    }
+    if (
+      candidate.kind === 'solo' &&
+      candidate.botId &&
+      (purgingBotIdsRef.current.has(candidate.botId) ||
+        deletedBotIdsRef.current.has(candidate.botId))
+    ) {
+      return true;
+    }
+    return false;
+  }, []);
+
+  const updateConversations: React.Dispatch<React.SetStateAction<SavedConversation[]>> =
+    useCallback((action) => {
+      const eagerNext =
+        typeof action === 'function' ? action(conversationsRef.current) : action;
+      conversationsRef.current = eagerNext;
+      setConversations((prev) => {
+        const next = typeof action === 'function' ? action(prev) : action;
+        conversationsRef.current = next;
+        return next;
+      });
+    }, []);
+
+  const updateCurrentRoom: React.Dispatch<React.SetStateAction<ChatRoom | null>> =
+    useCallback(
+      (action) => {
+        const eagerCandidate =
+          typeof action === 'function' ? action(currentRoomRef.current) : action;
+        if (!isBlockedRoom(eagerCandidate)) {
+          currentRoomRef.current = eagerCandidate;
+        }
+        setCurrentRoom((prev) => {
+          const next = typeof action === 'function' ? action(prev) : action;
+          if (isBlockedRoom(next)) {
+            return prev;
+          }
+          currentRoomRef.current = next;
+          return next;
+        });
+      },
+      [isBlockedRoom]
+    );
+
   useIsomorphicLayoutEffect(() => {
     const restored = readStoredRoom(language);
     if (!restored) return;
-    setCurrentRoom({
+    updateCurrentRoom({
       conversationId: restored.conversationId,
       kind: restored.kind,
       botId: restored.botId,
@@ -74,19 +390,32 @@ export function useConversations({
 
   // Load durable solo & group conversations on sign-in.
   useEffect(() => {
+    deletedConversationIdsRef.current.clear();
+    deletedBotIdsRef.current.clear();
     if (!authUser) return;
     let cancelled = false;
     void fetch('/api/conversations', { credentials: 'same-origin' })
       .then((response) => (response.ok ? response.json() : null))
       .then((body: { conversations?: SavedConversation[] } | null) => {
         if (cancelled || !body?.conversations) return;
-        setConversations(body.conversations);
+        updateConversations(() =>
+          body.conversations!.filter(
+            (c) =>
+              !deletedConversationIdsRef.current.has(c.id) &&
+              !(
+                c.kind === 'solo' &&
+                c.botId &&
+                (purgingBotIdsRef.current.has(c.botId) ||
+                  deletedBotIdsRef.current.has(c.botId))
+              )
+          )
+        );
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [authUser]);
+  }, [authUser, updateConversations]);
 
   const roomRosterPartition = useMemo(() => {
     if (!currentRoom) return { activeIds: [], disabledIds: [] };
@@ -95,14 +424,24 @@ export function useConversations({
 
   const persistRoomSnapshot = useCallback(
     async (snapshot: ChatRoom) => {
-      if (!authUser || !snapshot.conversationId) return;
+      const convId = snapshot.conversationId;
+      if (!authUser || !convId) return;
+      if (
+        deletedConversationIdsRef.current.has(convId) ||
+        (snapshot.kind === 'solo' &&
+          snapshot.botId &&
+          (purgingBotIdsRef.current.has(snapshot.botId) ||
+            deletedBotIdsRef.current.has(snapshot.botId)))
+      ) {
+        return;
+      }
       try {
         const res = await fetch('/api/conversations', {
           method: 'PATCH',
           credentials: 'same-origin',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: snapshot.conversationId,
+            id: convId,
             title: snapshot.title,
             mode: snapshot.mode,
             messages: snapshot.messages,
@@ -114,24 +453,44 @@ export function useConversations({
         });
         if (!res.ok) return;
         const body = (await res.json()) as { conversation?: SavedConversation };
-        if (body.conversation) {
-          setConversations((list) =>
-            [body.conversation!, ...list.filter((item) => item.id !== body.conversation!.id)].sort(
-              (a, b) => b.updatedAt.localeCompare(a.updatedAt)
-            )
-          );
+        const saved = body.conversation;
+        if (saved) {
+          updateConversations((list) => {
+            if (
+              deletedConversationIdsRef.current.has(saved.id) ||
+              (saved.kind === 'solo' &&
+                saved.botId &&
+                (purgingBotIdsRef.current.has(saved.botId) ||
+                  deletedBotIdsRef.current.has(saved.botId))) ||
+              !list.some((item) => item.id === saved.id)
+            ) {
+              return list;
+            }
+            return [saved, ...list.filter((item) => item.id !== saved.id)].sort((a, b) =>
+              b.updatedAt.localeCompare(a.updatedAt)
+            );
+          });
         }
       } catch {
         // Best-effort remote snapshot; local storage already holds the latest room.
       }
     },
-    [authUser]
+    [authUser, updateConversations]
   );
 
   const loadConversationIntoRoom = useCallback(
     (conv: SavedConversation) => {
+      if (
+        deletedConversationIdsRef.current.has(conv.id) ||
+        (conv.kind === 'solo' &&
+          conv.botId &&
+          (purgingBotIdsRef.current.has(conv.botId) ||
+            deletedBotIdsRef.current.has(conv.botId)))
+      ) {
+        return;
+      }
       roomAbortRef.current?.abort();
-      setCurrentRoom({
+      updateCurrentRoom({
         conversationId: conv.id,
         kind: conv.kind,
         botId: conv.botId,
@@ -149,11 +508,12 @@ export function useConversations({
       setEditingGroupId(null);
       setCurrentView('chat-room');
     },
-    [setCurrentView]
+    [setCurrentView, updateCurrentRoom]
   );
 
   const createSoloThread = async (botId: string, title?: string) => {
-    const bot = bots.find((item) => item.id === botId);
+    if (purgingBotIdsRef.current.has(botId) || deletedBotIdsRef.current.has(botId)) return;
+    const bot = botsRef.current.find((item) => item.id === botId);
     const persona =
       personas.find((item) => item.id === botPersonaId(botId)) ??
       (bot ? botToPersona(bot, 0) : undefined);
@@ -177,7 +537,14 @@ export function useConversations({
         });
         if (res.ok) {
           const body = (await res.json()) as { conversation: SavedConversation };
-          setConversations((prev) => [body.conversation, ...prev]);
+          if (purgingBotIdsRef.current.has(botId) || deletedBotIdsRef.current.has(botId)) {
+            deletedConversationIdsRef.current.add(body.conversation.id);
+            void enqueueDeleteRef.current(() =>
+              executeDeleteRemoteConversation(body.conversation.id, true)
+            );
+            return;
+          }
+          updateConversations((prev) => [body.conversation, ...prev]);
           loadConversationIntoRoom(body.conversation);
           return;
         }
@@ -185,6 +552,8 @@ export function useConversations({
         // Fall through to local conversation fallback.
       }
     }
+
+    if (purgingBotIdsRef.current.has(botId) || deletedBotIdsRef.current.has(botId)) return;
 
     const fallback: SavedConversation = {
       id: `local-solo-${Date.now()}`,
@@ -201,30 +570,48 @@ export function useConversations({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setConversations((prev) => [fallback, ...prev]);
+    updateConversations((prev) => [fallback, ...prev]);
     loadConversationIntoRoom(fallback);
   };
 
   const openBotChat = (botId: string, conversationId?: string) => {
+    if (purgingBotIdsRef.current.has(botId) || deletedBotIdsRef.current.has(botId)) return;
+    const liveConversations = conversationsRef.current;
     if (conversationId) {
-      const specific = conversations.find((c) => c.id === conversationId && c.kind === 'solo');
+      const specific = liveConversations.find(
+        (c) =>
+          c.id === conversationId &&
+          c.kind === 'solo' &&
+          !deletedConversationIdsRef.current.has(c.id)
+      );
       if (specific) {
         loadConversationIntoRoom(specific);
         return;
       }
     }
-    const existing = conversations.find((c) => c.kind === 'solo' && c.botId === botId);
+    const existing = liveConversations.find(
+      (c) =>
+        c.kind === 'solo' &&
+        c.botId === botId &&
+        !deletedConversationIdsRef.current.has(c.id)
+    );
     if (existing) {
       loadConversationIntoRoom(existing);
       return;
     }
-    const bot = bots.find((item) => item.id === botId);
-    void createSoloThread(botId, bot?.name ?? copy[language].soloNewThread);
+    const bot = botsRef.current.find((item) => item.id === botId);
+    if (!bot) return;
+    void createSoloThread(botId, bot.name || copy[language].soloNewThread);
   };
 
   /** Redirects to the first available bot chat, or falls back to `bot-wizard` when no bots exist. */
   const openFirstBotOrWizard = (excludeBotId?: string) => {
-    const firstBot = bots.find((item) => item.id !== excludeBotId);
+    const firstBot = botsRef.current.find(
+      (item) =>
+        item.id !== excludeBotId &&
+        !purgingBotIdsRef.current.has(item.id) &&
+        !deletedBotIdsRef.current.has(item.id)
+    );
     if (firstBot) {
       openBotChat(firstBot.id);
       return;
@@ -260,7 +647,7 @@ export function useConversations({
         });
         if (res.ok) {
           const body = (await res.json()) as { conversation: SavedConversation };
-          setConversations((prev) => [body.conversation, ...prev]);
+          updateConversations((prev) => [body.conversation, ...prev]);
           loadConversationIntoRoom(body.conversation);
           return body.conversation;
         }
@@ -283,7 +670,7 @@ export function useConversations({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    setConversations((prev) => [fallback, ...prev]);
+    updateConversations((prev) => [fallback, ...prev]);
     loadConversationIntoRoom(fallback);
     return fallback;
   };
@@ -296,7 +683,7 @@ export function useConversations({
     const capped = roster.slice(0, Math.max(1, personaCap));
     if (capped.length === 0) return;
     const rawBotId = capped[0].id.startsWith('bot:') ? capped[0].id.slice(4) : undefined;
-    setCurrentRoom({
+    updateCurrentRoom({
       kind: capped.length === 1 ? 'solo' : 'group',
       botId: rawBotId,
       title: title ?? copy[language].chatRoomTitle,
@@ -314,7 +701,9 @@ export function useConversations({
   };
 
   const openGroupChat = (conversationId: string) => {
-    const found = conversations.find((c) => c.id === conversationId && c.kind === 'group');
+    const found = conversationsRef.current.find(
+      (c) => c.id === conversationId && c.kind === 'group'
+    );
     if (found) loadConversationIntoRoom(found);
   };
 
@@ -338,10 +727,10 @@ export function useConversations({
         });
         if (!res.ok) return false;
         const body = (await res.json()) as { conversation: SavedConversation };
-        setConversations((list) =>
+        updateConversations((list) =>
           list.map((item) => (item.id === id ? body.conversation : item))
         );
-        setCurrentRoom((room) =>
+        updateCurrentRoom((room) =>
           room && room.conversationId === id
             ? {
                 ...room,
@@ -357,7 +746,7 @@ export function useConversations({
         return false;
       }
     }
-    setConversations((list) =>
+    updateConversations((list) =>
       list.map((item) =>
         item.id === id
           ? {
@@ -370,7 +759,7 @@ export function useConversations({
           : item
       )
     );
-    setCurrentRoom((room) =>
+    updateCurrentRoom((room) =>
       room && room.conversationId === id
         ? {
             ...room,
@@ -391,51 +780,71 @@ export function useConversations({
   };
 
   const deleteConversationById = async (id: string) => {
-    if (authUser && !id.startsWith('local-')) {
-      await fetch(`/api/conversations?id=${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-        credentials: 'same-origin',
-      }).catch(() => undefined);
-    }
-    const remaining = conversations.filter((item) => item.id !== id);
-    setConversations(remaining);
-    if (currentRoom?.conversationId === id) {
-      roomAbortRef.current?.abort();
-      clearStoredRoom();
-      const sameBotNext =
-        currentRoom.kind === 'solo' && currentRoom.botId
-          ? remaining.find((c) => c.kind === 'solo' && c.botId === currentRoom.botId)
-          : undefined;
-      if (sameBotNext) {
-        loadConversationIntoRoom(sameBotNext);
-      } else {
-        setCurrentRoom(null);
-        openFirstBotOrWizard();
-      }
-    }
+    await executeSingleConversationDelete({
+      id,
+      isAuthenticated: Boolean(authUser),
+      getConversations: () => conversationsRef.current,
+      updateConversations,
+      getCurrentRoom: () => currentRoomRef.current,
+      updateCurrentRoom,
+      abortActiveTurn: () => roomAbortRef.current?.abort(),
+      clearStoredRoomFn: clearStoredRoom,
+      markConversationDeleted: (convId) => {
+        deletedConversationIdsRef.current.add(convId);
+      },
+      purgingBotIds: purgingBotIdsRef.current,
+      deletedBotIds: deletedBotIdsRef.current,
+      loadConversationIntoRoom,
+      openFirstBotOrWizard,
+      enqueueDelete: enqueueDeleteRef.current,
+      onFailure: () => showToast?.('authGenericError'),
+    });
   };
+
+  const purgeBotSoloConversations = async (botId: string) => {
+    await executeBotSoloConversationPurge({
+      botId,
+      isAuthenticated: Boolean(authUser),
+      getConversations: () => conversationsRef.current,
+      updateConversations,
+      getCurrentRoom: () => currentRoomRef.current,
+      updateCurrentRoom,
+      abortActiveTurn: () => roomAbortRef.current?.abort(),
+      clearStoredRoomFn: clearStoredRoom,
+      markConversationDeleted: (convId) => {
+        deletedConversationIdsRef.current.add(convId);
+      },
+      purgingBotIds: purgingBotIdsRef.current,
+      enqueueDelete: enqueueDeleteRef.current,
+    });
+  };
+
+  const markBotDeleted = useCallback((botId: string) => {
+    deletedBotIdsRef.current.add(botId);
+  }, []);
 
   const stopRoom = () => {
     roomAbortRef.current?.abort();
-    setCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
+    updateCurrentRoom((room) => (room ? { ...room, stoppedBy: 'cancelled' } : room));
   };
 
   const clearRoom = () => {
-    if (currentRoom?.conversationId) {
-      void deleteConversationById(currentRoom.conversationId);
+    const active = currentRoomRef.current;
+    if (active?.conversationId) {
+      void deleteConversationById(active.conversationId);
       return;
     }
     roomAbortRef.current?.abort();
     clearStoredRoom();
-    setCurrentRoom(null);
+    updateCurrentRoom(null);
     openFirstBotOrWizard();
   };
 
   return {
     conversations,
-    setConversations,
+    setConversations: updateConversations,
     currentRoom,
-    setCurrentRoom,
+    setCurrentRoom: updateCurrentRoom,
     roomAbortRef,
     roomRosterPartition,
     editingGroupId,
@@ -460,6 +869,8 @@ export function useConversations({
     updateGroupChat,
     renameConversation,
     deleteConversationById,
+    purgeBotSoloConversations,
+    markBotDeleted,
     stopRoom,
     clearRoom,
   };

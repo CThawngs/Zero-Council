@@ -62,6 +62,7 @@ export const AppProvider: React.FC<{
 }> = ({ children, initialLanguage, initialAuthUser }) => {
   const router = useRouter();
   const [currentView, setCurrentViewState] = useState<ViewType>('overview');
+  const [editingBotId, setEditingBotId] = useState<string | null>(null);
   const [contentPanel, setContentPanel] = useState<ContentPanelPayload | null>(null);
   const [toastMessage, setToastMessage] = useState<ToastMessage | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -74,6 +75,9 @@ export const AppProvider: React.FC<{
 
   const setCurrentView = useCallback(
     (next: ViewType) => {
+      if (next !== 'personas') {
+        setEditingBotId(null);
+      }
       setCurrentViewState(next);
       if (typeof window === 'undefined') return;
       const pathname = window.location.pathname;
@@ -225,6 +229,7 @@ export const AppProvider: React.FC<{
     personas: providersAndBots.personas,
     setCurrentView,
     setCurrentViewState,
+    showToast,
   });
 
   const messaging = useRoomMessaging({
@@ -248,12 +253,23 @@ export const AppProvider: React.FC<{
     showToast,
   });
 
+  const openEditBot = useCallback(
+    (botId: string) => {
+      setEditingBotId(botId);
+      setCurrentView('personas');
+    },
+    [setCurrentView]
+  );
+
+  const closeEditBot = useCallback(() => {
+    setEditingBotId(null);
+  }, []);
+
   const deleteBot = async (id: string) => {
+    await conv.purgeBotSoloConversations(id);
+    setEditingBotId((current) => (current === id ? null : current));
+    conv.markBotDeleted(id);
     await providersAndBots.removeBotRecord(id);
-    const soloThreads = conv.conversations.filter((c) => c.kind === 'solo' && c.botId === id);
-    for (const thread of soloThreads) {
-      void conv.deleteConversationById(thread.id);
-    }
   };
 
   return (
@@ -288,6 +304,9 @@ export const AppProvider: React.FC<{
         createBot: providersAndBots.createBot,
         updateBot: providersAndBots.updateBot,
         deleteBot,
+        editingBotId,
+        openEditBot,
+        closeEditBot,
         openBotChat: conv.openBotChat,
         openFirstBotOrWizard: conv.openFirstBotOrWizard,
         createSoloThread: conv.createSoloThread,
