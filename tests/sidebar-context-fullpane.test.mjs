@@ -205,3 +205,579 @@ test('Edit bot opens target bot editor directly without creating or selecting a 
   closeEditBot();
   assert.equal(editingBotId, null);
 });
+
+import { registerHooks } from 'node:module';
+import os from 'node:os';
+import { pathToFileURL } from 'node:url';
+
+const resolveTsCandidate = (basePath) => {
+  for (const candidate of [
+    basePath,
+    basePath + '.ts',
+    basePath + '.tsx',
+    path.join(basePath, 'index.ts'),
+  ]) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return pathToFileURL(candidate).href;
+    }
+  }
+  return null;
+};
+
+registerHooks({
+  resolve(specifier, context, nextResolve) {
+    if (specifier === 'react') {
+      return {
+        url: pathToFileURL(path.join(ROOT, 'web/node_modules/react/index.js')).href,
+        shortCircuit: true,
+      };
+    }
+    if (specifier.startsWith('@/')) {
+      const hit = resolveTsCandidate(path.join(ROOT, 'web/src', specifier.slice(2)));
+      if (hit) return { url: hit, shortCircuit: true };
+    }
+    if (
+      (specifier.startsWith('./') || specifier.startsWith('../')) &&
+      context.parentURL?.startsWith('file:') &&
+      !path.extname(specifier)
+    ) {
+      const parentDir = path.dirname(fileURLToPath(context.parentURL));
+      const hit = resolveTsCandidate(path.resolve(parentDir, specifier));
+      if (hit) return { url: hit, shortCircuit: true };
+    }
+    return nextResolve(specifier, context);
+  },
+});
+
+const convLifecycle = await import('../web/src/prototype/context/useConversations.ts');
+const {
+  createSerialQueue,
+  executeBotSoloConversationPurge,
+  executeDeleteRemoteConversation,
+  executeSingleConversationDelete,
+  isSoloConversationForBot,
+  isSoloRoomForBot,
+  snapshotBotSoloConversationIds,
+} = convLifecycle;
+
+test('Source contracts: AppContext.deleteBot awaits serialized purge, functional updates, and recoverable UI error', () => {
+  const appContext = read('web/src/prototype/context/AppContext.tsx');
+  const useConvSrc = read('web/src/prototype/context/useConversations.ts');
+  const botsSection = read('web/src/prototype/components/sidebar/SidebarBotsSection.tsx');
+
+  // AppContext.deleteBot must await purgeBotSoloConversations and must NOT fire unawaited deleteConversationById loops.
+  const deleteBotMatch = appContext.match(
+    /const deleteBot = async \(id: string\) => \{[\s\S]*?\r?\n  \};/
+  );
+  assert.ok(deleteBotMatch, 'deleteBot should exist in AppContext');
+  assert.match(deleteBotMatch[0], /await conv\.purgeBotSoloConversations\(id\);/);
+  assert.doesNotMatch(deleteBotMatch[0], /void conv\.deleteConversationById/);
+
+  // useConversations uses functional updater for removals and never applies sameBotNext inside bot purge.
+  const purgeFnMatch = useConvSrc.match(
+    /export async function executeBotSoloConversationPurge\([\s\S]*?\}: BotSoloPurgeDeps\): Promise<void> \{[\s\S]*?\r?\n\}/
+  );
+  assert.ok(purgeFnMatch, 'executeBotSoloConversationPurge should exist');
+  assert.doesNotMatch(purgeFnMatch[0], /sameBotNext/);
+  assert.match(
+    purgeFnMatch[0],
+    /updateConversations\(\(prev\) => prev\.filter\(\(item\) => item\.id !== convId\)\)/
+  );
+
+  // SidebarBotsSection surfaces recoverable delete error alert + toast and keeps modal dismissible.
+  assert.match(botsSection, /setDeleteBotError\(t\.authGenericError\)/);
+  assert.match(botsSection, /showToast\('authGenericError'\)/);
+  assert.match(botsSection, /data-bot-delete-error/);
+});
+
+test('Active bot delete with >=3 solo threads and active 2nd thread serializes server DELETEs (0 race/404), clears room once, and never reopens ghost thread', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zc-purge-race-'));
+  const prevStore = process.env.ZC_CONVERSATIONS_STORE;
+  process.env.ZC_CONVERSATIONS_STORE = path.join(tmpDir, 'conversations.json');
+  delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  try {
+    const convStore = await import(
+      '../web/src/lib/store/conversations.ts?purgeRace=' + Date.now()
+    );
+    const email = 'qa-disposable@zerocouncil.local';
+
+    // Seed real file-backed store: 3 solo threads for bot-alpha (2nd created via + is active),
+    // 1 solo thread for bot-beta, and 1 group conversation including bot:bot-alpha.
+    const alpha1 = await convStore.createConversation(email, {
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: 'Alpha Old Thread',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+    });
+    const alpha2 = await convStore.createConversation(email, {
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: 'New thread',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+    });
+    const alpha3 = await convStore.createConversation(email, {
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: 'Alpha Third Thread',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+    });
+    const beta1 = await convStore.createConversation(email, {
+      kind: 'solo',
+      botId: 'bot-beta',
+      title: 'Beta Existing Thread',
+      mode: 'round-robin',
+      roster: ['bot:bot-beta'],
+      messages: [],
+    });
+    const group1 = await convStore.createConversation(email, {
+      kind: 'group',
+      title: 'Strategy Council',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha', 'bot:bot-beta'],
+      messages: [],
+    });
+
+    let conversations = [alpha3, alpha2, alpha1, beta1, group1];
+    let bots = [
+      { id: 'bot-alpha', name: 'Alpha Strategist' },
+      { id: 'bot-beta', name: 'Beta Reviewer' },
+    ];
+    // Active room is the 2nd thread (alpha2, created via +).
+    let currentRoom = {
+      conversationId: alpha2.id,
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: alpha2.title,
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+      pending: [],
+      turns: 0,
+      stoppedBy: null,
+      failures: [],
+      held: [],
+    };
+
+    const deletedConversationIds = new Set();
+    const purgingBotIds = new Set();
+    const deletedBotIds = new Set();
+    const enqueueDelete = createSerialQueue();
+
+    let abortCount = 0;
+    let clearStoredCount = 0;
+    let inFlightServerDeletes = 0;
+    let maxConcurrentServerDeletes = 0;
+    const deleteStatuses = [];
+
+    const fetchStub = async (url, init) => {
+      assert.equal(init?.method, 'DELETE');
+      const id = new URL(url, 'http://localhost').searchParams.get('id');
+      inFlightServerDeletes += 1;
+      maxConcurrentServerDeletes = Math.max(maxConcurrentServerDeletes, inFlightServerDeletes);
+      await new Promise((r) => setTimeout(r, 12));
+      try {
+        const removed = await convStore.deleteConversation(email, id);
+        const status = removed ? 200 : 404;
+        deleteStatuses.push({ id, status });
+        return new Response(JSON.stringify(removed ? { ok: true } : { error: 'NOT_FOUND' }), {
+          status,
+        });
+      } finally {
+        inFlightServerDeletes -= 1;
+      }
+    };
+
+    const updateConversations = (updater) => {
+      conversations = updater(conversations);
+    };
+    const updateCurrentRoom = (updater) => {
+      const next = typeof updater === 'function' ? updater(currentRoom) : updater;
+      if (
+        next &&
+        ((next.conversationId && deletedConversationIds.has(next.conversationId)) ||
+          (next.kind === 'solo' &&
+            next.botId &&
+            (purgingBotIds.has(next.botId) || deletedBotIds.has(next.botId))))
+      ) {
+        return;
+      }
+      currentRoom = next;
+    };
+
+    // 1. Cancel remains a strict no-op before confirmation.
+    const snapshotBeforeCancel = conversations.map((c) => c.id);
+    assert.equal(snapshotBeforeCancel.length, 5);
+
+    // 2. Confirm delete on active bot-alpha: purge threads -> mark deleted -> remove bot -> switch to bot-beta.
+    await executeBotSoloConversationPurge({
+      botId: 'bot-alpha',
+      isAuthenticated: true,
+      getConversations: () => conversations,
+      updateConversations,
+      getCurrentRoom: () => currentRoom,
+      updateCurrentRoom,
+      abortActiveTurn: () => {
+        abortCount += 1;
+      },
+      clearStoredRoomFn: () => {
+        clearStoredCount += 1;
+      },
+      markConversationDeleted: (id) => deletedConversationIds.add(id),
+      purgingBotIds,
+      enqueueDelete,
+      fetchImpl: fetchStub,
+    });
+
+    deletedBotIds.add('bot-alpha');
+    bots = bots.filter((b) => b.id !== 'bot-alpha');
+
+    // Sidebar switches to remaining bot-beta once deleteBot resolves.
+    const nextBot = bots.find((b) => b.id !== 'bot-alpha');
+    const nextConv = conversations.find((c) => c.kind === 'solo' && c.botId === nextBot.id);
+    updateCurrentRoom({
+      conversationId: nextConv.id,
+      kind: 'solo',
+      botId: nextConv.botId,
+      title: nextConv.title,
+      mode: nextConv.mode,
+      roster: nextConv.roster,
+      messages: [],
+      pending: [],
+      turns: 0,
+      stoppedBy: null,
+      failures: [],
+      held: [],
+    });
+
+    // Simulate a late async turn completion trying to reopen ghost room for alpha1/alpha2.
+    updateCurrentRoom({
+      conversationId: alpha1.id,
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: 'Alpha Old Thread',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+      pending: [],
+      turns: 1,
+      stoppedBy: 'completed',
+      failures: [],
+      held: [],
+    });
+
+    // Verify every acceptance criterion:
+    assert.equal(maxConcurrentServerDeletes, 1, 'server DELETEs must be strictly serialized');
+    assert.deepEqual(
+      deleteStatuses.map((s) => s.status),
+      [200, 200, 200],
+      'zero 404s across >=3 solo thread deletes'
+    );
+    assert.equal(abortCount, 1, 'active target-bot room aborted exactly once');
+    assert.equal(clearStoredCount, 1, 'stored room cleared exactly once');
+    assert.equal(
+      conversations.some((c) => isSoloConversationForBot(c, 'bot-alpha')),
+      false,
+      'no deleted-bot solo conversation remains in client list'
+    );
+    assert.deepEqual(
+      conversations.map((c) => c.id),
+      [beta1.id, group1.id],
+      'surviving bot solo thread and group conversation remain untouched'
+    );
+    assert.equal(currentRoom?.botId, 'bot-beta', 'currentRoom stays on surviving bot-beta');
+    assert.equal(currentRoom?.conversationId, beta1.id);
+
+    const serverRemaining = await convStore.listConversations(email);
+    assert.deepEqual(
+      serverRemaining.map((c) => c.id).sort(),
+      [beta1.id, group1.id].sort(),
+      'server store retains zero orphan threads for deleted bot'
+    );
+  } finally {
+    if (prevStore === undefined) delete process.env.ZC_CONVERSATIONS_STORE;
+    else process.env.ZC_CONVERSATIONS_STORE = prevStore;
+    fs.rmSync(tmpDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+});
+
+test('Deleting an inactive bot leaves active room untouched; failed API delete surfaces error without silent loss and recovers on retry; local unauth threads purge without network', async () => {
+  let conversations = [
+    {
+      id: 'inactive-1',
+      kind: 'solo',
+      botId: 'bot-inactive',
+      title: 'Inactive 1',
+      mode: 'round-robin',
+      roster: ['bot:bot-inactive'],
+      messages: [],
+    },
+    {
+      id: 'inactive-2',
+      kind: 'solo',
+      botId: 'bot-inactive',
+      title: 'Inactive 2',
+      mode: 'round-robin',
+      roster: ['bot:bot-inactive'],
+      messages: [],
+    },
+    {
+      id: 'active-beta',
+      kind: 'solo',
+      botId: 'bot-beta',
+      title: 'Active Beta',
+      mode: 'round-robin',
+      roster: ['bot:bot-beta'],
+      messages: [],
+    },
+  ];
+  let currentRoom = {
+    conversationId: 'active-beta',
+    kind: 'solo',
+    botId: 'bot-beta',
+    title: 'Active Beta',
+    mode: 'round-robin',
+    roster: ['bot:bot-beta'],
+    messages: [],
+    pending: [],
+    turns: 0,
+    stoppedBy: null,
+    failures: [],
+    held: [],
+  };
+
+  const deletedIds = new Set();
+  const purgingBotIds = new Set();
+  const enqueueDelete = createSerialQueue();
+  let abortCalled = 0;
+
+  // First attempt: inactive-2 fails with HTTP 500 -> throws recoverable error, keeps inactive-2 in client state, leaves active-beta untouched.
+  let failSecond = true;
+  await assert.rejects(
+    () =>
+      executeBotSoloConversationPurge({
+        botId: 'bot-inactive',
+        isAuthenticated: true,
+        getConversations: () => conversations,
+        updateConversations: (fn) => {
+          conversations = fn(conversations);
+        },
+        getCurrentRoom: () => currentRoom,
+        updateCurrentRoom: (fn) => {
+          currentRoom = fn(currentRoom);
+        },
+        abortActiveTurn: () => {
+          abortCalled += 1;
+        },
+        clearStoredRoomFn: () => {},
+        markConversationDeleted: (id) => deletedIds.add(id),
+        purgingBotIds,
+        enqueueDelete,
+        fetchImpl: async (url) => {
+          const id = new URL(url, 'http://localhost').searchParams.get('id');
+          if (failSecond && id === 'inactive-2') {
+            return new Response(JSON.stringify({ error: 'DELETE_FAILED' }), { status: 500 });
+          }
+          return new Response(JSON.stringify({ ok: true }), { status: 200 });
+        },
+      }),
+    /CONVERSATION_PURGE_FAILED:inactive-2/
+  );
+
+  assert.equal(purgingBotIds.size, 0, 'purging flag cleaned up after failure');
+  assert.deepEqual(
+    conversations.map((c) => c.id),
+    ['inactive-2', 'active-beta'],
+    'failed delete must not silently drop un-deleted thread'
+  );
+  assert.equal(currentRoom?.conversationId, 'active-beta', 'active room on another bot untouched');
+  assert.equal(abortCalled, 0);
+
+  // Retry succeeds cleanly and deletes remaining inactive-2 without touching active-beta.
+  failSecond = false;
+  await executeBotSoloConversationPurge({
+    botId: 'bot-inactive',
+    isAuthenticated: true,
+    getConversations: () => conversations,
+    updateConversations: (fn) => {
+      conversations = fn(conversations);
+    },
+    getCurrentRoom: () => currentRoom,
+    updateCurrentRoom: (fn) => {
+      currentRoom = fn(currentRoom);
+    },
+    abortActiveTurn: () => {
+      abortCalled += 1;
+    },
+    clearStoredRoomFn: () => {},
+    markConversationDeleted: (id) => deletedIds.add(id),
+    purgingBotIds,
+    enqueueDelete,
+    fetchImpl: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+  });
+
+  assert.deepEqual(conversations.map((c) => c.id), ['active-beta']);
+  assert.equal(currentRoom?.conversationId, 'active-beta');
+  assert.equal(abortCalled, 0);
+
+  // Local / unauthenticated conversations purge without calling fetch.
+  const localList = [
+    {
+      id: 'local-solo-1',
+      kind: 'solo',
+      botId: 'bot-local',
+      title: 'Local 1',
+      mode: 'round-robin',
+      roster: ['bot:bot-local'],
+      messages: [],
+    },
+  ];
+  let fetchCount = 0;
+  assert.equal(
+    await executeDeleteRemoteConversation('local-solo-1', true, async () => {
+      fetchCount += 1;
+      return new Response('{}', { status: 500 });
+    }),
+    true
+  );
+  assert.equal(
+    await executeDeleteRemoteConversation('persisted-id', false, async () => {
+      fetchCount += 1;
+      return new Response('{}', { status: 500 });
+    }),
+    true
+  );
+  assert.equal(fetchCount, 0, 'local-* and unauth deletes must not hit network');
+  assert.deepEqual(snapshotBotSoloConversationIds(localList, 'bot-local'), ['local-solo-1']);
+  assert.equal(
+    isSoloRoomForBot({ kind: 'group', roster: ['bot:bot-local'] }, 'bot-local'),
+    false,
+    'group room is never treated as solo room for deleted bot'
+  );
+});
+
+test('Single-conversation delete uses functional state updates, preserves state on API failure, and keeps sameBotNext for surviving bot', async () => {
+  let conversations = [
+    {
+      id: 'alpha-2',
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: 'Alpha 2',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+    },
+    {
+      id: 'alpha-1',
+      kind: 'solo',
+      botId: 'bot-alpha',
+      title: 'Alpha 1',
+      mode: 'round-robin',
+      roster: ['bot:bot-alpha'],
+      messages: [],
+    },
+  ];
+  let currentRoom = {
+    conversationId: 'alpha-2',
+    kind: 'solo',
+    botId: 'bot-alpha',
+    title: 'Alpha 2',
+    mode: 'round-robin',
+    roster: ['bot:bot-alpha'],
+    messages: [],
+    pending: [],
+    turns: 0,
+    stoppedBy: null,
+    failures: [],
+    held: [],
+  };
+  let failureCount = 0;
+  const enqueueDelete = createSerialQueue();
+
+  // 1. Failed single-conversation API delete keeps client state intact and invokes onFailure.
+  const failedResult = await executeSingleConversationDelete({
+    id: 'alpha-2',
+    isAuthenticated: true,
+    getConversations: () => conversations,
+    updateConversations: (fn) => {
+      conversations = fn(conversations);
+    },
+    getCurrentRoom: () => currentRoom,
+    updateCurrentRoom: (fn) => {
+      currentRoom = fn(currentRoom);
+    },
+    abortActiveTurn: () => {},
+    clearStoredRoomFn: () => {},
+    markConversationDeleted: () => {},
+    purgingBotIds: new Set(),
+    deletedBotIds: new Set(),
+    loadConversationIntoRoom: (conv) => {
+      currentRoom = { ...currentRoom, conversationId: conv.id, title: conv.title };
+    },
+    openFirstBotOrWizard: () => {},
+    enqueueDelete,
+    onFailure: () => {
+      failureCount += 1;
+    },
+    fetchImpl: async () => new Response('{}', { status: 500 }),
+  });
+
+  assert.equal(failedResult, false);
+  assert.equal(failureCount, 1);
+  assert.equal(conversations.length, 2);
+  assert.equal(currentRoom.conversationId, 'alpha-2');
+
+  // 2. Successful single-conversation delete concurrently with a newly added conversation preserves concurrent item via functional update and falls back to alpha-1.
+  const okResult = await executeSingleConversationDelete({
+    id: 'alpha-2',
+    isAuthenticated: true,
+    getConversations: () => conversations,
+    updateConversations: (fn) => {
+      conversations = fn(conversations);
+    },
+    getCurrentRoom: () => currentRoom,
+    updateCurrentRoom: (fn) => {
+      currentRoom = fn(currentRoom);
+    },
+    abortActiveTurn: () => {},
+    clearStoredRoomFn: () => {},
+    markConversationDeleted: () => {},
+    purgingBotIds: new Set(),
+    deletedBotIds: new Set(),
+    loadConversationIntoRoom: (conv) => {
+      currentRoom = { ...currentRoom, conversationId: conv.id, title: conv.title };
+    },
+    openFirstBotOrWizard: () => {},
+    enqueueDelete,
+    fetchImpl: async () => {
+      // Concurrent conversation arrives while DELETE is in flight.
+      conversations = [
+        ...conversations,
+        {
+          id: 'beta-concurrent',
+          kind: 'solo',
+          botId: 'bot-beta',
+          title: 'Concurrent Beta',
+          mode: 'round-robin',
+          roster: ['bot:bot-beta'],
+          messages: [],
+        },
+      ];
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    },
+  });
+
+  assert.equal(okResult, true);
+  assert.deepEqual(
+    conversations.map((c) => c.id),
+    ['alpha-1', 'beta-concurrent'],
+    'functional update preserves concurrently added conversation'
+  );
+  assert.equal(currentRoom.conversationId, 'alpha-1', 'surviving bot switches to sameBotNext');
+});

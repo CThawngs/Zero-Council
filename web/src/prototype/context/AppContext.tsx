@@ -229,6 +229,7 @@ export const AppProvider: React.FC<{
     personas: providersAndBots.personas,
     setCurrentView,
     setCurrentViewState,
+    showToast,
   });
 
   const messaging = useRoomMessaging({
@@ -265,12 +266,10 @@ export const AppProvider: React.FC<{
   }, []);
 
   const deleteBot = async (id: string) => {
+    await conv.purgeBotSoloConversations(id);
     setEditingBotId((current) => (current === id ? null : current));
+    conv.markBotDeleted(id);
     await providersAndBots.removeBotRecord(id);
-    const soloThreads = conv.conversations.filter((c) => c.kind === 'solo' && c.botId === id);
-    for (const thread of soloThreads) {
-      void conv.deleteConversationById(thread.id);
-    }
   };
 
   return (

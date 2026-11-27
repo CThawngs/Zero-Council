@@ -149,6 +149,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
     openEditBot,
     deleteBot,
     openFirstBotOrWizard,
+    showToast,
     t,
   } = useApp();
 
@@ -156,6 +157,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
   const [creatingForBotId, setCreatingForBotId] = useState<string | null>(null);
   const [pendingDeleteBot, setPendingDeleteBot] = useState<UserBot | null>(null);
   const [deletingBot, setDeletingBot] = useState(false);
+  const [deleteBotError, setDeleteBotError] = useState<string | null>(null);
 
   const botMenuRef = useRef<HTMLDivElement>(null);
   const triggerElRef = useRef<HTMLElement | null>(null);
@@ -232,7 +234,10 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (!deletingBot) setPendingDeleteBot(null);
+        if (!deletingBot) {
+          setDeleteBotError(null);
+          setPendingDeleteBot(null);
+        }
       }
     };
     window.addEventListener('keydown', onKeyDown, true);
@@ -284,18 +289,32 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
     openEditBot(botId);
   };
 
+  const dismissDeleteModal = () => {
+    if (deletingBot) return;
+    setDeleteBotError(null);
+    setPendingDeleteBot(null);
+  };
+
   const handleConfirmDeleteBot = async () => {
     if (!pendingDeleteBot || deletingBot) return;
     const targetId = pendingDeleteBot.id;
-    const wasActiveSolo = currentRoom?.kind === 'solo' && currentRoom?.botId === targetId;
+    const wasActiveSolo =
+      currentRoom?.kind === 'solo' &&
+      (currentRoom.botId === targetId || currentRoom.roster.includes(`bot:${targetId}`));
+    const shouldRedirectAfterDelete =
+      wasActiveSolo || (currentView === 'chat-room' && currentRoom === null);
+    setDeleteBotError(null);
     setDeletingBot(true);
     try {
       await deleteBot(targetId);
       setPendingDeleteBot(null);
-      if (wasActiveSolo) {
+      if (shouldRedirectAfterDelete) {
         openFirstBotOrWizard(targetId);
         onClose?.();
       }
+    } catch {
+      setDeleteBotError(t.authGenericError);
+      showToast('authGenericError');
     } finally {
       setDeletingBot(false);
     }
@@ -354,6 +373,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
             onClick={() => {
               const target = activeBotForMenu;
               closeBotMenu(false);
+              setDeleteBotError(null);
               setPendingDeleteBot(target);
             }}
             className="flex min-h-11 w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold text-terracotta transition hover:bg-terracotta/10"
@@ -501,9 +521,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
 
       <Modal
         isOpen={Boolean(pendingDeleteBot)}
-        onClose={() => {
-          if (!deletingBot) setPendingDeleteBot(null);
-        }}
+        onClose={dismissDeleteModal}
         onBeforeClose={() => !deletingBot}
         title={t.wsDeleteBot}
         description={
@@ -516,7 +534,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
               type="button"
               data-bot-delete-cancel
               disabled={deletingBot}
-              onClick={() => setPendingDeleteBot(null)}
+              onClick={dismissDeleteModal}
               className="button-secondary min-h-11 justify-center"
             >
               {t.wsDeleteCancel}
@@ -537,7 +555,17 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
             </button>
           </>
         }
-      />
+      >
+        {deleteBotError ? (
+          <p
+            role="alert"
+            data-bot-delete-error
+            className="rounded-xl border border-terracotta/40 bg-terracotta/10 px-3 py-2 text-xs font-medium text-terracotta"
+          >
+            {deleteBotError}
+          </p>
+        ) : null}
+      </Modal>
     </div>
   );
 };
