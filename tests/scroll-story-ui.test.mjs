@@ -89,3 +89,42 @@ test('Reduced-motion and mobile fallbacks disable parallax/ambient shifts and ex
   // Additive reveal respects prefers-reduced-motion
   assert.match(reveal, /prefers-reduced-motion: reduce/);
 });
+
+test('Story root avoids Tailwind space-y margin on fixed ambient/progress children', () => {
+  const overview = read('web/src/prototype/components/OverviewView.tsx');
+  const css = read('web/src/app/globals.css');
+
+  const rootClassMatch = /className="([^"]*zc-story-root[^"]*)"/.exec(overview);
+  assert.ok(rootClassMatch, '.zc-story-root element must exist');
+  const rootClasses = rootClassMatch[1];
+
+  assert.doesNotMatch(
+    rootClasses,
+    /(?:^|\s)(?:sm:|md:|lg:|xl:)?space-y-/,
+    '.zc-story-root must not use space-y-* utilities that add margin-bottom to fixed children'
+  );
+  assert.match(rootClasses, /\bflex\b/);
+  assert.match(rootClasses, /\bflex-col\b/);
+  assert.match(rootClasses, /\bgap-24\b/);
+  assert.match(rootClasses, /\bsm:gap-28\b/);
+  assert.match(rootClasses, /\blg:gap-32\b/);
+
+  const ambientBlock = /\.ambient-field\s*\{([\s\S]*?)\r?\n\}/.exec(css);
+  assert.ok(ambientBlock, '.ambient-field CSS block must exist');
+  assert.match(ambientBlock[1], /margin:\s*0;/, '.ambient-field must explicitly reset margin: 0');
+
+  const progressBlock = /\.story-progress-track\s*\{([\s\S]*?)\r?\n\}/.exec(css);
+  assert.ok(progressBlock, '.story-progress-track CSS block must exist');
+  assert.match(progressBlock[1], /margin:\s*0;/, '.story-progress-track must explicitly reset margin: 0');
+});
+
+test('Step switcher buttons scroll target step into view unless reduced-motion is active', () => {
+  const overview = read('web/src/prototype/components/OverviewView.tsx');
+
+  assert.match(overview, /const handleStepSelect = useCallback\(\(index: number\) => \{/);
+  assert.match(
+    overview,
+    /handleStepSelect[\s\S]*?setActiveStep\(index\);[\s\S]*?prefers-reduced-motion: reduce[\s\S]*?stepNodeRefs\.current\[index\]\?\.scrollIntoView\(\{\s*behavior:\s*'smooth',\s*block:\s*'center'\s*\}\)/
+  );
+  assert.match(overview, /onClick=\{\(\) => handleStepSelect\(idx\)\}/);
+});

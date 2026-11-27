@@ -970,6 +970,7 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
 .ambient-field {
   position: fixed;
   inset: 0;
+  margin: 0;
   z-index: -1;
   pointer-events: none;
   overflow: hidden;
@@ -1115,6 +1116,7 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   position: fixed;
   inset-inline: 0;
   top: 75px;
+  margin: 0;
   z-index: 30;
   height: 2px;
   pointer-events: none;

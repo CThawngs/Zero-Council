@@ -191,6 +191,14 @@ export const OverviewView: React.FC = () => {
   const flowSectionRef = useRef<HTMLElement>(null);
   const stepNodeRefs = useRef<Array<HTMLElement | null>>([]);
 
+  const handleStepSelect = useCallback((index: number) => {
+    setActiveStep(index);
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      stepNodeRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, []);
+
   const handleCardPointerMove = useCallback((event: React.PointerEvent<HTMLElement>) => {
     if (event.pointerType !== 'mouse') return;
     const card = event.currentTarget;
@@ -363,7 +371,7 @@ export const OverviewView: React.FC = () => {
     <div
       ref={storyRef}
       data-story-act="hero"
-      className="zc-story-root relative isolate mx-auto w-full max-w-6xl space-y-24 overflow-x-clip py-8 sm:space-y-28 sm:py-12 lg:space-y-32"
+      className="zc-story-root relative isolate mx-auto flex w-full max-w-6xl flex-col gap-24 overflow-x-clip py-8 sm:gap-28 sm:py-12 lg:gap-32"
     >
       {/* Full-bleed atmospheric ambient backdrop — zero rectangular edge clipping */}
       <div className="ambient-field" aria-hidden="true">
@@ -626,7 +634,7 @@ export const OverviewView: React.FC = () => {
                       key={step.badge}
                       type="button"
                       aria-pressed={selected}
-                      onClick={() => setActiveStep(idx)}
+                      onClick={() => handleStepSelect(idx)}
                       className={`min-h-10 rounded-xl border px-3 py-2 text-xs font-extrabold transition-colors ${
                         selected
                           ? 'border-[var(--color-accent)] bg-accent-soft text-ink'
