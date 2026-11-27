@@ -34,8 +34,11 @@ const { resetRateLimitStore } = await import('../web/src/lib/security/rate-limit
 const {
   isGroupRosterOverPlanLimit,
   resolveRequestBotId,
+  resolveRequestBotIds,
   isBotDisabledForPlan,
 } = await import('../web/src/lib/store/planLimits.ts');
+
+const { PLANS, planPrice } = await import('../web/src/prototype/data/plans.ts');
 
 const {
   isBlockedIp,
@@ -496,6 +499,10 @@ test('planLimits: enforces maxActiveAdvisors and locks excess bots after downgra
   assert.equal(resolveRequestBotId(undefined, 'bot:advisor-2'), 'advisor-2');
   assert.equal(resolveRequestBotId(undefined, 'builtin-stoic'), null);
 
+  assert.deepEqual(resolveRequestBotIds('advisor-1', 'bot:advisor-2'), ['advisor-1', 'advisor-2']);
+  assert.deepEqual(resolveRequestBotIds('advisor-1', 'advisor-2'), ['advisor-1', 'advisor-2']);
+  assert.equal(resolveRequestBotId('advisor-1', 'bot:advisor-2'), 'advisor-2');
+
   const bots = [
     { id: 'b1', createdAt: '2026-01-01T00:00:00.000Z' },
     { id: 'b2', createdAt: '2026-01-02T00:00:00.000Z' },
@@ -506,6 +513,22 @@ test('planLimits: enforces maxActiveAdvisors and locks excess bots after downgra
   assert.equal(isBotDisabledForPlan('b3', bots, 'free'), true);
   assert.equal(isBotDisabledForPlan('bot:b3', bots, 'free'), true);
   assert.equal(isBotDisabledForPlan('b3', bots, 'pro'), false);
+  assert.ok(resolveRequestBotIds('b1', 'bot:b3').some((id) => isBotDisabledForPlan(id, bots, 'free')));
+});
+
+test('plan prices do not imply monthly billing for one-time 30-day passes', () => {
+  assert.equal(planPrice(PLANS.find((plan) => plan.id === 'pro'), 'en'), '$5.99');
+  assert.equal(planPrice(PLANS.find((plan) => plan.id === 'pro'), 'vi'), '139.000₫');
+});
+
+test('public documentation matches the shipped 55-second turn timeout', () => {
+  for (const file of ['README.md', 'features/FEATURE_MAP.md']) {
+    const source = fs.readFileSync(path.join(repoRoot, file), 'utf8');
+    assert.match(source, /55s/, `${file} should document the shipped 55-second timeout`);
+    assert.doesNotMatch(source, /30s/, `${file} must not claim a 30-second turn timeout`);
+  }
+  const readme = fs.readFileSync(path.join(repoRoot, 'README.md'), 'utf8');
+  assert.doesNotMatch(readme, /AppContext\.tsx/, 'README should not point to the removed AppContext file');
 });
 
 test('migration 0010 & stale catalog cleanup: revokes anon/authenticated grants, hardens trigger, and removes dead seed', () => {

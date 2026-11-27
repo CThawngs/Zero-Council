@@ -73,6 +73,14 @@ export function isPublicPath(pathname: string): boolean {
   );
 }
 
+/** Only shipped private page families require authentication; unknown paths reach Next.js 404. */
+export function isAuthenticationRequiredPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return ['/dashboard', '/admin'].some(
+    (base) => normalized === base || normalized.startsWith(`${base}/`)
+  );
+}
+
 /**
  * Signed-in accounts that have not set a password yet are guided to /auth,
  * except when reading public documentation/legal pages or crawler assets.

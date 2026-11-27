@@ -16,7 +16,7 @@ import { assertSafeRemoteUrl, isPrivateProviderNetworkAllowed } from '@/lib/secu
 import { effectivePlan } from '@/lib/store/account';
 import { listBots } from '@/lib/store/bots';
 import { isCustomProviderId, isValidProviderId } from '@/lib/store/botValidation';
-import { isBotDisabledForPlan, resolveRequestBotId } from '@/lib/store/planLimits';
+import { isBotDisabledForPlan, resolveRequestBotIds } from '@/lib/store/planLimits';
 import { listProviderKeys, providerStoreErrorOf } from '@/lib/store/providerKeys';
 import { byokGenerator, completeByokText } from '@/prototype/chat/byok';
 import type { ChatTurnRequest } from '@/prototype/chat/engine';
@@ -76,14 +76,15 @@ export async function POST(request: Request) {
     turnRequest && typeof turnRequest === 'object'
       ? ((turnRequest as { bot?: { id?: unknown } }).bot?.id ?? undefined)
       : undefined;
-  const targetBotId = resolveRequestBotId(botId, turnBotHandle);
-  if (targetBotId) {
+  const targetBotIds = resolveRequestBotIds(botId, turnBotHandle);
+  if (targetBotIds.length > 0) {
     try {
       const [planRecord, userBots] = await Promise.all([
         effectivePlan(user.email).catch(() => null),
         listBots(user.email),
       ]);
-      if (isBotDisabledForPlan(targetBotId, userBots, planRecord?.planId ?? 'free')) {
+      const planId = planRecord?.planId ?? 'free';
+      if (targetBotIds.some((targetBotId) => isBotDisabledForPlan(targetBotId, userBots, planId))) {
         return Response.json({ ok: false, error: 'PLAN_BOT_LIMIT' }, { status: 403 });
       }
     } catch (error) {

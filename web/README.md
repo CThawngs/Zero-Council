@@ -76,7 +76,7 @@ src/
 └── prototype/                  # Interactive workspace UI, council chat engine, and bilingual i18n
     ├── chat/                   # Multi-agent engine, BYOK adapters, attachments, conclusion parser
     ├── components/             # Modular UI views & subcomponents (chat-room, api-keys, checkout, etc.)
-    ├── context/                # Domain-split workspace state hooks (AppContext)
+    ├── context/                # Domain-split workspace state context and hooks
     ├── data/                   # Single-source pricing (plans.ts) and provider catalog
     └── i18n/                   # Strict EN/VI translation dictionaries, legal docs, and localizers
 ```

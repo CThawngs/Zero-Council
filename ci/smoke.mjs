@@ -92,6 +92,22 @@ for (const pathname of ['/fixture', '/council-fixture', '/api/council']) {
   );
 }
 
+const unknownPage = await fetchAs(`${BASE}/__qa-route-that-does-not-exist`, { redirect: 'manual' });
+check(
+  'unknown page stays not found',
+  unknownPage.status === 404,
+  unknownPage.error ?? `HTTP ${unknownPage.status}${unknownPage.headers.location ? ` -> ${unknownPage.headers.location}` : ''}`
+);
+
+for (const pathname of ['/dashboard', '/admin']) {
+  const response = await fetchAs(`${BASE}${pathname}`, { redirect: 'manual' });
+  check(
+    `${pathname} stays behind authentication`,
+    response.status === 307 && response.headers.location?.includes('/auth'),
+    response.error ?? `HTTP ${response.status}${response.headers.location ? ` -> ${response.headers.location}` : ''}`
+  );
+}
+
 // --- Same-origin language preference can be changed and remains client-readable ---
 
 const languageOrigin = new URL(BASE).origin;

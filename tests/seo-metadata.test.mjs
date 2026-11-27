@@ -15,6 +15,7 @@ const {
   canAccessWithoutPasswordClaim,
   getSiteUrl,
   isPublicPath,
+  isAuthenticationRequiredPath,
   isValidLegalPath,
   normalizeCanonicalPath,
   resolveRequestLanguage,
@@ -266,7 +267,13 @@ test('isPublicPath & canAccessWithoutPasswordClaim whitelist crawler routes and 
   for (const priv of ['/dashboard', '/admin']) {
     assert.equal(isPublicPath(priv), false, `Expected ${priv} to require auth`);
     assert.equal(canAccessWithoutPasswordClaim(priv), false);
+    assert.equal(isAuthenticationRequiredPath(priv), true);
   }
+
+  assert.equal(isAuthenticationRequiredPath('/dashboard/settings'), true);
+  assert.equal(isAuthenticationRequiredPath('/admin/users'), true);
+  assert.equal(isAuthenticationRequiredPath('/dashboardish'), false);
+  assert.equal(isAuthenticationRequiredPath('/unknown-page'), false);
 
   for (const passwordExempt of ['/auth', '/guide', '/legal/privacy', '/robots.txt', '/sitemap.xml', '/llms.txt']) {
     assert.equal(canAccessWithoutPasswordClaim(passwordExempt), true);

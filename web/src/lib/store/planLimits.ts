@@ -27,23 +27,24 @@ export const isGroupRosterOverPlanLimit = (
   planId: PlanId | null | undefined
 ): boolean => rosterLength > planLimits(planId).maxActiveAdvisors;
 
-/**
- * Extracts a normalized user-created bot ID (stripping an optional `bot:` persona prefix) from
- * either an explicit `botId` field or a `turnRequest.bot.id` handle.
- */
-export const resolveRequestBotId = (
-  explicitBotId: unknown,
-  turnBotId?: unknown
-): string | null => {
-  if (typeof explicitBotId === 'string' && explicitBotId.trim()) {
-    const trimmed = explicitBotId.trim();
-    return trimmed.startsWith('bot:') ? trimmed.slice('bot:'.length) : trimmed;
-  }
-  if (typeof turnBotId === 'string' && turnBotId.startsWith('bot:')) {
-    const stripped = turnBotId.slice('bot:'.length).trim();
-    return stripped || null;
-  }
-  return null;
+const normalizeRequestBotId = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.startsWith('builtin-')) return null;
+  const normalized = trimmed.startsWith('bot:') ? trimmed.slice('bot:'.length).trim() : trimmed;
+  return normalized || null;
+};
+
+/** Returns every distinct custom bot ID supplied by either request field. */
+export const resolveRequestBotIds = (explicitBotId: unknown, turnBotId?: unknown): string[] =>
+  [normalizeRequestBotId(explicitBotId), normalizeRequestBotId(turnBotId)].filter(
+    (id, index, ids): id is string => Boolean(id) && ids.indexOf(id) === index
+  );
+
+/** The bot carried by the actual turn request takes precedence over the legacy explicit field. */
+export const resolveRequestBotId = (explicitBotId: unknown, turnBotId?: unknown): string | null => {
+  const ids = resolveRequestBotIds(explicitBotId, turnBotId);
+  return ids.length > 0 ? ids[ids.length - 1] : null;
 };
 
 /**

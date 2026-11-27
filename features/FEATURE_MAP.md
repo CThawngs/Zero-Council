@@ -34,11 +34,11 @@ Truthful capability and verification inventory for **Zero Council** on `feat/pro
 | Capability | Status | Implementation & Verification |
 |---|---|---|
 | Custom AI bots (name, system prompt, provider, verified model, color) | ✅ Shipped | `BotWizardView.tsx`, `PersonasView.tsx`, `/api/bots` (`tests/bots-and-conversations.test.mjs`) |
-| Solo 1-on-1 multi-thread conversations | ✅ Shipped | `ChatRoomView.tsx` + `ChatRoomHeader.tsx` thread switcher, inline rename, and persistence |
+| Solo 1-on-1 multi-thread conversations | ✅ Shipped | `components/ChatRoomView.tsx` + `components/chat-room/ChatRoomHeader.tsx` thread switcher, inline rename, and persistence |
 | Group Councils (2–8 bots capped by plan: Free `2`, Pro `4`, Ultra `8`) | ✅ Shipped | `JoinRoomModal.tsx`, `lib/deliberation/plan.ts`, automatic lock/unlock on plan downgrade/upgrade (`tests/deliberation.test.mjs`) |
 | Independent (`panel`) & Debate (`round-robin`) deliberation modes | ✅ Shipped | `prototype/chat/engine.ts` (`tests/chat-engine.test.mjs`, `tests/engine-v2.test.mjs`) |
 | Structured A2A handoffs (`message_agent`), `@mention`, `@all`, `stop @bot`, `[SILENT]` | ✅ Shipped | Structured tool-call routing; prose `@name` mentions never trigger accidental handoffs (`tests/chat-engine.test.mjs`, `tests/mentions.test.mjs`) |
-| Real cancellation (`AbortController`), per-turn timeout (30s), inline retry cards | ✅ Shipped | `useRoomMessaging.ts` + `ChatMessageItem.tsx` (`#chat-turn-error-card`) |
+| Real cancellation (`AbortController`), per-turn timeout (55s), inline retry cards | ✅ Shipped | `useRoomMessaging.ts` + `ChatMessageItem.tsx` (`#chat-turn-error-card`) |
 | Room Summary & AI Chair Conclusion (Good / Normal / Bad scenarios) | ✅ Shipped | `RoomSummaryView.tsx`, `SessionConcludedView.tsx`, `prototype/chat/conclusion/` (`tests/room-summary-conclusion.test.mjs`) |
 
 ---
