@@ -76,6 +76,7 @@ Truthful capability and verification inventory for **Zero Council** on `feat/pro
 |---|---|---|
 | Full EN / VI localization with 100% key parity & localized runtime errors | ✅ Shipped | `web/src/prototype/i18n/` (`tests/ui-theme-i18n.test.mjs`) |
 | Light / Dark editorial theme with WCAG 2.1 AA contrast (≥ 4.5:1) | ✅ Shipped | `web/src/app/globals.css` + `prototype/theme.ts` (`tests/ui-theme-i18n.test.mjs`) |
+| Atmospheric Editorial Chamber landing scroll-story (full-bleed soft ambient field, volumetric camera-facing 3D `CouncilOrb`, desktop sticky `#how-it-works` split-story, static mobile & `prefers-reduced-motion` fallbacks) | ✅ Shipped | `OverviewView.tsx`, `CouncilOrb.tsx`, `Reveal.tsx`, `web/src/app/globals.css` (`tests/scroll-story-ui.test.mjs`) |
 | Technical SEO (`canonical`, `hreflang`, OpenGraph, JSON-LD `@graph`, `sitemap.xml`, `robots.txt`, `llms.txt`) | ✅ Shipped | `web/src/lib/seo.ts` (`tests/seo.test.mjs`) |
 | 7 bilingual legal documents (Terms, Privacy, Refund, Cookies, Acceptable Use, Disclaimer, Contact) + Cookie consent | ✅ Shipped | `prototype/i18n/legal-{en,vi}.ts`, `LegalView.tsx`, `CookieNotice.tsx` |
 
