@@ -12,11 +12,69 @@ export interface SidebarOrgState {
   departments: SidebarDepartment[];
   /** Maps group conversationId -> departmentId */
   assignments: Record<string, string>;
-  /** Ordered list of pinned group conversation IDs */
+  /** Ordered list of pinned conversation IDs (group or solo session) */
   pinnedIds: string[];
   /** Department IDs currently collapsed in the sidebar */
   collapsedDepartmentIds: string[];
 }
+
+export interface SoloSessionCandidate {
+  id: string;
+  kind: 'solo' | 'group';
+  botId?: string;
+  title: string;
+  roster: readonly string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SidebarSessionCopy {
+  sectionTitle: string;
+  emptyText: string;
+  openAction: string;
+  renameAction: string;
+  pinAction: string;
+  unpinAction: string;
+  deleteAction: string;
+  confirmDeleteAction: string;
+  cancelDeleteAction: string;
+  lastSessionHint: string;
+  showAll: string;
+  showLess: string;
+}
+
+export const RECENT_SOLO_SESSIONS_LIMIT = 5;
+
+export const SIDEBAR_SESSION_COPY: Record<'en' | 'vi', SidebarSessionCopy> = {
+  en: {
+    sectionTitle: 'Recent sessions',
+    emptyText: 'No 1-on-1 sessions yet. Pick a bot above to start chatting.',
+    openAction: 'Open',
+    renameAction: copy.en.sidebarActionRename,
+    pinAction: copy.en.sidebarActionPin,
+    unpinAction: copy.en.sidebarActionUnpin,
+    deleteAction: copy.en.sidebarActionDelete,
+    confirmDeleteAction: copy.en.sidebarConfirmDelete,
+    cancelDeleteAction: copy.en.adminCancel,
+    lastSessionHint: 'Keep at least 1 session for this bot',
+    showAll: 'Show all ({count})',
+    showLess: 'Show less',
+  },
+  vi: {
+    sectionTitle: 'Phiên chat gần đây',
+    emptyText: 'Chưa có phiên chat 1-1 nào. Chọn một bot ở trên để bắt đầu.',
+    openAction: 'Mở',
+    renameAction: copy.vi.sidebarActionRename,
+    pinAction: copy.vi.sidebarActionPin,
+    unpinAction: copy.vi.sidebarActionUnpin,
+    deleteAction: copy.vi.sidebarActionDelete,
+    confirmDeleteAction: copy.vi.sidebarConfirmDelete,
+    cancelDeleteAction: copy.vi.adminCancel,
+    lastSessionHint: 'Cần giữ lại ít nhất 1 phiên cho bot này',
+    showAll: 'Xem tất cả ({count})',
+    showLess: 'Thu gọn',
+  },
+};
 
 export interface GroupChatTemplate {
   id: string;
@@ -353,6 +411,121 @@ export const pruneRemovedConversations = (
     assignments: nextAssignments,
     pinnedIds: nextPinned,
   };
+};
+
+/**
+ * Resolves the owning UserBot ID for a solo conversation, falling back to `bot:<id>` in `roster`.
+ */
+export const resolveSoloSessionBotId = (
+  conv: Pick<SoloSessionCandidate, 'kind' | 'botId' | 'roster'>
+): string | undefined => {
+  if (conv.kind !== 'solo') return undefined;
+  if (typeof conv.botId === 'string' && conv.botId.trim()) {
+    return conv.botId.trim();
+  }
+  for (const member of conv.roster) {
+    if (typeof member === 'string' && member.startsWith('bot:')) {
+      const id = member.slice(4).trim();
+      if (id) return id;
+    }
+  }
+  return undefined;
+};
+
+const parseConversationTimestampMs = (
+  conv: Pick<SoloSessionCandidate, 'updatedAt' | 'createdAt'>
+): number => {
+  if (conv.updatedAt) {
+    const updatedMs = Date.parse(conv.updatedAt);
+    if (!Number.isNaN(updatedMs)) return updatedMs;
+  }
+  if (conv.createdAt) {
+    const createdMs = Date.parse(conv.createdAt);
+    if (!Number.isNaN(createdMs)) return createdMs;
+  }
+  return 0;
+};
+
+/**
+ * Selects solo conversations ordered with pinned items first (in `pinnedIds` order),
+ * followed by most-recently-updated (`updatedAt` desc).
+ */
+export const selectOrderedSoloSessions = <T extends SoloSessionCandidate>(
+  conversations: readonly T[],
+  pinnedIds: readonly string[],
+  validBotIds?: ReadonlySet<string>
+): T[] => {
+  const seenIds = new Set<string>();
+  const indexed: Array<{ item: T; index: number; updatedMs: number }> = [];
+
+  conversations.forEach((conv, index) => {
+    if (conv.kind !== 'solo' || !conv.id || seenIds.has(conv.id)) return;
+    const botId = resolveSoloSessionBotId(conv);
+    if (!botId) return;
+    if (validBotIds && !validBotIds.has(botId)) return;
+    seenIds.add(conv.id);
+    indexed.push({
+      item: conv,
+      index,
+      updatedMs: parseConversationTimestampMs(conv),
+    });
+  });
+
+  const pinnedOrder = new Map(pinnedIds.map((id, idx) => [id, idx]));
+
+  indexed.sort((a, b) => {
+    const pa = pinnedOrder.get(a.item.id);
+    const pb = pinnedOrder.get(b.item.id);
+    if (pa !== undefined && pb !== undefined) return pa - pb;
+    if (pa !== undefined) return -1;
+    if (pb !== undefined) return 1;
+    if (b.updatedMs !== a.updatedMs) return b.updatedMs - a.updatedMs;
+    return a.index - b.index;
+  });
+
+  return indexed.map((entry) => entry.item);
+};
+
+/**
+ * Slices ordered solo sessions for bounded sidebar density while exposing expand metadata.
+ */
+export const partitionBoundedSessions = <T>(
+  orderedSessions: readonly T[],
+  expanded: boolean,
+  limit = RECENT_SOLO_SESSIONS_LIMIT
+): { visible: T[]; hiddenCount: number; canExpand: boolean } => {
+  const safeLimit = Math.max(1, limit);
+  const canExpand = orderedSessions.length > safeLimit;
+  const visible =
+    expanded || !canExpand ? [...orderedSessions] : orderedSessions.slice(0, safeLimit);
+  return {
+    visible,
+    hiddenCount: Math.max(0, orderedSessions.length - visible.length),
+    canExpand,
+  };
+};
+
+/**
+ * Returns `true` iff `sessionId` is a solo conversation whose bot owns at least 2 solo threads,
+ * preserving the invariant that a bot's last solo session cannot be deleted via session actions.
+ */
+export const canDeleteSoloSession = (
+  conversations: readonly SoloSessionCandidate[],
+  sessionId: string
+): boolean => {
+  const target = conversations.find((conv) => conv.id === sessionId);
+  if (!target || target.kind !== 'solo') return false;
+  const botId = resolveSoloSessionBotId(target);
+  if (!botId) return false;
+
+  let count = 0;
+  for (const conv of conversations) {
+    if (conv.kind === 'solo' && resolveSoloSessionBotId(conv) === botId) {
+      count += 1;
+      if (count > 1) return true;
+    }
+  }
+  return false;
 };
 
 export const formatRelativeTime = (

@@ -99,16 +99,16 @@ export const handleFloatingMenuKeyDown = (
   const activeIndex = items.indexOf(document.activeElement as HTMLElement);
   if (event.key === 'ArrowDown') {
     event.preventDefault();
-    items[(activeIndex + 1 + items.length) % items.length]?.focus();
+    items[(activeIndex + 1 + items.length) % items.length]?.focus({ preventScroll: true });
   } else if (event.key === 'ArrowUp') {
     event.preventDefault();
-    items[(activeIndex - 1 + items.length) % items.length]?.focus();
+    items[(activeIndex - 1 + items.length) % items.length]?.focus({ preventScroll: true });
   } else if (event.key === 'Home') {
     event.preventDefault();
-    items[0]?.focus();
+    items[0]?.focus({ preventScroll: true });
   } else if (event.key === 'End') {
     event.preventDefault();
-    items[items.length - 1]?.focus();
+    items[items.length - 1]?.focus({ preventScroll: true });
   }
 };
 
@@ -126,6 +126,7 @@ interface SidebarBotsSectionProps {
   onClose?: () => void;
   closeMenuRef?: React.MutableRefObject<(() => void) | null>;
   onBeforeOpenMenu?: () => void;
+  onBeforeNavigate?: () => void;
 }
 
 export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
@@ -136,6 +137,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
   onClose,
   closeMenuRef,
   onBeforeOpenMenu,
+  onBeforeNavigate,
 }) => {
   const {
     apiKeys,
@@ -167,7 +169,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
     const focusTarget = restoreFocus ? triggerElRef.current : null;
     triggerElRef.current = null;
     if (focusTarget && focusTarget.isConnected) {
-      requestAnimationFrame(() => focusTarget.focus());
+      requestAnimationFrame(() => focusTarget.focus({ preventScroll: true }));
     }
   }, []);
 
@@ -194,7 +196,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
   useEffect(() => {
     if (!botMenu) return;
     const frame = requestAnimationFrame(() => {
-      botMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
+      botMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus({ preventScroll: true });
     });
     const onKeyDown = (event: KeyboardEvent) => {
       handleFloatingMenuKeyDown(event, botMenuRef.current, closeBotMenu);
@@ -274,6 +276,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
   const handleNewSoloChat = async (botId: string) => {
     if (creatingForBotId === botId) return;
     closeBotMenu(false);
+    onBeforeNavigate?.();
     setCreatingForBotId(botId);
     try {
       onClose?.();
@@ -285,6 +288,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
 
   const handleEditBot = (botId: string) => {
     closeBotMenu(false);
+    onBeforeNavigate?.();
     onClose?.();
     openEditBot(botId);
   };
@@ -324,7 +328,9 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
     ? bots.find((bot) => bot.id === botMenu.botId) ?? null
     : null;
 
-  const actionButtonSize = mobile ? 'h-10 w-10' : 'h-8 w-8';
+  const actionButtonSize = mobile
+    ? 'h-10 w-10'
+    : 'h-8 w-8 [@media(hover:none)]:h-10 [@media(hover:none)]:w-10';
 
   const renderedBotMenu =
     botMenu && activeBotForMenu ? (
@@ -419,6 +425,12 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
                   onContextMenu={(event) => {
                     event.preventDefault();
                     event.stopPropagation();
+                    if (event.button !== 2 || (event.clientX === 0 && event.clientY === 0)) {
+                      const kbAnchor =
+                        event.target instanceof HTMLElement ? event.target : event.currentTarget;
+                      openBotMenuFromTrigger(bot.id, kbAnchor, false);
+                      return;
+                    }
                     const focusAnchor =
                       event.currentTarget.querySelector<HTMLElement>(`[data-sidebar-bot="${bot.id}"]`) ??
                       event.currentTarget;
@@ -436,6 +448,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
                     aria-current={isActive ? 'page' : undefined}
                     onClick={() => {
                       closeBotMenu(false);
+                      onBeforeNavigate?.();
                       onClose?.();
                       openBotChat(bot.id);
                     }}
@@ -480,7 +493,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
                     aria-label={newChatLabel}
                     title={newChatLabel}
                     className={`flex ${actionButtonSize} shrink-0 items-center justify-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink focus-visible:opacity-100 disabled:opacity-50 ${
-                      mobile ? 'opacity-100' : 'opacity-75 group-hover:opacity-100'
+                      mobile ? 'opacity-100' : 'opacity-75 group-hover:opacity-100 [@media(hover:none)]:opacity-100'
                     }`}
                   >
                     {isCreating ? (
@@ -504,7 +517,7 @@ export const SidebarBotsSection: React.FC<SidebarBotsSectionProps> = ({
                     className={`flex ${actionButtonSize} shrink-0 items-center justify-center rounded-md text-ink-muted transition hover:bg-surface hover:text-ink focus-visible:opacity-100 ${
                       isMenuOpen || mobile
                         ? 'bg-surface text-ink opacity-100'
-                        : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
+                        : 'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100'
                     }`}
                   >
                     <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
