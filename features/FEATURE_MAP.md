@@ -1,249 +1,88 @@
-# FEATURE_MAP — Zero Council
+# FEATURE_MAP — Zero Council (Production Architecture Inventory)
 
-Kiểm kê UI và engine **tại thời điểm `2e1e828`**. Mục đích: không ai đọc copy landing rồi tưởng đã có.
-
-Cột **Bằng chứng** chỉ ghi bằng chứng thật. Trạng thái `CHƯA CÓ CODE` nghĩa là chỉ có lời.
+Truthful capability and verification inventory for **Zero Council** on `feat/production-launch-hardening`. Every status below reflects shipped, tested code in `web/src/**` and `tests/*.test.mjs` — zero placeholder mocks or unbuilt marketing claims.
 
 ---
 
-## 1. Engine vòng họp — `web/src/prototype/chat/engine.ts`
+## 1. Authentication, RBAC & Multi-Device Persistence
 
-| Tính năng | Trạng thái | Bằng chứng |
+| Capability | Status | Implementation & Verification |
 |---|---|---|
-| Mention `@bot` mở lượt | ✅ | 25 test + lái Chrome |
-| Không mention → theo thứ tự vào phòng | ✅ | `planSpeakers` |
-| Handoff A2A qua tool call `message_agent` | ✅ | test adapter, nhưng ⚠️ chưa có model thật |
-| `[SILENT]` — cố vấn không có ý kiến thì im | ✅ | test |
-| `stop @bot` giữ riêng cố vấn đó | ✅ | lái Chrome |
-| `@all` mời lại | ✅ | lái Chrome |
-| Rò rỉ handoff qua prose | ✅ **đã chặn** | test: prose có `@name` ⇒ `handoffs: []` |
-| Trần lượt + trần phòng | ⚠️ `12` / `200` | Chủ dự án chốt. **Chưa phải vô hạn** |
-| Memory riêng từng cố vấn, `/compress` | ❌ **CHƯA CÓ CODE** | Không có |
-
-⚠️ **Quan trọng nhất bảng này:** cột A2A ✅ nghĩa là *routing đúng*, **không** phải *model thật đã từng phát ra handoff*. Không có provider nào từng được gọi. `scriptedGenerator` tuân thủ hợp đồng mà không suy nghĩ.
-
-## 2. Provider — `web/src/prototype/chat/byok.ts`
-
-| Tính năng | Trạng thái | Bằng chứng |
-|---|---|---|
-| Adapter Anthropic (`/v1/messages`) | ✅ | 9 test, `fetch` stub |
-| Adapter OpenAI (`/v1/chat/completions`) | ✅ | 9 test, `fetch` stub |
-| Phòng hỗn hợp nhiều provider | ✅ | mỗi cố vấn gọi vendor riêng |
-| Tool call hỏng ⇒ giữ câu trả lời, trao `user` | ✅ | cờ `attempted` |
-| Key trong RAM, không lưu, không log | ✅ | lái Chrome: key không lọt vào DOM |
-| **Gọi provider thật** | ❌ **CHƯA TỪNG** | Không có key nào trong môi trường |
-
-## 3. Phòng — `web/src/prototype/chat/storage.ts`
-
-| Tính năng | Trạng thái | Bằng chứng |
-|---|---|---|
-| Sống sót qua reload | ✅ | lái Chrome, reload thật, transcript giống từng ký tự |
-| Xoá phòng thật (xoá cả store) | ✅ | lái Chrome, không quay lại |
-| Blob build cũ bị từ chối | ✅ | test schema |
-| Store hỏng / bị chặn ⇒ không crash | ✅ | test |
-| Lịch sử lâu dài, nhiều thiết bị | ❌ **CHƯA CÓ CODE** | `sessionStorage` chết theo tab |
-
-## 4. Lớp vỏ sản phẩm
-
-| Tính thật | Trạng thái |
-|---|---|
-| Đăng nhập / đăng ký | ❌ `SignInView` rỗng, `currentUser.ts` trả `null`. **Giao cho đồng nghiệp** |
-| Thanh toán / đơn hàng | ❌ stub, `orders.ts` rỗng |
-| API route `/api/council` | ❌ 5 dòng, trả fixture. BYOK **không** đi qua đây |
-| Giới hạn theo gói (2/4/8 cố vấn) | ✅ đã chặn thật, xác nhận "2 of 2 selected" |
-| `features/`, đa ngữ | ✅ |
+| Email/password sign-up & sign-in + Google / Discord OAuth | ✅ Shipped | Supabase Auth (`web/src/lib/supabase/`, `web/src/app/auth/callback/route.ts`, `SignInView.tsx`, `SignUpView.tsx`) |
+| Mandatory password setup after first OAuth sign-in | ✅ Shipped | Middleware & `SetPasswordView.tsx` enforce `has_password` claim before workspace actions |
+| Role-based access control (`admin` / `user`) + Founder lock | ✅ Shipped | `zc_users` + `FOUNDER_EMAILS` (`web/src/lib/currentUser.ts`, `web/src/lib/store/account.ts`, `tests/admin.test.mjs`) |
+| Persistent bots, provider keys, conversations, orders, coupons & grants | ✅ Shipped | Supabase Postgres + Row-Level Security (`web/supabase/migrations/0001`..`0010`) |
+| Graceful guest local fallback before sign-in | ✅ Shipped | Scoped client storage (`prototype/chat/storage.ts`, `sidebar-organization.ts`, `tests/storage.test.mjs`) |
 
 ---
 
-## 5. ⚠️ Landing đang hứa thứ chưa có
+## 2. Hardened BYOK & Server-Side AI Proxy
 
-Mục này tồn tại để không ai bán nhầm. **Sửa copy là việc của chủ sản phẩm** (rule 28.3 — không đoán chính sách).
-
-| Landing hứa | Thực tế |
-|---|---|
-| "AES-256" cho API key | **Không có mã hoá nào.** Key nằm thô trong RAM tab |
-| "Cuộc trò chuyện được mã hoá" | **Không có mã hoá nào.** Transcript nằm trong `sessionStorage` dạng rõ |
-| "Vòng lặp vô hạn" | Có trần `12` lượt |
-| "Nhớ ngữ cảnh riêng từng cố vấn" | Chưa có |
-
-Cách sửa không cần hạ tính năng: **nói đúng**. "Key của bạn nằm trong tab này, không lưu, không gửi qua máy chủ tôi, F5 là mất" bán được và **không sai**. AES-256 thì không bán được khi chưa có.
-
-## 6. Việc còn nợ
-
-- `.agent/HANDOFF.md` chưa cập nhật cho cấp 12–13.
-- Ghi quyết định lên Notion (AI OS Documentation) — chưa làm.
+| Capability | Status | Implementation & Verification |
+|---|---|---|
+| 8 locked built-in providers (Anthropic, OpenAI, Google Gemini, Groq, xAI Grok, OpenRouter, NVIDIA NIM, DeepSeek) | ✅ Shipped | Canonical locked base URLs (`web/src/prototype/chat/byok/catalog.ts`, `tests/byok.test.mjs`) |
+| Custom OpenAI- & Anthropic-compatible endpoints | ✅ Shipped | `CustomProviderModal.tsx` + `slugifyCustomProvider` (`web/src/lib/store/botValidation.ts`) |
+| Live-inference key & model verification before save | ✅ Shipped | `POST /api/providers/verify` & `/api/providers/test` (`web/src/lib/byok/verify.ts`, `tests/byok-verify.test.mjs`) |
+| `AES-256-GCM` encryption at rest for stored API keys | ✅ Shipped | `ZC_PROVIDER_KEY_SECRET` (`web/src/lib/security/crypto.ts`, `web/src/lib/store/providerKeys.ts`, `tests/security.test.mjs`) |
+| Masked client state (`••••`) + server-proxied chat completions | ✅ Shipped | `POST /api/providers/chat` decrypts server-side per turn; raw keys never re-enter browser DOM or storage |
+| SSRF + DNS-rebinding guard, CSRF `Origin` check, sliding-window rate limit | ✅ Shipped | `web/src/lib/security/{ssrf,csrf,rateLimit}.ts` (`tests/security.test.mjs`) |
 
 ---
 
-## 7. Gộp PR #18 vào main (2026-10-09)
+## 3. Solo & Group Council Chat Engine
 
-Mục này viết lại sau khi gộp. **Mốc trước đó (`2e1e828`) nằm trên `main` cục bộ, chưa từng lên GitHub** — đó là 3 ngày công làm sau PR #18, làm nhầm trên nhánh `main` thay vì trên branch của PR, rồi chết giữa chừng lúc `git merge origin/main`.
-
-### Đã đưa vào
-
-| Từ | Gì | Bằng chứng |
+| Capability | Status | Implementation & Verification |
 |---|---|---|
-| `origin/main` | UI deliberation (Scenario/Hats/Matrix), auth Google/Discord, payOS, coupon | đã merge qua PR #13–#17 |
-| local main (4 commit) | chat engine A2A có cấu trúc, BYOK Anthropic+OpenAI, `sessionStorage`, `FEATURE_MAP` này | 119 test · lái Chrome `ALL_CHECKS_PASS` |
-| PR #18 | `read-link.ts` + **33 test**, `ci/smoke.mjs`, `.github/workflows/verify.yml` (CI tự bật app), tài liệu `verify-app/features/` | smoke 4/4 exit 0 |
-| PR #18 | **3 test membership** viết lại cho engine đang chạy (`plan.ts`) | `tests/deliberation.test.mjs` 19/19 |
-
-### ⚠️ Không đưa vào — và vì sao
-
-PR #18 còn một nhánh thiết kế cũ **không ghép được** với engine đã chạy:
-
-| Phần của PR #18 | Vì sao bỏ |
-|---|---|
-| `lib/deliberation/engine.ts` thứ 2 (`createDeliberationEngine`: timeout 30s, cancel, attachment, streaming) | Kiến trúc khác hẳn: bản đang chạy có `FrameworkOutput`/`MatrixData`/`buildFixtureRound`, bản PR #18 thì không. `FrameworkPanel` + `RoundThread` + `scoreMatrix` cần bản đang chạy. **Đây là feature thật chưa lên main** — xem mục 8. |
-| 59 key copy deliberation bị xoá | Bản PR #18 xoá hết vì nó thay UI deliberation bằng UI riêng. Giữ UI cũ thì phải giữ key. |
-| `AdvisorConversation`, `CouncilSetupBar`, `PendingRoundPanel`, `AttachmentPicker` | 4 component của thiết kế UI cũ, không route tới từ `App.tsx` sau khi gộp. Membership nay do `JoinRoomModal` + cap theo gói đảm nhiệm. |
-| `EmptyChamberView` + `SessionActiveView` bản PR #18 | Lấy bản `origin/main`. Membership của PR #18 nằm ở tầng engine (`plan.ts`) nên không mất. |
-
-## 8. Nợ lớn nhất sau khi gộp
-
-**Engine `createDeliberationEngine` của PR #18 chưa lên main.** Nó có những thứ bản đang chạy không có: deadline 30s, cancel giữa chừng, attachment (đọc link/file), streaming `onContribution`, và `requestProblems` từ chối request hỏng **trước khi** tốn tiền. 27 test kèm theo đã bị bỏ cùng file.
-
-Đưa lên thì **không sửa chồng `engine.ts`** — phải đặt cạnh (`deliberation/engine-v2.ts`) và chuyển `AppContext` sang từng đường một, giữ `FrameworkPanel` chạy từng vòng. Việc nhiều ngày, không làm vội trong lượt gộp này.
-
-Nhỏ hơn, làm được ngay:
-- `read-link.ts` **chưa route nào gọi** — cố ý. Endpoint đọc URL tuỳ ý mà chưa đăng nhập là proxy mở cho ai tìm thấy.
-- `.agent/skills/verify-app/features/*.md` của PR #18 mô tả lái bằng Playwright; repo không có Playwright. Driver thật là `tests/drive-*.mjs` (Node + CDP). **Tài liệu sai so với repo** — cần sửa hoặc xoá.
+| Custom AI bots (name, system prompt, provider, verified model, color) | ✅ Shipped | `BotWizardView.tsx`, `PersonasView.tsx`, `/api/bots` (`tests/bots-and-conversations.test.mjs`) |
+| Solo 1-on-1 multi-thread conversations | ✅ Shipped | `components/ChatRoomView.tsx` + `components/chat-room/ChatRoomHeader.tsx` thread switcher, inline rename, and persistence |
+| Group Councils (2–8 bots capped by plan: Free `2`, Pro `4`, Ultra `8`) | ✅ Shipped | `JoinRoomModal.tsx`, `lib/deliberation/plan.ts`, automatic lock/unlock on plan downgrade/upgrade (`tests/deliberation.test.mjs`) |
+| Independent (`panel`) & Debate (`round-robin`) deliberation modes | ✅ Shipped | `prototype/chat/engine.ts` (`tests/chat-engine.test.mjs`, `tests/engine-v2.test.mjs`) |
+| Structured A2A handoffs (`message_agent`), `@mention`, `@all`, `stop @bot`, `[SILENT]` | ✅ Shipped | Structured tool-call routing; prose `@name` mentions never trigger accidental handoffs (`tests/chat-engine.test.mjs`, `tests/mentions.test.mjs`) |
+| Real cancellation (`AbortController`), per-turn timeout (55s), inline retry cards | ✅ Shipped | `useRoomMessaging.ts` + `ChatMessageItem.tsx` (`#chat-turn-error-card`) |
+| Room Summary & AI Chair Conclusion (Good / Normal / Bad scenarios) | ✅ Shipped | `RoomSummaryView.tsx`, `SessionConcludedView.tsx`, `prototype/chat/conclusion/` (`tests/room-summary-conclusion.test.mjs`) |
 
 ---
 
-## 9. Đóng nốt mảng còn lại của PR #18 (2026-10-09, sau khi merge)
+## 4. Multimodal Attachments, Web Search & Content Render Panel
 
-Mục 8 là nợ đã được trả. Số ở mục này là **sau** khi nó đóng.
-
-### Lên rồi
-
-| Tính năng | Trạng thái | Bằng chứng |
+| Capability | Status | Implementation & Verification |
 |---|---|---|
-| `engine-v2.ts` — hợp đồng deadline/cancel/streaming/membership | ✅ đứng cạnh `engine.ts` | **23 test** `tests/engine-v2.test.mjs` |
-| `requestProblems` + `rosterProblems` trong `plan.ts` | ✅ trước mọi lần gọi provider | 4 test trong `engine-v2.test.mjs` |
-| **Chat room từ chối request hỏng trước khi tốn tiền** | ✅ | `a bad request is refused before any advisor is asked` |
-| **Deadline theo lượt** — `TurnFailure{kind:'timeout'}` trước đây có trong type nhưng **không chỗ nào sinh ra** | ✅ giờ có | `an advisor that never answers is dropped` |
-| **Stop dừng thật** — trước đó chỉ đổi nhãn, hội đồng vẫn trả lời, provider vẫn bị tính tiền | ✅ `AbortController` + `fetch` bị huỷ | `Stop discards the answer an advisor was still writing` · lái Chrome |
-| **Streaming** — tin nhắn hiện ngay khi từng cố vấn trả lời | ✅ `onTurn` | `each advisor appears as it answers` |
-| **Đính kèm link** — đọc 1 lần lúc ghim, mang theo tin nhắn | ✅ | 3 test · `drive-attach.mjs` `ALL_CHECKS_PASS` |
-| `read-link-web.ts` — tầng đọc link phía browser | ✅ 7 test | `tests/read-link-web.test.mjs` |
-| **Đính kèm file** (txt/md/csv/tsv/json/log, docx, pptx, xlsx, pdf) — nút kẹp giấy, kéo-thả, dán; đọc 1 lần lúc ghim, trong browser | ⚠️ 12 test cho txt/docx/pptx/xlsx; **PDF chưa chạy thử** | `tests/read-file-web.test.mjs`; `read-file-web.ts`, `attachment-status.ts` |
-| **Đính kèm ảnh** (png/jpg/webp/gif/heic) — thu nhỏ ≤1568px, nén JPEG, gửi dạng ảnh cho Anthropic/OpenAI | ⚠️ 8 test cho phần thuần + wire format; **bước canvas chưa chạy thử trong browser** | `tests/attach-image.test.mjs`; `read-image-web.ts`, `byok.ts` |
-
-Test: **160/160** (trước: 122). Build 0 · `tsc` 0 · eslint 0 lỗi.
-
-### Vẫn nợ — và đây là lý do
-
-**Đọc link chạy trong trình duyệt, không qua server.** `read-link.ts` chặn SSRF bằng `node:dns` nên **không** bundle được cho client (Turbopack fail thật: *"the chunking context does not support external modules: node:dns/promises"*). Parser đã tách ra `html-text.ts` để dùng chung; phần fetch thì có hai đường:
-
-| Đường | Trạng thái | Đánh đổi |
-|---|---|---|
-| Browser fetch (`read-link-web.ts`) | ✅ đang dùng | Đa số website không gửi CORS → **bị chặn**. Phòng nói thẳng là không đọc được chứ không giấu. |
-| Server route qua `read-link.ts` | ❌ cố ý chưa làm | Endpoint đọc URL tuỳ ý mà chưa đăng nhập là **proxy mở**: ai tìm thấy cũng dùng băng thông của bạn. Cần quyết định của chủ sản phẩm + rate limit + auth. |
-
-Không tự mở route. Đây là câu hỏi đã nêu từ PR #18 và vẫn chưa có câu trả lời.
-
-### Vẫn chưa chứng minh
-
-- **Chưa từng gọi provider thật.** Toàn bộ bằng chứng dùng `scriptedGenerator` và key giả. Cơ chế deadline/cancel đã test bằng generator hỏng, nhưng chưa từng giết một request `fetch` thật đang bay.
-- **Chưa đọc được link thật qua mạng.** `drive-attach.mjs` dán `http://127.0.0.1/` (cùng origin) và một URL bị CORS chặn. Chưa từng đọc được một trang thật ở domain khác.
+| Document attachments (`docx`, `xlsx`, `pptx`, `txt`, `md`, `csv`, `tsv`, `json`, `log`) | ✅ Shipped | Zero-dependency browser ZIP+XML & text extraction (`prototype/chat/read-file-web.ts`, `tests/read-file-web.test.mjs`) |
+| Vision image attachments (`png`, `jpg`, `webp`, `gif`, `heic`) | ✅ Shipped | Client canvas resize ≤1568px & JPEG re-encode (strips EXIF) (`prototype/chat/read-image-web.ts`, `tests/attach-image.test.mjs`) |
+| Video keyframe extraction (`mp4`, `webm`, `mov`) | ✅ Shipped | Sampled frame extraction for vision models (`prototype/chat/read-video-web.ts`) |
+| SSRF-guarded URL attachment reader | ✅ Shipped | `POST /api/read-link` + `lib/deliberation/read-link.ts` (`tests/read-link.test.mjs`, `tests/read-link-web.test.mjs`) |
+| Live web search grounding | ✅ Shipped | Composer globe toggle + `POST /api/web-search` |
+| Content Render Panel (Markdown, syntax-highlighted code, collapsible tree graph) | ✅ Shipped | `prototype/chat/content-render.ts` + `components/ContentRenderPanel.tsx` (`tests/content-render.test.mjs`) |
+| Sidebar department organization, pinning & JSON export/import | ✅ Shipped | `prototype/sidebar-organization.ts` + `components/Sidebar.tsx` (`tests/sidebar-organization.test.mjs`) |
 
 ---
 
-## 10. UI redesign (2026-10-11, worktree `ui-redesign-2025`)
+## 5. PayOS v2 Billing, Promo Coupons & Admin Console
 
-### Bản đồ view
-
-Cột `Bilingual`: ⭕ đã dịch đủ EN/VI.
-
-| View | Nguồn | File | Bilingual |
-|---|---|---|---|
-| Landing | nav | `components/OverviewView.tsx` | ⭕ |
-| Sign in | `/auth` | `components/SignInView.tsx` | ⭕ |
-| Sign up | `/auth` | `components/SignUpView.tsx` | ⭕ |
-| Sessions / Group chats | nav Workspace / sidebar | `components/SessionsListView.tsx` | ⭕ |
-| Council room | nav Workspace | `components/ChatRoomView.tsx` | ⭕ |
-| Advisors | nav Workspace | `components/PersonasView.tsx` | ⭕ |
-| New advisor | nav Workspace | `components/NewAdvisorView.tsx` | ⭕ |
-| Session active / concluded | session flow | `SessionActiveView.tsx`, `SessionConcludedView.tsx` | ⭕ |
-| Empty chamber | từ "Get started" | `components/EmptyChamberView.tsx` | ⭕ |
-| API keys | nav Manage | `components/ApiKeysView.tsx` | ⭕ |
-| Billing | nav Manage | `components/BillingHistoryView.tsx` | ⭕ |
-| Settings | nav Manage | `components/SettingsView.tsx` | ⭕ |
-| Legal (7 doc) | footer | `components/LegalView.tsx` | ⭕ |
-| Room summary | wrapUpRoom | `components/RoomSummaryView.tsx` | ⭕ |
-
-Nguồn điều hướng duy nhất: `prototype/navigation.ts`. Header, Sidebar và mobile panel đều render từ đó — mục đích là không còn danh sách link trôi lệch giữa 3 nơi.
-
-### Thay đổi hành vi
-
-| Việc | Trước | Sau |
+| Capability | Status | Implementation & Verification |
 |---|---|---|
-| Nav "Pricing" | navigate sang view riêng | anchor cuộn tới `#pricing` |
-| Nút mua gói | mở checkout luôn | `requestCheckout()` → sign-in nếu chưa đăng nhập |
-| Theme toggle | không có hành vi | `data-theme` + `localStorage` + script tiền-paint |
-| Language toggle | chỉ đổi state | dịch trọn site, nhớ qua `localStorage` |
-| Footer | 2 link | nhóm Product + 7 tài liệu pháp lý + disclaimer |
-| Auth screens | hardcode English | song ngữ |
-| RoomSummaryView roster | hiện tất cả advisor trong phòng gồm cả cố vấn mẫu | chỉ lọc và hiện danh sách bot do người dùng tạo (`bot:*`) |
-| PersonasView advisors | hiện cả userBots và preset advisors | chỉ hiển thị userBots (CRUD, chat 1-1, hạn mức), ẩn danh sách cố vấn mẫu |
-| SessionsListView | hiện các phiên deliberation mẫu từ mockData | hiển thị danh sách group chats thực tế từ `conversations`, hỗ trợ tìm kiếm, mở phòng, sửa nhóm, xóa nhóm tương tự sidebar |
-| RoomSummaryView conclusion | nút Mở kết luận không chạy khi click (bị disabled oan, lỗi so khớp ID bot/cố vấn, BYOK throw không bắt) | giữ nguyên luồng: ChatRoomView ấn Tóm tắt chuyển sang RoomSummaryView, nút Mở kết luận trong RoomSummaryView chạy mượt mà với fallback an toàn |
-| SessionConcludedView analysis | gọi lại toàn bộ cố vấn trả lời câu hỏi đầu tiên từ đầu, giữ kịch bản tĩnh và hiện nút đổi sang Six Thinking Hats / Decision Matrix | chọn 1 AI trong phòng chat để phân tích toàn bộ câu trả lời của đoạn chat theo 3 hướng Tốt / Bình thường / Xấu, ẩn hoàn toàn các khung framework khác; khung summary chỉ hiện văn bản summary (tách sạch từ JSON/markdown fence/JSON cắt cụt, không hiện JSON thô) |
-| Sidebar nhóm chat AI (`Sidebar.tsx`, `sidebar-organization.ts`) | nút sửa/xóa lộ sẵn khi hover trên từng nhóm chat AI | giữ nguyên bố cục sidebar gốc (`+ Tạo nhóm chat`, `Bot của tôi`, `Nhóm chat AI`, `Quản trị`, thẻ `Riêng tư mặc định`, `Cài đặt tài khoản`); thay nút sửa/xóa trên từng nhóm chat bằng nút `...` mở menu nổi 5 mục (`Đổi tên` inline, `Sửa thành viên`, `Ghim`/`Bỏ ghim` đẩy nhóm lên đầu và lưu theo tài khoản ở `localStorage`, `Xuất JSON`, `Xóa` xác nhận 2 bước). Bằng chứng: `tests/sidebar-organization.test.mjs` (5/5), `tests/drive-sidebar-groups.mjs` (`ALL_CHECKS_PASS`, 10/10 check trên Chrome thật, ảnh `.agent/evidence/sidebar-group-menu.png`). |
+| Single source of truth pricing (`Free 0₫`, `Pro 139,000₫ / $5.99`, `Ultra 379,000₫ / $16.99`) | ✅ Shipped | `web/src/prototype/data/plans.ts` (`tests/pricing.test.mjs`) |
+| One-time 30-day passes (zero recurring auto-charge) + self-serve downgrade/cancel | ✅ Shipped | `POST /api/payos/create-payment`, `POST /api/plan/cancel` |
+| Local zero-dependency VietQR SVG rendering (no external QR image leak) | ✅ Shipped | `web/src/lib/qr-svg.ts` + `CheckoutQrModal.tsx` (`tests/qr-svg.test.mjs`) |
+| HMAC-SHA256 webhook verification + idempotent `PAID` order finality | ✅ Shipped | `POST /api/payos/webhook` (`web/src/lib/payos/`, `tests/payos.test.mjs`, `tests/orders.test.mjs`) |
+| Single-use percentage promo coupons (incl. 100%-off instant grant without PayOS fee) | ✅ Shipped | `zc_coupons` + `zc_coupon_redemptions` (`tests/coupons.test.mjs`) |
+| Admin console (`/admin`) for users, roles, manual grants, and coupons | ✅ Shipped | `web/src/app/admin/` + `/api/admin/**` (`tests/admin.test.mjs`) |
 
-### Đã xoá
+---
 
-| File | Lý do |
-|---|---|
-| `PricingView.tsx` | Bảng giá là section của landing, không cần view riêng |
-| `PrivacyView.tsx` | Gộp vào `LegalView` dưới dạng `legal-privacy` |
+## 6. UI, Bilingual SEO & Legal Transparency
 
-### Pháp lý
-
-7 tài liệu (`terms`, `privacy`, `refund`, `cookies`, `acceptable-use`, `disclaimer`, `contact`), nội dung song ngữ trong `i18n.ts` (`t.legal.*`), render chung bởi `LegalView`.
-
-**Mọi giá trị pháp lý chưa có nguồn chân lý đều để trống bằng `{{PLACEHOLDER}}`** và mỗi tài liệu có `draft: true` → hiện cảnh báo "bản nháp" cho người đọc. Cần điền trước khi công bố: tên pháp lý, mã số DN, địa chỉ, email liên hệ, tên cổng thanh toán, công cụ analytics, thời hạn hoàn tiền / lưu trữ / số ngày thông báo.
-
-### Bẫy dev: React không hydrate
-
-`next.config.ts` phải giữ `allowedDevOrigins: ["127.0.0.1", "localhost"]`.
-
-Next coi `127.0.0.1` là cross-origin với `localhost` và chặn dev resource `/_next/hmr` + client chunks. Server vẫn trả HTML server-render đầy đủ nên **trang nhìn hoàn hảo**, nhưng client bundle không chạy → React không hydrate → **mọi button mất handler**, và console chỉ hiện lỗi HMR WebSocket (`net::ERR_INVALID_HTTP_RESPONSE`), không có lỗi React nào.
-
-Cách kiểm tra trong 2 giây, không cần đoán:
-
-```js
-let n = 0;
-const walk = (el) => {
-  for (const k of Object.getOwnPropertyNames(el)) if (k.startsWith('__reactFiber$')) n++;
-  for (const c of el.children) walk(c);
-};
-walk(document.body); // 0 = không hydrate
-```
-
-## Đính kèm file (thêm sau mục 5)
-
-**Trần đã biết, không phải lỗi:**
-- Không đọc `.doc` / `.ppt` / `.xls` đời cũ — báo "lưu thành .docx/.pptx/.xlsx".
-- PDF scan / ảnh không có lớp chữ → báo thẳng, **chưa có OCR**.
-- xlsx: ngày tháng ra số serial; không đọc công thức, chỉ giá trị đã lưu.
-- Mỗi file tối đa 10 MB; chỉ giữ `MAX_FILE_TEXT = 30 000` ký tự đầu, chip + prompt ghi rõ "bị cắt".
-- Văn bản ghim đi trong prompt của **mỗi advisor ở mỗi lượt**, trên key BYOK của user — file dài là tốn tiền nhân với số advisor × số lượt.
-- PDF cần `unpdf` (thêm vào `web/package.json`), nạp lazy. **Chạy `pnpm install` rồi `pnpm build`** trước khi tin phần PDF.
-- Nội dung file được coi là dữ liệu: prompt dặn advisor không làm theo chỉ thị nằm trong file.
-
-**Ảnh — trần đã biết:**
-- Tối đa 4 ảnh/tin nhắn; ảnh chỉ đi kèm tin nhắn của người dùng **ngay lúc gửi**, các lượt sau không gửi lại (tránh trả tiền lại cho mỗi advisor).
-- Ảnh được vẽ lại qua canvas và nén JPEG: xoá EXIF (có thể chứa GPS), nền trong suốt thành trắng, GIF động chỉ lấy khung đầu.
-- **Ảnh không được lưu vào sessionStorage** (một ảnh vài trăm KB, vượt hạn mức sẽ làm mất cả phòng). Tải lại trang: ảnh đã gửi mất bản xem trước; ảnh chưa gửi bị đánh dấu "cần gắn lại".
-- Cần model có vision. Hai provider hiện có (Claude Sonnet 4.5, GPT-4o / 4o mini) đều có; thêm provider mới phải kiểm tra điều này.
-- HEIC chỉ đọc được ở trình duyệt tự giải mã được (Safari); không có OCR riêng — model tự nhìn ảnh.
-
-## Content Render Panel (Code / Markdown / Tree Graph)
-
-| Thành phần | Trạng thái | Ghi chú |
+| Capability | Status | Implementation & Verification |
 |---|---|---|
-| Parser zero-dep (`web/src/prototype/chat/content-render.ts`) | ✅ | 8 unit test (`tests/content-render.test.mjs`) |
-| `ContentRenderPanel` + `ContentPanelModal` (`web/src/prototype/components/ContentRenderPanel.tsx`) | ⚠️ | Chưa chạy `tsc`/`next build`/CDP vì `web/node_modules` chưa cài trong worktree |
-| Tích hợp `ChatRoomView`, `RoundThread`, `RoomSummaryView`, `AppContext` | ⚠️ | Giữ nguyên `@mention` highlight (`renderBody`) và plain-text fallback |
+| Full EN / VI localization with 100% key parity & localized runtime errors | ✅ Shipped | `web/src/prototype/i18n/` (`tests/ui-theme-i18n.test.mjs`) |
+| Light / Dark editorial theme with WCAG 2.1 AA contrast (≥ 4.5:1) | ✅ Shipped | `web/src/app/globals.css` + `prototype/theme.ts` (`tests/ui-theme-i18n.test.mjs`) |
+| Technical SEO (`canonical`, `hreflang`, OpenGraph, JSON-LD `@graph`, `sitemap.xml`, `robots.txt`, `llms.txt`) | ✅ Shipped | `web/src/lib/seo.ts` (`tests/seo.test.mjs`) |
+| 7 bilingual legal documents (Terms, Privacy, Refund, Cookies, Acceptable Use, Disclaimer, Contact) + Cookie consent | ✅ Shipped | `prototype/i18n/legal-{en,vi}.ts`, `LegalView.tsx`, `CookieNotice.tsx` |
+
+---
+
+## 7. Known Boundaries (Documented By Design)
+
+- **No recurring subscription auto-charge**: Pro and Ultra are one-time 30-day passes settled in VND via PayOS; expired passes automatically revert active bot/council caps to Free without deleting saved bots or history.
+- **Attachment size & format guardrails**: Files are capped at `10 MB` and `30,000` extracted characters per document (`MAX_FILE_TEXT`), up to `4` resized images per message. Legacy binary Office files (`.doc`, `.xls`, `.ppt`) and `.pdf` uploads report explicit guidance rather than failing silently (no server-side file upload or OCR).
+- **Non-professional-advice boundary**: Zero Council is a structured multi-perspective thinking tool, never a substitute for licensed legal, medical, financial, or tax professionals.

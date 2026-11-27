@@ -8,7 +8,7 @@ import {
 } from '@/lib/byok/verify';
 import { maskProviderKey } from '@/lib/crypto/providerKeys';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 import { isBuiltinProviderId, isValidProviderId } from '@/lib/store/botValidation';
 import { isAllowedBuiltinModel, visibleModelsForProvider } from '@/prototype/chat/modelAllowList';
 import {
@@ -73,6 +73,9 @@ export async function GET() {
  * stored as "connected" — not through the UI and not by calling this API directly.
  */
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -122,7 +125,6 @@ export async function POST(request: Request) {
   if (isBuiltinProviderId(provider) && !isAllowedBuiltinModel(provider, selectedModel)) {
     return Response.json({ error: 'UNSUPPORTED_MODEL' }, { status: 400 });
   }
-  // Store exactly what was verified: quotes / "Bearer " / zero-width paste artifacts removed.
   const cleanKey = sanitizeApiKey(key);
   const verification = await verifyProviderKey(resolved.target, cleanKey, { model: selectedModel });
   if (!verification.ok) {
@@ -144,7 +146,6 @@ export async function POST(request: Request) {
       models: modelList,
       label: resolved.label,
       protocol: resolved.target.protocol,
-      // Persist the Base URL the API actually answered on (normalized, `/v1` appended if needed).
       baseUrl: verification.resolvedBaseUrl ?? resolved.target.baseUrl,
     });
     return Response.json(
@@ -168,6 +169,9 @@ export async function POST(request: Request) {
  * provider. A model that is not yet in the stored list is probed live with the stored key first.
  */
 export async function PATCH(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -248,6 +252,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
   try {

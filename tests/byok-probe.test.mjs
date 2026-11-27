@@ -127,6 +127,7 @@ test('google 200 strips models/ prefix and filters generateContent models', asyn
     },
     async () => {
       assert.deepEqual(await fetchProviderModels('google', GOOGLE_KEY), [
+        'gemini-2.5-flash',
         'gemini-3.5-flash-lite',
         'gemini-3.8-flash',
         'gemini-4-argon',

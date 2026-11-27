@@ -1,12 +1,16 @@
 import { adminOnly } from '@/lib/api/adminOnly';
 import { canResetPassword } from '@/lib/founder';
 import { currentAccount } from '@/lib/currentUser';
+import { verifySameOrigin } from '@/lib/security/request-guard';
 import { createAdminClient } from '@/lib/supabase/server';
 
 type Context = { params: Promise<{ email: string }> };
 
 /** Founder-only password reset via Supabase Auth Admin API (bcrypt handled by Supabase). */
 export async function POST(request: Request, context: Context) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const denied = await adminOnly();
   if (denied) return denied;
   const caller = await currentAccount();
@@ -26,13 +30,14 @@ export async function POST(request: Request, context: Context) {
   }
   try {
     const admin = createAdminClient();
-    // Find auth user id by email (list + filter; no plaintext password in app store).
     const { data, error: listError } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
     if (listError) return Response.json({ error: 'LIST_FAILED' }, { status: 500 });
     const found = data.users.find((u) => u.email?.toLowerCase() === target);
     if (!found) return Response.json({ error: 'UNKNOWN_USER' }, { status: 404 });
     const { error } = await admin.auth.admin.updateUserById(found.id, { password });
-    if (error) return Response.json({ error: 'RESET_FAILED', detail: error.message }, { status: 500 });
+    if (error) {
+      return Response.json({ error: 'RESET_FAILED', detail: error.message }, { status: 500 });
+    }
   } catch (error) {
     console.error('[admin] password reset failed:', (error as Error).message);
     return Response.json({ error: 'RESET_FAILED' }, { status: 500 });

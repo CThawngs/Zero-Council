@@ -17,6 +17,7 @@ const {
   checkRateLimit,
   enforceRateLimit,
   extractClientIp,
+  getClientIp,
   getRateLimitBucketCount,
   resetRateLimitStore,
 } = await import('../web/src/lib/security/rate-limit.ts');
@@ -115,19 +116,29 @@ test('providerKeys: ZC_REQUIRE_PROD_SECRETS=1 enforces explicit 32-byte base64 k
 
 // --- 2. rate-limit.ts sliding window, headers, and bounded memory ---
 
-test('rate-limit: extracts client IP from x-forwarded-for first hop, x-real-ip, or local fallback', () => {
-  const reqForwarded = new Request('http://localhost/api/test', {
+test('rate-limit: prefers x-vercel-forwarded-for and x-real-ip over spoofable leftmost x-forwarded-for', () => {
+  const reqVercel = new Request('http://localhost/api/test', {
+    headers: {
+      'x-vercel-forwarded-for': '203.0.113.55',
+      'x-real-ip': '198.51.100.4',
+      'x-forwarded-for': '1.2.3.4, 10.0.0.1',
+    },
+  });
+  assert.equal(getClientIp(reqVercel), '203.0.113.55');
+  assert.equal(extractClientIp(reqVercel), '203.0.113.55');
+
+  const reqRealIpVsSpoof = new Request('http://localhost/api/test', {
     headers: { 'x-forwarded-for': '203.0.113.9, 10.0.0.1', 'x-real-ip': '198.51.100.4' },
   });
-  assert.equal(extractClientIp(reqForwarded), '203.0.113.9');
+  assert.equal(getClientIp(reqRealIpVsSpoof), '198.51.100.4');
 
-  const reqRealIp = new Request('http://localhost/api/test', {
-    headers: { 'x-real-ip': '198.51.100.4' },
+  const reqForwardedChain = new Request('http://localhost/api/test', {
+    headers: { 'x-forwarded-for': '203.0.113.9, 198.51.100.7' },
   });
-  assert.equal(extractClientIp(reqRealIp), '198.51.100.4');
+  assert.equal(getClientIp(reqForwardedChain), '198.51.100.7');
 
   const reqLocal = new Request('http://localhost/api/test');
-  assert.equal(extractClientIp(reqLocal), 'local');
+  assert.equal(getClientIp(reqLocal), 'local');
 });
 
 test('rate-limit: sliding window enforces limit, emits 429 headers, and recovers after window expiry', async () => {

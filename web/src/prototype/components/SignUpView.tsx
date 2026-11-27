@@ -1,65 +1,82 @@
 'use client';
 
 import { createClient } from '@/lib/supabase/client';
+import Link from 'next/link';
 import { FormEvent, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { localizeAuthError } from '../i18n';
-import { CheckCircle2, Eye, EyeOff, LockKeyhole, Mail, UserPlus } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2, LockKeyhole, Mail, UserPlus } from 'lucide-react';
 import { AuthShowcase } from './AuthShowcase';
 
 export const SignUpView: React.FC = () => {
-    const { setCurrentView, t } = useApp();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState('');
-    const [message, setMessage] = useState('');
-    const [error, setError] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
+  const { setCurrentView, t } = useApp();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+
+  const anyBusy = submitting || oauthBusy;
 
   async function handleSignUp(event: FormEvent) {
     event.preventDefault();
+    if (anyBusy) return;
     setError('');
     setMessage('');
+    setSubmitting(true);
 
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      // Must point at the callback route, not at `/`. Supabase sends the confirmation link to
-      // `emailRedirectTo`, and the session cookie is only written by the handler in
-      // `/auth/callback` (`verifyOtp`). Sending the user straight to `/` drops the token: no
-      // cookie, no session, and the page loads as if the sign-up never happened.
-      options: { 
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-        data: {
-          has_password: true,
-        }
-      },
-    });
+    try {
+      const supabase = await createClient();
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            has_password: true,
+          },
+        },
+      });
 
-    if (error) {
-        setError(localizeAuthError(error.message, t));
+      if (signUpError) {
+        setError(localizeAuthError(signUpError.message, t));
         return;
-    }
+      }
 
-    setMessage(t.authCheckEmail);
+      setMessage(t.authCheckEmail);
+    } catch {
+      setError(t.authGenericError);
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const oauth = async (provider: 'google') => {
+    if (anyBusy) return;
     setError('');
     setMessage('');
-    const supabase = await createClient();
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider,
-      options: { 
-        redirectTo: `${window.location.origin}/auth/callback`,
-        queryParams: {
-          prompt: 'select_account',
-        }
-      },
-    });
-    if (error) setError(localizeAuthError(error.message, t));
-    // On success Supabase redirects the browser to the provider and back to /auth/callback,
-    // so there is nothing else to do here.
+    setOauthBusy(true);
+    try {
+      const supabase = await createClient();
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            prompt: 'select_account',
+          },
+        },
+      });
+      if (oauthError) {
+        setError(localizeAuthError(oauthError.message, t));
+        setOauthBusy(false);
+      }
+    } catch {
+      setError(t.authGenericError);
+      setOauthBusy(false);
+    }
   };
 
   return (
@@ -80,13 +97,17 @@ export const SignUpView: React.FC = () => {
             <label className="field">
               <span className="field-label">{t.authEmail}</span>
               <div className="relative">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
+                <Mail
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
+                  aria-hidden="true"
+                />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder={t.emailPlaceholder}
                   required
+                  disabled={anyBusy}
                   style={{ paddingLeft: '2.25rem' }}
                   autoComplete="email"
                 />
@@ -95,9 +116,12 @@ export const SignUpView: React.FC = () => {
 
             <label className="field">
               <span className="field-label">{t.authPassword}</span>
-              
+
               <div className="relative">
-                <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted" aria-hidden="true" />
+                <LockKeyhole
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-muted"
+                  aria-hidden="true"
+                />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={password}
@@ -105,7 +129,8 @@ export const SignUpView: React.FC = () => {
                   placeholder={t.authPasswordHint}
                   required
                   minLength={8}
-                  style={{ paddingLeft: '2.25rem', paddingRight: '2.75rem' }}
+                  disabled={anyBusy}
+                  style={{ paddingLeft: '2.25rem', paddingRight: '3.5rem' }}
                   autoComplete="new-password"
                 />
                 <button
@@ -119,10 +144,36 @@ export const SignUpView: React.FC = () => {
               </div>
             </label>
 
-            <button type="submit" className="button-primary min-h-11 w-full justify-center">
-              <UserPlus className="h-4 w-4" />
+            <button
+              type="submit"
+              disabled={anyBusy}
+              className="button-primary min-h-11 w-full justify-center disabled:opacity-60"
+            >
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+              )}
               {t.authSignUpAction}
             </button>
+
+            <p className="text-center text-xs leading-relaxed text-ink-muted">
+              {t.signUpTermsPrefix}{' '}
+              <Link
+                href="/legal/terms"
+                className="font-medium text-brass underline-offset-2 hover:underline"
+              >
+                {t.legal.terms.title}
+              </Link>{' '}
+              {t.signUpTermsAnd}{' '}
+              <Link
+                href="/legal/privacy"
+                className="font-medium text-brass underline-offset-2 hover:underline"
+              >
+                {t.legal.privacy.title}
+              </Link>
+              .
+            </p>
 
             {message && (
               <div className="flex gap-3 rounded-lg border border-sage/40 bg-sage/10 p-4 text-sm leading-relaxed text-ink">
@@ -130,7 +181,11 @@ export const SignUpView: React.FC = () => {
                 <span>{message}</span>
               </div>
             )}
-            {error && <p className="field-error" role="alert">{error}</p>}
+            {error && (
+              <p className="field-error" role="alert">
+                {error}
+              </p>
+            )}
 
             <div className="flex items-center gap-3 text-xs uppercase tracking-wide text-ink-muted">
               <span className="h-px flex-1 bg-border" />
@@ -138,20 +193,45 @@ export const SignUpView: React.FC = () => {
               <span className="h-px flex-1 bg-border" />
             </div>
 
-            <button type="button" onClick={() => oauth('google')} className="button-secondary min-h-11 w-full justify-center">
-              <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
-                <path fill="#4285F4" d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z" />
-                <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z" />
-                <path fill="#FBBC05" d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.93.46 3.76 1.27 5.39l4-3.11Z" />
-                <path fill="#EA4335" d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z" />
-              </svg>
+            <button
+              type="button"
+              onClick={() => void oauth('google')}
+              disabled={anyBusy}
+              className="button-secondary min-h-11 w-full justify-center disabled:opacity-60"
+            >
+              {oauthBusy ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    fill="#4285F4"
+                    d="M23.52 12.27c0-.85-.08-1.67-.22-2.45H12v4.64h6.47a5.53 5.53 0 0 1-2.4 3.63v3h3.88c2.27-2.09 3.57-5.17 3.57-8.82Z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3c-1.08.72-2.46 1.15-4.07 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.11A12 12 0 0 0 12 24Z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.27 14.28A7.2 7.2 0 0 1 4.89 12c0-.79.14-1.56.38-2.28V6.61H1.27A12 12 0 0 0 0 12c0 1.93.46 3.76 1.27 5.39l4-3.11Z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.77c1.76 0 3.34.6 4.58 1.79l3.44-3.44C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.69 1.27 6.61l4 3.11C6.22 6.88 8.87 4.77 12 4.77Z"
+                  />
+                </svg>
+              )}
               {t.authContinueGoogle}
             </button>
-
           </form>
 
           <p className="text-center text-sm text-ink-muted">
-            <button type="button" onClick={() => setCurrentView('sign-in')} className="font-medium text-brass hover:underline">
+            <button
+              type="button"
+              onClick={() => setCurrentView('sign-in')}
+              disabled={anyBusy}
+              className="font-medium text-brass hover:underline disabled:opacity-50"
+            >
               {t.authOrSignIn}
             </button>
           </p>

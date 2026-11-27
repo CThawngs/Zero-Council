@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { runTurn, USER_HANDLE } from '../web/src/prototype/chat/engine.ts';
-import { scriptedGenerator } from '../web/src/prototype/chat/scripted.ts';
+import { scriptedGenerator } from './helpers/scripted.ts';
 import { byokGenerator } from '../web/src/prototype/chat/byok.ts';
 
 const ROSTER = [

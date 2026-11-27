@@ -21,7 +21,7 @@ const {
   planSpeakers,
   runTurn,
 } = engine;
-const { scriptedGenerator } = await import('../web/src/prototype/chat/scripted.ts');
+const { scriptedGenerator } = await import('./helpers/scripted.ts');
 
 const ROSTER = [
   { id: 'pragmatist', name: 'The Pragmatist' },

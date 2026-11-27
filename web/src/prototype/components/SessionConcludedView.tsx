@@ -1,11 +1,13 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { modelLabel, providerLabel } from '../data/mockData';
+import { modelLabel, providerLabel } from '../data/catalog';
 import { extractReadableSummary, matchPersonaId } from '../chat/conclusion';
 import {
+  ArrowLeft,
   Copy,
   ListChecks,
   Maximize2,
+  MessageSquare,
   Quote,
   ShieldAlert,
   UsersRound,
@@ -18,6 +20,8 @@ import { ContentRenderPanel } from './ContentRenderPanel';
 export const SessionConcludedView: React.FC = () => {
   const {
     currentSession,
+    currentRoom,
+    setCurrentView,
     openContentPanel,
     showToast,
     t,
@@ -90,6 +94,26 @@ export const SessionConcludedView: React.FC = () => {
             />
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">{t.concludedBody}</p>
           </div>
+          {currentRoom && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentView('room-summary')}
+                className="button-secondary min-h-11 justify-center"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                {t.sessionBackToSummary}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrentView('chat-room')}
+                className="button-quiet min-h-11 justify-center"
+              >
+                <MessageSquare className="h-4 w-4" aria-hidden="true" />
+                {t.sessionBackToChat}
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
@@ -195,7 +219,7 @@ export const SessionConcludedView: React.FC = () => {
               type="button"
               onClick={() => void handleCopySummary()}
               disabled={isCopying}
-              className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-brass px-4 py-2.5 text-sm font-semibold text-accent-ink transition hover:bg-brass/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brass disabled:cursor-wait disabled:opacity-60"
+              className="button-primary min-h-11 shrink-0 justify-center disabled:cursor-wait disabled:opacity-60"
             >
               <Copy className="h-4 w-4" aria-hidden="true" />
               {t.copySummary}
@@ -228,7 +252,6 @@ export const SessionConcludedView: React.FC = () => {
             return (
               <article
                 key={`${contribution.advisorId}-${index}`}
-                // `min-w-0` stops long unbroken text from blowing out the 3-column CSS grid track.
                 className="min-w-0 rounded-2xl border border-border bg-surface p-5"
               >
                 <div className="border-b border-border pb-3">
@@ -247,7 +270,6 @@ export const SessionConcludedView: React.FC = () => {
                     </p>
                   )}
                 </div>
-                {/* Allow both inline expand/collapse and full panel modal for rich advisor testimonies */}
                 {rich ? (
                   <>
                     <ExpandableText

@@ -1,20 +1,9 @@
-/**
- * POST /api/providers/test
- *
- * Re-tests an ALREADY SAVED provider key (the "Re-test connection" button or custom-model probe).
- * Client sends `{ providerId, model? }` — the server decrypts the stored key and runs the same
- * strict verification as `/api/providers/verify` for all three protocols: `openai`, `anthropic`
- * and `google`.
- *
- * Response: { ok: true, models, verifiedModel } on success, { ok: false, error: <code> } on failure.
- */
-
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { getKey } from '@/lib/byok/key-store';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 import { listProviderKeys, providerStoreErrorOf } from '@/lib/store/providerKeys';
 
 /** Verification probes several models with a per-request timeout; give the function room. */
@@ -24,6 +13,9 @@ const MAX_BODY_BYTES = 32 * 1024;
 const MAX_MODEL_ID_LENGTH = 200;
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -53,7 +45,6 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: 'INVALID_MODEL' }, { status: 400 });
   }
 
-  // Look up metadata (protocol, baseUrl, model) without the key.
   let records: Awaited<ReturnType<typeof listProviderKeys>>;
   try {
     records = await listProviderKeys(user.email);
@@ -67,13 +58,11 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: 'PROVIDER_NOT_CONNECTED' }, { status: 404 });
   }
 
-  // Built-ins re-resolve to their locked canonical endpoint; customs re-pass the SSRF guard.
   const resolved = resolveVerifyTarget({ provider: providerId, baseUrl: record.baseUrl });
   if (!resolved.ok) {
     return Response.json({ ok: false, error: resolved.error }, { status: 400 });
   }
 
-  // Decrypt the key server-side — it never leaves the server.
   let apiKey: string | null;
   try {
     apiKey = await getKey(user.email, providerId);

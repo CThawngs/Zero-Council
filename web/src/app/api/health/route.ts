@@ -1,6 +1,6 @@
 import { getEncryptionMode, isEncryptionKeyConfigured } from '@/lib/crypto/providerKeys';
 import { isSupabaseServerConfigured } from '@/lib/devAuth';
-import { serverEnv } from '@/lib/serverEnv';
+import { isPayosConfigured } from '@/lib/payos/config';
 
 const HEALTH_HEADERS = {
   'Cache-Control': 'no-store, max-age=0',
@@ -13,11 +13,7 @@ const buildHealthPayload = () => ({
   uptimeSeconds: Math.floor(process.uptime()),
   checks: {
     supabaseConfigured: isSupabaseServerConfigured(),
-    payosConfigured: Boolean(
-      (serverEnv('PAYOS_CLIENT_ID') || serverEnv('PAYLOS_CLIENT_ID')) &&
-        (serverEnv('PAYOS_API_KEY') || serverEnv('PAYLOS_API_KEY')) &&
-        (serverEnv('PAYOS_CHECKSUM_KEY') || serverEnv('PAYLOS_CHECKSUM_KEY'))
-    ),
+    payosConfigured: isPayosConfigured(),
     encryptionKeyConfigured: isEncryptionKeyConfigured(),
     // Which key protects stored provider keys — a label only, never key material.
     encryptionMode: getEncryptionMode(),

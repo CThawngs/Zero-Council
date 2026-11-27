@@ -1,20 +1,36 @@
+import { serverEnv } from './serverEnv.ts';
+
 /**
- * The founder is the hard-coded supreme admin of the whole project. Unlike a normal
- * admin row in `zc_users`, this identity is not stored anywhere and cannot be granted
- * or revoked from the admin page: it is a literal email the server compares against.
+ * Default supreme-admin founder email when `FOUNDER_EMAILS` is not configured.
  *
- * Only the founder may demote an admin back to `user`, and only the founder's account
- * may have its password reset through the admin API. Normal admins can promote other
- * accounts to admin, but the demotion and the password change are founder-only.
+ * Unlike normal `admin` rows in `zc_users`, founder identities cannot be granted or
+ * revoked from the admin UI: only a founder may demote an `admin` back to `user`, and
+ * only a founder may reset passwords through the admin API.
  */
 export const FOUNDER_EMAIL = 'nguyenchithang2804@gmail.com';
 
+/**
+ * Resolves the active set of lowercased founder emails at runtime.
+ * Reads comma-separated `FOUNDER_EMAILS` when configured, falling back to `[FOUNDER_EMAIL]`.
+ */
+export const getFounderEmails = (): ReadonlySet<string> => {
+  const configured = serverEnv('FOUNDER_EMAILS')?.trim();
+  if (!configured) {
+    return new Set([FOUNDER_EMAIL]);
+  }
+  const parsed = configured
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
+  return parsed.length > 0 ? new Set(parsed) : new Set([FOUNDER_EMAIL]);
+};
+
 export const isFounder = (email: string | null | undefined): boolean =>
-  typeof email === 'string' && email.trim().toLowerCase() === FOUNDER_EMAIL;
+  typeof email === 'string' && getFounderEmails().has(email.trim().toLowerCase());
 
 /**
  * Whether `caller` may set `target` to `nextRole`. Promotion (to `admin`) is open to
- * every admin; demotion (from `admin` to `user`) is founder-only, and the founder's
+ * every admin; demotion (from `admin` to `user`) is founder-only, and a founder's
  * own row can never be demoted at all.
  */
 export const canSetRole = (
@@ -30,6 +46,6 @@ export const canSetRole = (
   return isFounder(callerEmail);
 };
 
-/** Only the founder account may be reset through the admin API. */
+/** Only a founder account may reset passwords through the admin API. */
 export const canResetPassword = (callerEmail: string | null | undefined): boolean =>
   isFounder(callerEmail);

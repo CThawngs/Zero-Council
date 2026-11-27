@@ -26,32 +26,28 @@ export const HeaderLoading: React.FC<HeaderLoadingProps> = ({ isWorkspace = fals
         {/* Navigation skeleton only for Home / Landing page */}
         {!isWorkspace && (
           <nav className="header-nav hidden min-w-0 items-center gap-6 lg:flex">
-            <div className="h-4 w-20 rounded bg-surface-2" />
-            <div className="h-4 w-16 rounded bg-surface-2" />
-            <div className="h-4 w-24 rounded bg-surface-2" />
+            <div className="h-4 w-20 rounded border border-border/60 bg-surface-2" />
+            <div className="h-4 w-16 rounded border border-border/60 bg-surface-2" />
+            <div className="h-4 w-24 rounded border border-border/60 bg-surface-2" />
           </nav>
         )}
 
         {/* Controls skeleton (Language, Theme, CTA / Sign In, Menu) */}
         <div className="flex items-center gap-1.5">
-          {/* Language button skeleton */}
-          <div className="icon-button header-compact-control min-w-16 gap-2 px-3 opacity-80 pointer-events-none">
+          <div className="icon-button header-compact-control pointer-events-none min-w-16 gap-2 px-3 opacity-80">
             <Globe2 className="h-5 w-5 shrink-0 text-ink-muted" aria-hidden="true" />
-            <div className="h-4 w-6 rounded bg-surface-2" />
+            <div className="h-4 w-6 rounded border border-border/60 bg-surface-2" />
           </div>
 
-          {/* Theme button skeleton */}
-          <div className="icon-button min-w-16 gap-2 px-3 opacity-80 pointer-events-none">
-            <div className="h-4 w-4 rounded-full bg-surface-2" />
+          <div className="icon-button pointer-events-none min-w-16 gap-2 px-3 opacity-80">
+            <div className="h-4 w-4 rounded-full border border-border/60 bg-surface-2" />
           </div>
 
-          {/* CTA / Action button skeleton */}
-          <div className="button-secondary header-cta min-w-[5rem] max-w-[13rem] opacity-80 pointer-events-none flex items-center justify-center">
-            <div className="h-4 w-14 rounded bg-surface-2" />
+          <div className="button-secondary header-cta pointer-events-none flex min-w-[5rem] max-w-[13rem] items-center justify-center opacity-80">
+            <div className="h-4 w-14 rounded border border-border/60 bg-surface-2" />
           </div>
 
-          {/* Mobile menu button skeleton */}
-          <div className="icon-button header-menu min-w-11 opacity-80 pointer-events-none flex items-center justify-center">
+          <div className="icon-button header-menu pointer-events-none flex min-w-11 items-center justify-center opacity-80">
             <Menu className="h-5 w-5 text-ink-muted" />
           </div>
         </div>

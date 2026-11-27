@@ -11,8 +11,12 @@ import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { getKey } from '@/lib/byok/key-store';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
-import { isValidProviderId } from '@/lib/store/botValidation';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
+import { assertSafeRemoteUrl, isPrivateProviderNetworkAllowed } from '@/lib/security/ssrf';
+import { effectivePlan } from '@/lib/store/account';
+import { listBots } from '@/lib/store/bots';
+import { isCustomProviderId, isValidProviderId } from '@/lib/store/botValidation';
+import { isBotDisabledForPlan, resolveRequestBotIds } from '@/lib/store/planLimits';
 import { listProviderKeys, providerStoreErrorOf } from '@/lib/store/providerKeys';
 import { byokGenerator, completeByokText } from '@/prototype/chat/byok';
 import type { ChatTurnRequest } from '@/prototype/chat/engine';
@@ -23,6 +27,9 @@ const MAX_BODY_BYTES = 2 * 1024 * 1024;
 const MAX_MODEL_ID_LENGTH = 200;
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -42,16 +49,18 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, error: 'INVALID_BODY' }, { status: 400 });
   }
 
-  const { mode, provider, model, system, prompt, maxTokens, persona, turnRequest } = body as {
-    mode?: unknown;
-    provider?: unknown;
-    model?: unknown;
-    system?: unknown;
-    prompt?: unknown;
-    maxTokens?: unknown;
-    persona?: unknown;
-    turnRequest?: unknown;
-  };
+  const { mode, provider, model, botId, system, prompt, maxTokens, persona, turnRequest } =
+    body as {
+      mode?: unknown;
+      provider?: unknown;
+      model?: unknown;
+      botId?: unknown;
+      system?: unknown;
+      prompt?: unknown;
+      maxTokens?: unknown;
+      persona?: unknown;
+      turnRequest?: unknown;
+    };
 
   if (mode !== 'text' && mode !== 'turn') {
     return Response.json({ ok: false, error: 'INVALID_MODE' }, { status: 400 });
@@ -61,6 +70,27 @@ export async function POST(request: Request) {
   }
   if (typeof model !== 'string' || !model.trim() || model.trim().length > MAX_MODEL_ID_LENGTH) {
     return Response.json({ ok: false, error: 'MODEL_REQUIRED' }, { status: 400 });
+  }
+
+  const turnBotHandle =
+    turnRequest && typeof turnRequest === 'object'
+      ? ((turnRequest as { bot?: { id?: unknown } }).bot?.id ?? undefined)
+      : undefined;
+  const targetBotIds = resolveRequestBotIds(botId, turnBotHandle);
+  if (targetBotIds.length > 0) {
+    try {
+      const [planRecord, userBots] = await Promise.all([
+        effectivePlan(user.email).catch(() => null),
+        listBots(user.email),
+      ]);
+      const planId = planRecord?.planId ?? 'free';
+      if (targetBotIds.some((targetBotId) => isBotDisabledForPlan(targetBotId, userBots, planId))) {
+        return Response.json({ ok: false, error: 'PLAN_BOT_LIMIT' }, { status: 403 });
+      }
+    } catch (error) {
+      console.error('[providers/chat] plan bot check failed:', (error as Error).message);
+      return Response.json({ ok: false, error: 'PLAN_CHECK_FAILED' }, { status: 500 });
+    }
   }
 
   let records: Awaited<ReturnType<typeof listProviderKeys>>;
@@ -80,6 +110,17 @@ export async function POST(request: Request) {
   const resolved = resolveVerifyTarget({ provider, baseUrl: record.baseUrl });
   if (!resolved.ok) {
     return Response.json({ ok: false, error: resolved.error }, { status: 400 });
+  }
+
+  if (isCustomProviderId(provider) && !isPrivateProviderNetworkAllowed()) {
+    try {
+      await assertSafeRemoteUrl(resolved.target.baseUrl, {
+        requireHttps: true,
+        allowPrivateNetwork: false,
+      });
+    } catch {
+      return Response.json({ ok: false, error: 'INVALID_BASE_URL' }, { status: 400 });
+    }
   }
 
   let apiKey: string | null;
@@ -103,7 +144,7 @@ export async function POST(request: Request) {
   };
 
   try {
-    const signal = AbortSignal.timeout(55_000);
+    const signal = AbortSignal.any([request.signal, AbortSignal.timeout(55_000)]);
     if (mode === 'text') {
       if (typeof prompt !== 'string' || !prompt.trim()) {
         return Response.json({ ok: false, error: 'PROMPT_REQUIRED' }, { status: 400 });
@@ -135,6 +176,9 @@ export async function POST(request: Request) {
     });
     return Response.json({ ok: true, turn });
   } catch (error) {
+    if (request.signal.aborted) {
+      return Response.json({ ok: false, error: 'CLIENT_ABORTED' }, { status: 499 });
+    }
     const message = error instanceof Error ? error.message : 'PROVIDER_ERROR';
     console.error(`[providers/chat] ${provider} completion failed:`, message.slice(0, 200));
     return Response.json({ ok: false, error: 'PROVIDER_ERROR' }, { status: 502 });

@@ -24,7 +24,7 @@ const {
 
 const { buildSystemPrompt } = await import('../web/src/prototype/chat/prompts.ts');
 const { resolveTarget } = await import('../web/src/prototype/chat/byok.ts');
-const { scriptedGenerator } = await import('../web/src/prototype/chat/scripted.ts');
+const { scriptedGenerator } = await import('./helpers/scripted.ts');
 const {
   buildFallbackConclusion,
   pickConclusionAnalyst,

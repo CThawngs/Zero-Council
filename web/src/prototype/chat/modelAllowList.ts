@@ -1,50 +1,48 @@
 /**
- * Allow-lists and non-text-chat exclusion patterns for built-in BYOK providers.
+ * Single source of truth for BYOK model allow-lists and non-chat capability exclusions.
  *
- * Keeps `fetchProviderModels` focused on active, text-chat models and filters out
- * retired/deprecated versions as well as video, voice, TTS, image, and embedding models.
+ * Keeps `fetchProviderModels`, `verifyProviderKey`, and UI model pickers focused on active
+ * text-chat models while filtering out embeddings, audio/TTS/STT, image/video generation,
+ * moderation/safety classifiers, legacy completion-only `-instruct` endpoints, and retired models.
  */
 
 import type { BuiltinProviderId } from './byok.ts';
 
 /**
- * Patterns for non-text-chat capabilities (video, voice/audio, TTS, image gen, embeddings, moderation).
- * Applied across all built-in providers before checking provider-specific allow-lists.
+ * Unified non-chat model exclusion pattern shared by both UI model filtering (`modelAllowList.ts`)
+ * and strict server/client key verification (`lib/byok/verify.ts`).
+ *
+ * Note: `gpt-[^/]*-instruct` and `turbo-instruct` target legacy OpenAI completion-only endpoints
+ * without excluding chat-tuned open-weight models like `meta/llama-3.1-8b-instruct`.
  */
-export const NON_TEXT_CHAT_PATTERNS: readonly RegExp[] = [
-  /\btts\b/i,
-  /-tts\b/i,
-  /\bwhisper\b/i,
-  /\btranscribe\b/i,
-  /\brealtime\b/i,
-  /\bnative-audio\b/i,
-  /\baudio\b/i,
-  /\bvoice\b/i,
-  /\bvideo\b/i,
-  /\bveo\b/i,
-  /\bsora\b/i,
-  /\bimagen\b/i,
-  /\bdall-e\b/i,
-  /\bgpt-image\b/i,
-  /-image\b/i,
-  /\bembedding\b/i,
-  /\bembed\b/i,
-  /\bmoderation\b/i,
-  /\brerank\b/i,
-  /\baqa\b/i,
-];
+export const NON_CHAT_MODEL_PATTERN =
+  /(embed|whisper|tts|audio|voice|speech|transcri|dall-e|imagen|image-|-image\b|gpt-image|chatgpt-image|video|veo|sora|lyria|moderation|rerank|realtime|search-preview|guard|aqa|clip|ocr|starcoder|retriev|detector|safety|reward|pii|calibrat|translat|babbage|davinci|gpt-[^/]*-instruct|turbo-instruct|codex|computer-use|robotics)/i;
+
+/** Backwards-compatible pattern array export wrapping `NON_CHAT_MODEL_PATTERN`. */
+export const NON_TEXT_CHAT_PATTERNS: readonly RegExp[] = [NON_CHAT_MODEL_PATTERN];
+
+/**
+ * Returns `true` when `modelId` belongs to a non-text-chat capability (embeddings, audio/TTS/STT,
+ * image/video generation, moderation, safety guards, legacy completion-only instruct, etc.).
+ */
+export const isNonChatModel = (modelId: string): boolean => NON_CHAT_MODEL_PATTERN.test(modelId.trim());
+
+/** Valid OpenRouter `<vendor>/<model>` identifier (including `:free`, `:extended`, etc.). */
+const OPENROUTER_MODEL_ID_PATTERN = /^[\w.-]+\/[\w.:-]+$/;
 
 /**
  * Active text-chat model prefixes per built-in provider.
- * A model ID is kept if it does not match `NON_TEXT_CHAT_PATTERNS` and starts with
- * at least one prefix listed for its provider.
+ *
+ * - `google` includes live GA `gemini-2.5-*` (`gemini-2.5-pro`, `gemini-2.5-flash`,
+ *   `gemini-2.5-flash-lite`) alongside `gemini-3.*` / `gemini-4*` and `gemma-3*` / `gemma-4*`.
+ * - `openrouter` aggregates dozens of active text-chat vendors (`openai/`, `anthropic/`, `google/`,
+ *   `meta-llama/`, `deepseek/`, `mistralai/`, `qwen/`, `nvidia/`, `liquid/`, `moonshotai/`,
+ *   `minimax/`, `z-ai/`, `microsoft/`, `nousresearch/`, etc.), so any valid `<vendor>/<model>` ID
+ *   that passes `!isNonChatModel` is accepted.
  */
 export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string[]>> = {
-  // Google Gemini: keep active Gemini 3.x/4.x (e.g. Hydrogen, Argon) and Gemma 3/4 text models; exclude deprecated 1.5/2.0/2.5.
-  google: ['gemini-3.', 'gemini-3-', 'gemini-4', 'gemma-3', 'gemma-4'],
-  // OpenAI: keep active GPT-4o+, GPT-5/6, o-series, and ChatGPT text models; exclude retired gpt-3.5 and audio/tts/image.
+  google: ['gemini-2.5-', 'gemini-3.', 'gemini-3-', 'gemini-4', 'gemma-3', 'gemma-4'],
   openai: ['gpt-4o', 'gpt-4.1', 'gpt-4.5', 'gpt-5', 'gpt-6', 'o1', 'o3', 'o4', 'chatgpt-4o'],
-  // Anthropic (Claude): keep active Claude 3.5+ and Claude 4/5 text models; exclude retired claude-2/instant/3.0.
   anthropic: [
     'claude-3-5-',
     'claude-3-7-',
@@ -58,7 +56,6 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
     'claude-fable-',
     'claude-5-',
   ],
-  // Groq: active Llama, Qwen, DeepSeek, Gemma, Mistral/Mixtral, and GPT-OSS text models; excludes whisper/tts.
   groq: [
     'llama-3.1-',
     'llama-3.3-',
@@ -72,21 +69,7 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
     'compound-',
     'openai/gpt-oss-',
   ],
-  // xAI (Grok): active Grok 2/3/4/code text models; non-text image/video models are excluded by NON_TEXT_CHAT_PATTERNS.
   xai: ['grok-2', 'grok-3', 'grok-4', 'grok-code'],
-  // OpenRouter: major active text-chat vendor prefixes; non-text models are excluded by NON_TEXT_CHAT_PATTERNS.
-  openrouter: [
-    'openai/',
-    'anthropic/',
-    'google/',
-    'meta-llama/',
-    'deepseek/',
-    'mistralai/',
-    'qwen/',
-    'x-ai/',
-    'cohere/',
-  ],
-  // NVIDIA NIM: active Llama, DeepSeek, Qwen, Mistral, Gemma, and Nemotron text-chat models.
   nvidia: [
     'meta/llama-3',
     'meta/llama-4',
@@ -97,12 +80,22 @@ export const MODEL_ALLOW_LIST: Partial<Record<BuiltinProviderId, readonly string
     'nvidia/llama',
     'nvidia/nemotron',
   ],
-  // DeepSeek: active text-chat and reasoning models (including V4 / Flash).
   deepseek: ['deepseek-chat', 'deepseek-reasoner', 'deepseek-coder', 'deepseek-v4', 'deepseek-flash'],
 };
 
+const BUILTIN_FILTERED_PROVIDERS: ReadonlySet<string> = new Set<BuiltinProviderId>([
+  'anthropic',
+  'openai',
+  'google',
+  'groq',
+  'xai',
+  'openrouter',
+  'nvidia',
+  'deepseek',
+]);
+
 /**
- * Returns true when `modelId` is an active text-chat model for the given built-in provider.
+ * Returns `true` when `modelId` is an active text-chat model for the given built-in provider.
  */
 export const isAllowedBuiltinModel = (
   providerId: BuiltinProviderId,
@@ -110,9 +103,12 @@ export const isAllowedBuiltinModel = (
 ): boolean => {
   const id = modelId.trim();
   if (!id) return false;
-  if (NON_TEXT_CHAT_PATTERNS.some((pattern) => pattern.test(id))) {
-    return false;
+  if (isNonChatModel(id)) return false;
+
+  if (providerId === 'openrouter') {
+    return OPENROUTER_MODEL_ID_PATTERN.test(id);
   }
+
   const allowPrefixes = MODEL_ALLOW_LIST[providerId];
   if (!allowPrefixes) return true;
   return allowPrefixes.some((prefix) => id.startsWith(prefix));
@@ -128,7 +124,8 @@ export const filterBuiltinModels = (
 
 /**
  * Returns the deduped list of models to display for a provider in UI dropdowns.
- * Built-in providers are filtered through `filterBuiltinModels`; custom providers keep all models.
+ * Built-in providers are filtered through `filterBuiltinModels`; custom providers keep all models
+ * except non-chat capabilities when empty.
  */
 export const visibleModelsForProvider = (
   providerId: string,
@@ -142,7 +139,7 @@ export const visibleModelsForProvider = (
         ? [fallbackModel]
         : [];
   const deduped = Array.from(new Set(base.map((m) => m.trim()).filter(Boolean)));
-  if (Object.prototype.hasOwnProperty.call(MODEL_ALLOW_LIST, providerId)) {
+  if (BUILTIN_FILTERED_PROVIDERS.has(providerId)) {
     return filterBuiltinModels(providerId as BuiltinProviderId, deduped);
   }
   return deduped;

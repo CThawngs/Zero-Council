@@ -1,4 +1,4 @@
-import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/engine';
+import type { CommunicationMode, FrameworkId, Round } from '@/lib/deliberation/types';
 import type { ChatMessage, ChatMode, TurnFailure, WhyStop } from './chat/engine';
 
 export type ViewType =
@@ -68,6 +68,9 @@ export type SupportedModel =
   | 'claude-sonnet-4-5'
   | 'gpt-4o'
   | 'gpt-4o-mini'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-pro'
+  | 'gemini-2.5-flash-lite'
   | 'gemini-3.5-flash-lite'
   | 'llama-3.3-70b-versatile'
   | 'grok-2-latest'

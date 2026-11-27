@@ -23,18 +23,31 @@ const bash = process.platform === 'win32' ? 'C:/Program Files/Git/bin/bash.exe' 
 const SECRETS = {
   VERCEL_TOKEN: 'tok-secret',
   VERCEL_PROJECT: 'zero-council',
-  PAYLOS_CLIENT_ID: 'cid',
-  PAYLOS_API_KEY: 'key',
-  PAYLOS_CHECKSUM_KEY: 'checksum',
+  PAYOS_CLIENT_ID: 'cid',
+  PAYOS_API_KEY: 'key',
+  PAYOS_CHECKSUM_KEY: 'checksum',
   SUPABASE_URL: 'https://abc.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'sb-secret',
+  ZC_PROVIDER_KEY_SECRET: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
 };
+
+const OPTIONAL_KEYS = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+  'NEXT_PUBLIC_SITE_URL',
+  'NEXT_PUBLIC_ANALYTICS_WEBSITE_ID',
+  'FOUNDER_EMAILS',
+];
 
 /** Chạy script với env cho sẵn, trả { code, stdout, stderr }. */
 const runScript = (env) =>
   new Promise((resolve) => {
+    const cleanParentEnv = { ...process.env };
+    for (const key of OPTIONAL_KEYS) {
+      delete cleanParentEnv[key];
+    }
     const child = spawn(bash, [script], {
-      env: { ...process.env, ...env, VERCEL_API_BASE: env.VERCEL_API_BASE },
+      env: { ...cleanParentEnv, ...env, VERCEL_API_BASE: env.VERCEL_API_BASE },
       cwd: root,
     });
     let stdout = '';
@@ -63,7 +76,7 @@ const stub = (status = 200) => {
   return { seen, server, listen: () => new Promise((r) => server.listen(0, '127.0.0.1', r)), close: () => new Promise((r) => server.close(r)) };
 };
 
-test('đẩy đúng 5 biến, dạng encrypted, chỉ target production', async () => {
+test('đẩy đúng 6 biến bắt buộc chuẩn PAYOS_* + ZC_PROVIDER_KEY_SECRET, dạng encrypted, chỉ target production', async () => {
   const s = stub(200);
   await s.listen();
   const { port } = s.server.address();
@@ -77,10 +90,18 @@ test('đẩy đúng 5 biến, dạng encrypted, chỉ target production', async 
   assert.equal(call.headers.authorization, 'Bearer tok-secret');
 
   const sent = JSON.parse(call.body);
-  assert.ok(Array.isArray(sent), 'gửi một mảng trong một request, không phải 5 request');
-  assert.deepEqual(sent.map((v) => v.key), [
-    'PAYLOS_CLIENT_ID', 'PAYLOS_API_KEY', 'PAYLOS_CHECKSUM_KEY', 'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
-  ]);
+  assert.ok(Array.isArray(sent), 'gửi một mảng trong một request, không phải nhiều request');
+  assert.deepEqual(
+    sent.map((v) => v.key),
+    [
+      'PAYOS_CLIENT_ID',
+      'PAYOS_API_KEY',
+      'PAYOS_CHECKSUM_KEY',
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'ZC_PROVIDER_KEY_SECRET',
+    ]
+  );
   for (const v of sent) {
     assert.equal(v.type, 'encrypted', `${v.key} phải là encrypted, không phải readable trong UI Vercel`);
     assert.deepEqual(v.target, ['production'], `${v.key} không được lọt sang preview/dev`);
@@ -88,6 +109,35 @@ test('đẩy đúng 5 biến, dạng encrypted, chỉ target production', async 
   assert.equal(sent.find((v) => v.key === 'SUPABASE_SERVICE_ROLE_KEY').value, 'sb-secret');
   assert.ok(!result.stdout.includes('sb-secret'), 'không được in giá trị secret ra log');
   assert.ok(!result.stdout.includes('checksum'), 'không được in giá trị secret ra log');
+});
+
+test('đẩy kèm các biến tùy chọn khi được khai báo khác rỗng', async () => {
+  const s = stub(200);
+  await s.listen();
+  const { port } = s.server.address();
+  const result = await runScript({
+    ...SECRETS,
+    NEXT_PUBLIC_SITE_URL: 'https://zerocouncil.app',
+    FOUNDER_EMAILS: 'founder@zerocouncil.app',
+    VERCEL_API_BASE: `http://127.0.0.1:${port}`,
+  });
+  await s.close();
+
+  assert.equal(result.code, 0, result.stderr);
+  const sent = JSON.parse(s.seen[0].body);
+  assert.deepEqual(
+    sent.map((v) => v.key),
+    [
+      'PAYOS_CLIENT_ID',
+      'PAYOS_API_KEY',
+      'PAYOS_CHECKSUM_KEY',
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'ZC_PROVIDER_KEY_SECRET',
+      'NEXT_PUBLIC_SITE_URL',
+      'FOUNDER_EMAILS',
+    ]
+  );
 });
 
 test('project thuộc team thì gửi kèm teamId', async () => {
@@ -99,18 +149,18 @@ test('project thuộc team thì gửi kèm teamId', async () => {
   assert.match(s.seen[0].url, /teamId=team_abc/);
 });
 
-test('thiếu một biến thì dừng, không gửi gì cả', async () => {
+test('thiếu một biến bắt buộc thì dừng, không gửi gì cả', async () => {
   const s = stub(200);
   await s.listen();
   const { port } = s.server.address();
   const env = { ...SECRETS, VERCEL_API_BASE: `http://127.0.0.1:${port}` };
-  delete env.SUPABASE_SERVICE_ROLE_KEY;
+  delete env.ZC_PROVIDER_KEY_SECRET;
   const result = await runScript(env);
   await s.close();
 
   assert.notEqual(result.code, 0);
-  assert.match(result.stderr, /SUPABASE_SERVICE_ROLE_KEY/);
-  assert.equal(s.seen.length, 0, 'không được đẩy nửa vời — 4 biến còn lại sẽ vào Vercel thiếu 1');
+  assert.match(result.stderr, /ZC_PROVIDER_KEY_SECRET/);
+  assert.equal(s.seen.length, 0, 'không được đẩy nửa vời khi thiếu secret bắt buộc');
 });
 
 test('Vercel từ chối thì exit khác 0 và in lý do', async () => {
@@ -130,8 +180,6 @@ test('thư mục tạm chứa token phải được dọn sau khi chạy', async
   const s = stub(200);
   await s.listen();
   const { port } = s.server.address();
-  // Trỏ TMPDIR vào chỗ kiểm soát được để xem script có dọn hay không. Nếu còn sót,
-  // thư mục này sẽ chứa file curl config với VERCEL_TOKEN nằm trong đó.
   const tmp = mkdtempSync(path.join(tmpdir(), 'zc-work-'));
   const before = readdirSync(tmp);
   const result = await runScript({ ...SECRETS, VERCEL_API_BASE: `http://127.0.0.1:${port}`, TMPDIR: tmp });

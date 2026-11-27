@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { useApp } from '@/prototype/context/AppContext';
 import { Footer } from '@/prototype/components/Footer';
 import { Header } from '@/prototype/components/Header';
@@ -11,95 +11,136 @@ import { SetPasswordView } from '@/prototype/components/SetPasswordView';
 import { createClient } from '@/lib/supabase/client';
 import { needsPasswordSet } from '@/lib/auth-password';
 
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
+function resolveAuthViewFromLocation(): 'sign-in' | 'sign-up' | 'set-password' {
+  if (typeof window === 'undefined') return 'sign-in';
+  const params = new URLSearchParams(window.location.search);
+  if (
+    window.location.hash.includes('access_token') ||
+    params.has('code') ||
+    params.get('reset') === '1'
+  ) {
+    return 'set-password';
+  }
+  if (params.get('mode') === 'signup') {
+    return 'sign-up';
+  }
+  return 'sign-in';
+}
+
 function AuthContent() {
-    const { currentView, setCurrentView, t } = useApp();
-    const isPublicPage = true;
-    const mainRef = useRef<HTMLElement>(null);
-    // Keep a ref so the auth listener callback can read the current view
-    // without being listed as a dependency (listener is registered once).
-    const currentViewRef = useRef(currentView);
-    useEffect(() => { currentViewRef.current = currentView; });
+  const { currentView, setCurrentView, t } = useApp();
+  const isPublicPage = true;
+  const mainRef = useRef<HTMLElement>(null);
+  const currentViewRef = useRef(currentView);
+  useEffect(() => {
+    currentViewRef.current = currentView;
+  });
 
-    // This route has its own fresh AppProvider (separate from the main app),
-    // so currentView always starts at its default ('overview'). Point it at
-    // the sign-in form the first time this page mounts.
+  // Synchronize initial auth view before first browser paint so /auth and /auth?mode=signup
+  // never flash an empty main area while waiting for Supabase's async session callback.
+  useIsomorphicLayoutEffect(() => {
+    const initial = resolveAuthViewFromLocation();
+    if (
+      currentViewRef.current !== 'sign-in' &&
+      currentViewRef.current !== 'sign-up' &&
+      currentViewRef.current !== 'set-password'
+    ) {
+      setCurrentView(initial);
+    }
+  }, [setCurrentView]);
 
-    // Route ràng buộc
-    useEffect(() => {
-        const supabase = createClient();
+  useEffect(() => {
+    const supabase = createClient();
 
-        // PKCE landings (?code=) never yield a session until the code is exchanged;
-        // the server callback does it, but a link that lands here directly needs
-        // it now, otherwise INITIAL_SESSION is null and the user ends up on sign-in.
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
-        if (code) {
-            supabase.auth.exchangeCodeForSession(code).then(async ({ error }) => {
-                if (!error) {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    if (session?.user) setCurrentView('set-password');
-                }
-            }).catch(() => undefined);
-        }
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    if (code) {
+      supabase.auth
+        .exchangeCodeForSession(code)
+        .then(async ({ error }) => {
+          if (!error) {
+            const {
+              data: { session },
+            } = await supabase.auth.getSession();
+            if (session?.user) setCurrentView('set-password');
+          }
+        })
+        .catch(() => undefined);
+    }
 
-        // Lắng nghe tất cả sự kiện Auth (bao gồm cả khi vừa load trang nhận token hoặc session)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            // Link email OTP/reset mang token trong hash (#access_token=...) hoặc
-            // ?code=/reset=1...: người vừa bấm link phải vào đặt mật khẩu mới, bất kể loại
-            // sự kiện (link OTP loại email phát SIGNED_IN, không phải PASSWORD_RECOVERY).
-            const arrivingFromEmailLink =
-                typeof window !== 'undefined' &&
-                (window.location.hash.includes('access_token') ||
-                    params.has('code') ||
-                    params.get('reset') === '1');
-            if (arrivingFromEmailLink && session?.user) {
-                setCurrentView('set-password');
-                return;
-            }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      const liveParams = new URLSearchParams(window.location.search);
+      const arrivingFromEmailLink =
+        typeof window !== 'undefined' &&
+        (window.location.hash.includes('access_token') ||
+          liveParams.has('code') ||
+          liveParams.get('reset') === '1');
+      if (arrivingFromEmailLink && session?.user) {
+        setCurrentView('set-password');
+        return;
+      }
 
-            // 1. Nếu là luồng reset password từ email
-            if (event === 'PASSWORD_RECOVERY') {
-                setCurrentView('set-password');
-                return;
-            }
+      if (event === 'PASSWORD_RECOVERY') {
+        setCurrentView('set-password');
+        return;
+      }
 
-            // 2. Nếu đã có session nhưng chưa có mật khẩu
-            if (session?.user && needsPasswordSet(session.user)) {
-                setCurrentView('set-password');
-                return;
-            }
+      if (session?.user && needsPasswordSet(session.user)) {
+        setCurrentView('set-password');
+        return;
+      }
 
-            // 3. Các trường hợp còn lại mặc định về sign-in
-            const cv = currentViewRef.current;
-            if (cv !== 'sign-up' && cv !== 'set-password') setCurrentView('sign-in');
-        });
+      const cv = currentViewRef.current;
+      if (liveParams.get('mode') === 'signup' && cv !== 'sign-in' && cv !== 'set-password') {
+        setCurrentView('sign-up');
+        return;
+      }
+      if (cv !== 'sign-up' && cv !== 'set-password') {
+        setCurrentView('sign-in');
+      }
+    });
 
-        return () => {
-            subscription.unsubscribe();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [setCurrentView]);
 
-    return (
-        <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
-            <a href="#main-content" className="skip-link">{t.skipToContent}</a>
-            <Header isWorkspace={!isPublicPage} />
-            <div className="flex min-h-screen flex-1 pt-[76px]">
-                <main id="main-content" ref={mainRef} tabIndex={-1} className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9">
-                    {currentView === 'sign-up' && <SignUpView />}
-                    {currentView === 'sign-in' && <SignInView />}
-                    {currentView === 'set-password' && <SetPasswordView />}
-                </main>
-            </div>
-            {isPublicPage && <Footer />}
-            <Toast />
-            <span className="sr-only" aria-live="polite">{t.localBadge}</span>
-        </div>
-    );
+  const activeAuthView =
+    currentView === 'sign-up' || currentView === 'sign-in' || currentView === 'set-password'
+      ? currentView
+      : 'sign-in';
+
+  return (
+    <div className="min-h-screen bg-background text-ink selection:bg-brass selection:text-background">
+      <a href="#main-content" className="skip-link">
+        {t.skipToContent}
+      </a>
+      <Header isWorkspace={!isPublicPage} />
+      <div className="flex min-h-screen flex-1 pt-[76px]">
+        <main
+          id="main-content"
+          ref={mainRef}
+          tabIndex={-1}
+          className="min-w-0 flex-1 px-4 py-5 outline-none sm:px-6 sm:py-7 lg:px-8 lg:py-9"
+        >
+          {activeAuthView === 'sign-up' && <SignUpView />}
+          {activeAuthView === 'sign-in' && <SignInView />}
+          {activeAuthView === 'set-password' && <SetPasswordView />}
+        </main>
+      </div>
+      {isPublicPage && <Footer />}
+      <Toast />
+      <span className="sr-only" aria-live="polite">
+        {t.localBadge}
+      </span>
+    </div>
+  );
 }
 
 export default function Authentication() {
-    return (
-        <AuthContent />
-    );
+  return <AuthContent />;
 }

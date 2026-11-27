@@ -29,9 +29,19 @@ import Link from 'next/link';
 import { Modal } from './Modal';
 
 export const OverviewView: React.FC = () => {
-  const { t, language, authUser, authReady, requestCheckout, currentPlanId, cancelPlanToFree } =
-    useApp();
+  const {
+    t,
+    language,
+    authUser,
+    authReady,
+    requestCheckout,
+    currentPlanId,
+    cancelPlanToFree,
+    downgradeToPro,
+    setCurrentView,
+  } = useApp();
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [downgradeConfirmOpen, setDowngradeConfirmOpen] = useState(false);
 
   const flow = [
     {
@@ -105,7 +115,10 @@ export const OverviewView: React.FC = () => {
           </p>
 
           <div className="mt-8 flex flex-col gap-3.5 sm:flex-row sm:items-center">
-            <Link href="/dashboard" className="button-primary text-base">
+            <Link
+              href={authUser ? '/dashboard' : '/auth?mode=signup'}
+              className="button-primary text-base"
+            >
               <span>{t.overviewPrimary}</span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
@@ -127,42 +140,46 @@ export const OverviewView: React.FC = () => {
           </div>
         </div>
 
-        {/* The 3D stage. Ambient blur blobs sit behind the orbit and floating cards. */}
-        <div className="stage relative flex items-center justify-center p-4">
+        {/* The 3D stage. Stacks cards cleanly below the orb on <640px to prevent overlap. */}
+        <div className="stage relative flex items-center justify-center p-2 sm:p-4">
           <div className="blob blob--blue -top-6 -left-6 h-48 w-48" aria-hidden="true" />
           <div className="blob blob--orange -bottom-6 -right-6 h-48 w-48" aria-hidden="true" />
 
-          <div className="relative aspect-square w-full max-w-[20rem] sm:max-w-[26rem]">
-            <CouncilOrb className="z-10" />
-
-            <div
-              className="float-card lift float-slow absolute -top-4 left-0 flex items-center gap-3 px-4 py-2.5 shadow-xl"
-              style={{ '--tilt-x': '-4deg', '--tilt-y': '6deg' } as React.CSSProperties}
-            >
-              <div className="toggle-pill" data-on="true">
-                <div className="toggle-pill__knob" />
-              </div>
-              <div>
-                <p className="text-xs font-extrabold text-ink">{t.heroModelsActive}</p>
-                <p className="text-[10px] text-ink-muted">{t.heroModelsList}</p>
-              </div>
+          <div className="relative w-full max-w-[20rem] sm:aspect-square sm:max-w-[26rem]">
+            <div className="relative mx-auto aspect-square w-full max-w-[15rem] sm:h-full sm:max-w-none">
+              <CouncilOrb className="z-10" />
             </div>
 
-            <div
-              className="float-card lift float-slower absolute bottom-0 right-0 flex items-center gap-3 px-4 py-2.5 shadow-xl"
-              style={{ '--tilt-x': '5deg', '--tilt-y': '-6deg' } as React.CSSProperties}
-            >
+            <div className="mt-3 grid grid-cols-1 gap-2.5 sm:mt-0 sm:block">
               <div
-                className="icon-tile text-[var(--tint-violet)]"
-                style={{ background: 'color-mix(in srgb, var(--tint-violet) 12%, transparent)' }}
+                className="float-card lift float-slow flex min-w-0 max-w-full items-center gap-3 px-4 py-2.5 shadow-xl sm:absolute sm:-top-4 sm:left-0"
+                style={{ '--tilt-x': '-4deg', '--tilt-y': '6deg' } as React.CSSProperties}
               >
-                <Zap className="h-4 w-4" />
+                <div className="toggle-pill shrink-0" data-on="true">
+                  <div className="toggle-pill__knob" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-ink">{t.heroModelsActive}</p>
+                  <p className="truncate text-[10px] text-ink-muted">{t.heroModelsList}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-extrabold text-ink">{t.heroFrameworkBadge}</p>
-                <p className="text-[10px] font-bold text-[var(--tint-green)]">
-                  {t.heroFrameworkPrivacy}
-                </p>
+
+              <div
+                className="float-card lift float-slower flex min-w-0 max-w-full items-center gap-3 px-4 py-2.5 shadow-xl sm:absolute sm:bottom-0 sm:right-0"
+                style={{ '--tilt-x': '5deg', '--tilt-y': '-6deg' } as React.CSSProperties}
+              >
+                <div
+                  className="icon-tile shrink-0 text-[var(--tint-violet)]"
+                  style={{ background: 'color-mix(in srgb, var(--tint-violet) 12%, transparent)' }}
+                >
+                  <Zap className="h-4 w-4" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold text-ink">{t.heroFrameworkBadge}</p>
+                  <p className="text-[10px] font-bold text-[var(--tint-green)]">
+                    {t.heroFrameworkPrivacy}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -303,52 +320,84 @@ export const OverviewView: React.FC = () => {
         </Reveal>
 
         <div className="grid gap-6 sm:grid-cols-3">
-          {PLANS.map((plan, index) => (
-            <Reveal key={plan.id} delayMs={index * 100}>
-              <article
-                className={`lift persona-card relative flex h-full flex-col justify-between p-6 sm:p-7 ${
-                  plan.popular ? 'border-2 border-[var(--tint-violet)] shadow-xl' : ''
-                }`}
-              >
-                <div>
-                  {plan.popular && (
-                    <span className="absolute -top-3 right-6 rounded-full bg-[var(--tint-violet)] px-3 py-0.5 text-[11px] font-black uppercase text-accent-ink shadow-md">
-                      {t.badgePopular}
-                    </span>
-                  )}
-                  <h3 className="text-lg font-extrabold text-ink">{plan.name}</h3>
-                  <p className="mt-3 text-3xl font-extrabold text-ink">
-                    {planPrice(plan, language)}
-                  </p>
-                  <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-                    {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (plan.priceVnd <= 0 && currentPlanId !== 'free') {
-                      setCancelConfirmOpen(true);
-                      return;
-                    }
-                    requestCheckout(plan);
-                  }}
-                  disabled={!authReady}
-                  className={`mt-6 w-full ${plan.popular ? 'button-primary' : 'button-secondary'}`}
+          {PLANS.map((plan, index) => {
+            const isCurrent = Boolean(authUser) && plan.id === currentPlanId;
+            const isDowngradeToPro =
+              Boolean(authUser) && currentPlanId === 'ultra' && plan.id === 'pro';
+            const ctaLabel =
+              plan.priceVnd <= 0
+                ? !authUser
+                  ? t.planStartFree
+                  : currentPlanId !== 'free'
+                    ? t.planCancelToFree
+                    : t.planCurrent
+                : isCurrent
+                  ? t.planCurrent
+                  : isDowngradeToPro
+                    ? t.planDowngradeToPro
+                    : authUser
+                      ? t.planChoose.replace('{plan}', plan.name)
+                      : t.planSignInToBuy;
+
+            return (
+              <Reveal key={plan.id} delayMs={index * 100}>
+                <article
+                  className={`lift persona-card relative flex h-full flex-col justify-between p-6 sm:p-7 ${
+                    plan.popular ? 'border-2 border-[var(--tint-violet)] shadow-xl' : ''
+                  }`}
                 >
-                  {plan.priceVnd <= 0
-                    ? currentPlanId !== 'free' && authUser
-                      ? t.planCancelToFree
-                      : t.planCurrent
-                    : plan.id === currentPlanId
-                      ? t.planCurrent
-                      : authUser
-                        ? t.planChoose.replace('{plan}', plan.name)
-                        : t.planSignInToBuy}
-                </button>
-              </article>
-            </Reveal>
-          ))}
+                  <div>
+                    {plan.popular && (
+                      <span className="absolute -top-3 right-6 rounded-full bg-[var(--tint-violet)] px-3 py-0.5 text-[11px] font-black uppercase text-accent-ink shadow-md">
+                        {t.badgePopular}
+                      </span>
+                    )}
+                    <h3 className="text-lg font-extrabold text-ink">{plan.name}</h3>
+                    <p className="mt-3 text-3xl font-extrabold text-ink">
+                      {planPrice(plan, language)}
+                    </p>
+                    {plan.priceVnd > 0 && (
+                      <p className="mt-1 text-xs font-medium text-ink-muted">{t.planPerMonth}</p>
+                    )}
+                    <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+                      {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))} ·{' '}
+                      {t.planBots.replace('{count}', String(plan.maxBots))}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (plan.priceVnd <= 0) {
+                        if (!authUser) {
+                          setCurrentView('sign-up');
+                          return;
+                        }
+                        if (currentPlanId !== 'free') {
+                          setCancelConfirmOpen(true);
+                        }
+                        return;
+                      }
+                      if (isDowngradeToPro) {
+                        setDowngradeConfirmOpen(true);
+                        return;
+                      }
+                      requestCheckout(plan);
+                    }}
+                    disabled={!authReady || isCurrent}
+                    className={`mt-6 min-h-11 w-full justify-center ${
+                      isCurrent
+                        ? 'button-secondary cursor-default opacity-60'
+                        : plan.popular
+                          ? 'button-primary'
+                          : 'button-secondary'
+                    }`}
+                  >
+                    {ctaLabel}
+                  </button>
+                </article>
+              </Reveal>
+            );
+          })}
         </div>
       </section>
 
@@ -425,9 +474,37 @@ export const OverviewView: React.FC = () => {
             </button>
           </>
         }
-      >
-        <p className="text-sm leading-relaxed text-ink-muted">{t.planCancelConfirm}</p>
-      </Modal>
+      />
+
+      {/* Downgrade Ultra -> Pro confirmation */}
+      <Modal
+        isOpen={downgradeConfirmOpen}
+        onClose={() => setDowngradeConfirmOpen(false)}
+        title={t.planDowngradeToPro}
+        description={t.planDowngradeConfirm}
+        closeLabel={t.close}
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setDowngradeConfirmOpen(false)}
+              className="button-secondary min-h-11 justify-center"
+            >
+              {t.cancel}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDowngradeConfirmOpen(false);
+                void downgradeToPro();
+              }}
+              className="button-primary min-h-11 justify-center"
+            >
+              {t.planDowngradeToPro}
+            </button>
+          </>
+        }
+      />
     </div>
   );
 };

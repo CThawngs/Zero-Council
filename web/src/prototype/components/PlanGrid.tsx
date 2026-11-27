@@ -21,7 +21,7 @@ export const PlanGrid: React.FC<PlanGridProps> = ({
   includeSettingsDataAttrs = false,
   statusMessage,
 }) => {
-  const { language, goToPricing, currentPlanId, planExpiresAt, t } = useApp();
+  const { language, currentPlanId, planExpiresAt, t } = useApp();
 
   return (
     <section className="panel p-5 sm:p-6" aria-labelledby="plan-title">
@@ -68,6 +68,9 @@ export const PlanGrid: React.FC<PlanGridProps> = ({
                 <p className="mt-1 font-serif text-lg text-ink">
                   {planPrice(plan, language)}
                 </p>
+                {plan.priceVnd > 0 && (
+                  <p className="mt-0.5 text-[11px] text-ink-muted">{t.planPerMonth}</p>
+                )}
                 <p className="mt-1 text-xs leading-relaxed text-ink-muted">
                   {t.planAdvisors.replace('{count}', String(plan.maxActiveAdvisors))} ·{' '}
                   {t.planBots.replace('{count}', String(plan.maxBots))}
@@ -94,10 +97,6 @@ export const PlanGrid: React.FC<PlanGridProps> = ({
           );
         })}
       </div>
-
-      <button type="button" onClick={goToPricing} className="button-secondary mt-4 min-h-11">
-        {t.pricingTitle}
-      </button>
 
       {statusMessage && (
         <div

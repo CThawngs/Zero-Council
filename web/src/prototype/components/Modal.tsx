@@ -19,7 +19,7 @@ export interface ModalProps {
   onBeforeClose?: () => boolean;
   title: string;
   description?: string;
-  children: ReactNode;
+  children?: ReactNode;
   footer?: ReactNode;
   closeLabel?: string;
   className?: string;
@@ -85,6 +85,8 @@ export function Modal({
     if (isBackdrop) close();
   };
 
+  const hasContent = children !== undefined && children !== null && children !== false;
+
   return (
     <dialog
       ref={dialogRef}
@@ -116,7 +118,7 @@ export function Modal({
             <X aria-hidden="true" size={18} strokeWidth={1.8} />
           </button>
         </header>
-        <div className="zc-modal__content">{children}</div>
+        {hasContent ? <div className="zc-modal__content">{children}</div> : null}
         {footer ? <footer className="zc-modal__footer">{footer}</footer> : null}
       </div>
     </dialog>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ArrowRight, Plus, Search, Settings2, Trash2, Users } from 'lucide-react';
+import { ArrowRight, Loader2, Plus, Search, Settings2, Trash2, Users } from 'lucide-react';
 import { Modal } from './Modal';
 import type { SavedConversation } from '../types';
 
@@ -25,8 +25,8 @@ export const SessionsListView: React.FC = () => {
   const filteredGroupChats = groupChats.filter((group) => {
     if (!normalizedSearch) return true;
     if (group.title.toLowerCase().includes(normalizedSearch)) return true;
-    const memberPersonas = group.roster.map(
-      (id) => personas.find((p) => p.id === id || p.id === `bot:${id}`)
+    const memberPersonas = group.roster.map((id) =>
+      personas.find((p) => p.id === id || p.id === `bot:${id}`)
     );
     return memberPersonas.some((p) => p?.name.toLowerCase().includes(normalizedSearch));
   });
@@ -51,7 +51,7 @@ export const SessionsListView: React.FC = () => {
           </p>
           <h1 className="mt-2 font-serif text-3xl text-ink sm:text-4xl">{t.groupChatsTitle}</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-ink-muted">
-            {t.groupChatsEmpty}
+            {t.groupChatsSubtitle}
           </p>
         </div>
         <button
@@ -71,7 +71,7 @@ export const SessionsListView: React.FC = () => {
             aria-hidden="true"
           />
           <label htmlFor="group-search" className="sr-only">
-            {t.groupChatsTitle}
+            {t.groupChatsSearchLabel}
           </label>
           <input
             id="group-search"
@@ -79,12 +79,12 @@ export const SessionsListView: React.FC = () => {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder={t.groupChatsTitle}
+            placeholder={t.groupChatsSearchPlaceholder}
             className="min-h-11 w-full rounded-lg border border-border bg-background py-2.5 pl-10 pr-3 text-sm text-ink placeholder:text-ink-muted focus:border-brass focus:outline-none focus:ring-2 focus:ring-brass/20"
           />
         </div>
         <span className="text-xs text-ink-muted">
-          {groupChats.length} {t.groupChatsTitle.toLowerCase()}
+          {t.groupChatsCount.replace('{count}', String(filteredGroupChats.length))}
         </span>
       </div>
 
@@ -95,10 +95,10 @@ export const SessionsListView: React.FC = () => {
         >
           <Users className="mx-auto h-9 w-9 text-ink-muted" aria-hidden="true" />
           <h2 className="mt-4 font-serif text-2xl text-ink">
-            {search.trim() ? t.emptySessionsTitle : t.groupChatsTitle}
+            {normalizedSearch ? t.groupChatsNoMatchTitle : t.groupChatsTitle}
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-ink-muted">
-            {t.groupChatsEmpty}
+            {normalizedSearch ? t.groupChatsNoMatchBody : t.groupChatsEmpty}
           </p>
           <button
             type="button"
@@ -157,7 +157,8 @@ export const SessionsListView: React.FC = () => {
                     )}
 
                     <p className="mt-2 text-xs text-ink-muted">
-                      {t.summaryStatTurns}: {group.messages.filter((m) => m.authorId !== 'user').length}
+                      {t.summaryStatTurns}:{' '}
+                      {group.messages.filter((m) => m.authorId !== 'user').length}
                     </p>
                   </div>
 
@@ -173,7 +174,7 @@ export const SessionsListView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => openEditGroup(group.id)}
-                      aria-label={t.groupEditTitle}
+                      aria-label={`${t.groupEditTitle}: ${group.title}`}
                       className="icon-button min-h-11 min-w-11"
                     >
                       <Settings2 className="h-4 w-4" aria-hidden="true" />
@@ -181,7 +182,7 @@ export const SessionsListView: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setGroupToDelete(group)}
-                      aria-label={t.deleteSession}
+                      aria-label={`${t.groupDeleteTitle}: ${group.title}`}
                       className="icon-button min-h-11 min-w-11 hover:bg-terracotta/10 hover:text-terracotta"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
@@ -198,7 +199,10 @@ export const SessionsListView: React.FC = () => {
       <Modal
         isOpen={groupToDelete !== null}
         onClose={() => !deleting && setGroupToDelete(null)}
-        title={t.deleteSession}
+        title={t.groupDeleteTitle}
+        description={
+          groupToDelete ? t.groupDeleteConfirmNamed.replace('{name}', groupToDelete.title) : ''
+        }
         closeLabel={t.close}
         footer={
           <>
@@ -216,15 +220,12 @@ export const SessionsListView: React.FC = () => {
               onClick={() => void handleDelete()}
               className="button-danger min-h-11 justify-center disabled:opacity-50"
             >
-              {t.deleteSession}
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {deleting ? t.groupDeleting : t.groupDeleteAction}
             </button>
           </>
         }
-      >
-        <p className="text-sm leading-relaxed text-ink-muted">
-          {groupToDelete ? t.botDeleteConfirm.replace('{name}', groupToDelete.title) : ''}
-        </p>
-      </Modal>
+      />
     </div>
   );
 };

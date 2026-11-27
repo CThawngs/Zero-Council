@@ -1,6 +1,6 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 import { effectivePlan } from '@/lib/store/account';
 import { createBot, deleteBot, listBots, updateBot } from '@/lib/store/bots';
 import { listProviderKeys } from '@/lib/store/providerKeys';
@@ -33,6 +33,9 @@ const assertBrainConnected = async (email: string, provider: string, model: stri
 };
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -71,6 +74,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -107,6 +113,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
   try {

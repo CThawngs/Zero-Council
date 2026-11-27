@@ -1,10 +1,45 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { modelLabel, providerLabel } from '../data/mockData';
+import { modelLabel, providerLabel } from '../data/catalog';
 import { visibleModelsForProvider } from '../chat/modelAllowList';
 import { planById } from '../data/plans';
 import { Check, Loader2, Lock } from 'lucide-react';
 import type { ModelProvider } from '../types';
+
+const BOT_WIZARD_DRAFT_KEY = 'zc:bot-wizard-draft';
+
+interface BotWizardDraft {
+  name: string;
+  instruction: string;
+}
+
+const readBotWizardDraft = (): BotWizardDraft => {
+  if (typeof window === 'undefined') return { name: '', instruction: '' };
+  try {
+    const raw = window.sessionStorage.getItem(BOT_WIZARD_DRAFT_KEY);
+    if (!raw) return { name: '', instruction: '' };
+    const parsed = JSON.parse(raw) as Partial<BotWizardDraft>;
+    return {
+      name: typeof parsed.name === 'string' ? parsed.name.slice(0, 80) : '',
+      instruction: typeof parsed.instruction === 'string' ? parsed.instruction.slice(0, 4000) : '',
+    };
+  } catch {
+    return { name: '', instruction: '' };
+  }
+};
+
+const writeBotWizardDraft = (draft: BotWizardDraft) => {
+  if (typeof window === 'undefined') return;
+  try {
+    if (!draft.name && !draft.instruction) {
+      window.sessionStorage.removeItem(BOT_WIZARD_DRAFT_KEY);
+    } else {
+      window.sessionStorage.setItem(BOT_WIZARD_DRAFT_KEY, JSON.stringify(draft));
+    }
+  } catch {
+    // Ignore storage refusal
+  }
+};
 
 export const BotWizardView: React.FC = () => {
   const {
@@ -20,12 +55,16 @@ export const BotWizardView: React.FC = () => {
     t,
   } = useApp();
   const [step, setStep] = useState(1);
-  const [name, setName] = useState('');
-  const [instruction, setInstruction] = useState('');
+  const [name, setName] = useState(() => readBotWizardDraft().name);
+  const [instruction, setInstruction] = useState(() => readBotWizardDraft().instruction);
   const [provider, setProvider] = useState<ModelProvider | null>(null);
   const [model, setModel] = useState('');
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    writeBotWizardDraft({ name, instruction });
+  }, [name, instruction]);
 
   const connected = apiKeys.filter((key) => key.connected);
   const selectedKey = provider ? connected.find((k) => k.provider === provider) : undefined;
@@ -71,6 +110,7 @@ export const BotWizardView: React.FC = () => {
       setError(t.botErrorSave);
       return;
     }
+    writeBotWizardDraft({ name: '', instruction: '' });
     openBotChat(bot.id);
   };
 

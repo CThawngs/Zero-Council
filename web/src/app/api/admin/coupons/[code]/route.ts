@@ -1,10 +1,14 @@
 import { adminOnly } from '@/lib/api/adminOnly';
 import { parseCouponInput } from '@/lib/api/couponInput';
+import { verifySameOrigin } from '@/lib/security/request-guard';
 import { deleteCoupon, getCoupon, updateCoupon } from '@/lib/store/account';
 
 type Context = { params: Promise<{ code: string }> };
 
 export async function PATCH(request: Request, context: Context) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const denied = await adminOnly();
   if (denied) return denied;
 
@@ -19,20 +23,18 @@ export async function PATCH(request: Request, context: Context) {
     return Response.json({ error: 'INVALID_JSON' }, { status: 400 });
   }
 
-  // The code is the primary key and the identity a user types; renaming one would orphan its
-  // redemption rows. Rejecting it is clearer than silently ignoring the field.
   if (body.code !== undefined && String(body.code).trim().toUpperCase() !== existing.code) {
     return Response.json({ error: 'CODE_IMMUTABLE' }, { status: 400 });
   }
 
-  // Reuse the create-form validation by merging the patch over the stored coupon, so a partial
-  // update cannot write a percent of 0 or a cap of -5 that the full form would have refused.
   const parsed = parseCouponInput({
     code: existing.code,
     percent: body.percent ?? existing.percent,
     expiresAt: body.expiresAt === undefined ? existing.expiresAt : body.expiresAt,
     maxTotalRedemptions:
-      body.maxTotalRedemptions === undefined ? existing.maxTotalRedemptions : body.maxTotalRedemptions,
+      body.maxTotalRedemptions === undefined
+        ? existing.maxTotalRedemptions
+        : body.maxTotalRedemptions,
     active: body.active === undefined ? existing.active : body.active,
     note: body.note === undefined ? existing.note : body.note,
   });
@@ -48,7 +50,10 @@ export async function PATCH(request: Request, context: Context) {
   return Response.json({ coupon: updated });
 }
 
-export async function DELETE(_request: Request, context: Context) {
+export async function DELETE(request: Request, context: Context) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const denied = await adminOnly();
   if (denied) return denied;
 

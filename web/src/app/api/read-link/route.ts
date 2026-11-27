@@ -1,11 +1,14 @@
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { UnreadableLink, readLink } from '@/lib/deliberation/read-link';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 
 const MAX_BODY_BYTES = 32 * 1024;
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 

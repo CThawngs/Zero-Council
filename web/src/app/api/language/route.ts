@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 
 const MAX_BODY_BYTES = 2 * 1024;
 
 export async function POST(request: NextRequest) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const limited = enforceRateLimit(request, {
     scope: 'language:set',
     limit: 60,
@@ -29,7 +32,7 @@ export async function POST(request: NextRequest) {
     request.nextUrl.protocol === 'https:' || process.env.VERCEL === '1';
 
   response.cookies.set('zc-lang', language, {
-    httpOnly: true,
+    httpOnly: false,
     secure: isSecureTransport,
     sameSite: 'lax',
     path: '/',

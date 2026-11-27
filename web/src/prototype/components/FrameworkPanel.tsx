@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Copy } from '../i18n';
 import type { DeliberationSession, ScenarioBranch } from '../types';
-import type { Round } from '@/lib/deliberation/engine';
+import type { Round } from '@/lib/deliberation/types';
 
 interface Props {
   round: Round;

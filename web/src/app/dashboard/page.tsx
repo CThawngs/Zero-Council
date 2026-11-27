@@ -8,7 +8,6 @@ import { ChatRoomView } from '@/prototype/components/ChatRoomView';
 import { CheckoutDrawer } from '@/prototype/components/CheckoutDrawer';
 import { ContentPanelModal } from '@/prototype/components/ContentRenderPanel';
 import { AnalyticsLoader, CookieNotice } from '@/prototype/components/CookieNotice';
-import { FrameworkModal } from '@/prototype/components/FrameworkModal';
 import { GuideView } from '@/prototype/components/GuideView';
 import { Header } from '@/prototype/components/Header';
 import { JoinRoomModal } from '@/prototype/components/JoinRoomModal';
@@ -146,7 +145,6 @@ export default function Dashboard() {
       </div>
       <CheckoutDrawer plan={checkoutPlan} onClose={closeCheckout} />
       <JoinRoomModal />
-      <FrameworkModal />
       <ContentPanelModal />
       <Toast />
       <CookieNotice />

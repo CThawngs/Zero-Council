@@ -1,20 +1,8 @@
-/**
- * POST /api/providers/verify
- *
- * Server-side strict key verification (no browser CORS, no public `/models` false positives).
- * Body: { provider, key, model?, protocol?, baseUrl? }
- *   - 200 { ok: true, models, verifiedModel }
- *   - 4xx/5xx { ok: false, error: 'INVALID_KEY' | 'INVALID_BASE_URL' | 'MODEL_NOT_FOUND' | 'EMPTY_KEY' | ... }
- *
- * Requires a signed-in user: an anonymous verify endpoint would be an open proxy to any host.
- * The key is used for the outbound probe only — never stored, logged, or echoed back.
- */
-
 import { currentUserOnly } from '@/lib/api/currentUserOnly';
 import { resolveVerifyTarget } from '@/lib/byok/resolve-target';
 import { checkKeyShape, httpStatusForVerifyError, verifyProviderKey } from '@/lib/byok/verify';
 import { enforceRateLimit } from '@/lib/security/rate-limit';
-import { readBoundedJson } from '@/lib/security/request-guard';
+import { readBoundedJson, verifySameOrigin } from '@/lib/security/request-guard';
 
 /** Verification probes several models with a per-request timeout; give the function room. */
 export const maxDuration = 60;
@@ -23,6 +11,9 @@ const MAX_MODEL_ID_LENGTH = 200;
 const MAX_BODY_BYTES = 32 * 1024;
 
 export async function POST(request: Request) {
+  const csrfDenied = verifySameOrigin(request);
+  if (csrfDenied) return csrfDenied;
+
   const { user, denied } = await currentUserOnly();
   if (denied) return denied;
 
@@ -70,7 +61,6 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
-    // Log the provider id and error code only — never the key or the provider's response body.
     console.warn(`[providers/verify] ${resolved.target.providerId} rejected: ${result.error}`);
     return Response.json(result, { status: httpStatusForVerifyError(result.error) });
   }

@@ -327,9 +327,9 @@ test('valid Google key: generateContent with maxOutputTokens 16 -> verified', as
     [endsWith(':generateContent', 'POST'), json(200, { candidates: [{ finishReason: 'MAX_TOKENS' }], usageMetadata: {} })],
   ]);
   const result = await verifyProviderKey(verifyTargetFor('google'), 'AIzaSyValidLookingKey000', { fetchImpl: impl });
-  assert.deepEqual(result, { ok: true, verifiedModel: 'gemini-3.5-flash-lite', models: ['gemini-3.5-flash-lite'] });
+  assert.deepEqual(result, { ok: true, verifiedModel: 'gemini-2.5-flash', models: ['gemini-2.5-flash', 'gemini-3.5-flash-lite'] });
   const probe = calls.find((c) => c.method === 'POST');
-  assert.equal(probe.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent');
+  assert.equal(probe.url, 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent');
   assert.equal(probe.body.generationConfig.maxOutputTokens, 16);
 });
 

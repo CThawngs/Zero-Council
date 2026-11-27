@@ -31,11 +31,11 @@ const enNumber = new Intl.NumberFormat('en-US');
 
 export const planById = (id: PlanId): Plan => PLANS.find((plan) => plan.id === id) ?? PLANS[0];
 
-/** Locale only changes how the same number is written: VI shows the VND source, EN the published USD. */
+/** Locale only changes how the same one-time 30-day pass price is written. */
 export const planPrice = (plan: Plan, language: Language): string =>
   language === 'vi'
-    ? `${viNumber.format(plan.priceVnd)}₫/tháng`
-    : `$${plan.priceUsd}/mo`;
+    ? `${viNumber.format(plan.priceVnd)}₫`
+    : `$${plan.priceUsd}`;
 
 /** Checkout always states the real charge in VND first, whatever the locale is. */
 export const planAmountLine = (plan: Plan): string =>

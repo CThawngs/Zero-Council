@@ -4,6 +4,7 @@ import { hasPasswordClaim } from '@/lib/auth-password';
 import { devLoginEmail, isSupabaseServerConfigured } from '@/lib/devAuth';
 import {
   canAccessWithoutPasswordClaim,
+  isAuthenticationRequiredPath,
   isPublicPath,
   isValidLegalPath,
   resolveRequestLanguage,
@@ -24,7 +25,7 @@ export async function updateSession(request: NextRequest) {
     });
   }
   const isPageRequest = !pathname.startsWith('/api/');
-  const publicRoute = isPublicPath(pathname);
+  const protectedPage = isAuthenticationRequiredPath(pathname);
 
   const rawLang = request.nextUrl.searchParams.get('lang');
   const hasExplicitLang =
@@ -53,7 +54,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (!isSupabaseServerConfigured()) {
-    if (isPageRequest && !publicRoute) {
+    if (isPageRequest && protectedPage) {
       const url = request.nextUrl.clone();
       url.pathname = '/auth';
       return NextResponse.redirect(url);
@@ -92,7 +93,7 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  if (isPageRequest && !user && !publicRoute) {
+  if (isPageRequest && !user && protectedPage) {
     const url = request.nextUrl.clone();
     url.pathname = '/auth';
     return NextResponse.redirect(url);
@@ -100,7 +101,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user) {
     const hasPassword = hasPasswordClaim(user as { user_metadata?: Record<string, unknown> });
-    if (!hasPassword && !canAccessWithoutPasswordClaim(pathname)) {
+    if (!hasPassword && protectedPage && !canAccessWithoutPasswordClaim(pathname)) {
       return NextResponse.redirect(new URL('/auth', request.url));
     }
   }

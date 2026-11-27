@@ -937,11 +937,6 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   position: relative;
   perspective: 1200px;
   perspective-origin: 50% 45%;
-  /* The ambient blobs are positioned with negative offsets (`-left-6`, `-right-6`) so their
-     blur bleeds past the stage edge. On a narrow viewport that becomes real horizontal
-     overflow: the whole page scrolls sideways by ~26px with nothing there to scroll to.
-     `overflow-x-clip` removes that escape route without also clipping the vertical bleed of
-     `.float-card`, which is deliberately positioned outside the orbit. */
   overflow-x: clip;
 }
 
@@ -1137,15 +1132,11 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   }
 }
 
-/* Header brand mark: the hero orb at mark size, driven by the same --orb-size.
-   A logo must not spin, and a 1.1rem node glow smears across a 24px mark, so
-   both are overridden here instead of forking the component. */
+/* Header brand mark: the hero orb at mark size, driven by the same --orb-size. */
 .brand-mark {
   flex: none;
 }
 
-/* The override must land on .council-orb itself: that element re-declares
-   --orb-size, so a value set on the wrapper would lose the cascade. */
 .brand-mark .council-orb {
   --orb-size: 1.5rem;
   padding: 0;
@@ -1157,26 +1148,11 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
 
 .brand-mark .council-orb__node {
   box-shadow: 0 0 0.25rem color-mix(in srgb, var(--node-color) 55%, transparent);
-  /* Mark only: cancel the orbit rotation so no node collapses to zero width at
-     24px. The hero keeps the un-billboarded transform — counter-rotating there
-     does not cancel the scene rotation, so the nodes came out stretched 8x29
-     instead of round. Consequence accepted in the mark: with the spin off and
-     the scene flat, the 0° and 180° nodes both project to the centre, so it
-     reads as three dots in a row rather than four on an orbit. */
   transform: rotateY(var(--node-angle)) translateZ(calc(var(--orb-size) * 0.42)) rotateY(calc(-1 * var(--node-angle)));
 }
 
 /* ---------------------------------------------------------------------------
    Scroll reveal
-
-   `data-armed` is set only by Reveal.tsx AFTER it has confirmed an
-   IntersectionObserver exists and the element starts below the fold. The old
-   build shipped `.reveal { opacity: 0 }` unconditionally, so every landing
-   section below the hero was invisible in the served HTML: 16 elements were
-   measured at opacity 0 on a live page, and the layout collapsed to 2329px.
-
-   Animating is strictly additive now — no JS, no observer, or no `data-armed`
-   all mean the content simply renders.
 --------------------------------------------------------------------------- */
 
 .reveal {
@@ -1194,6 +1170,21 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
   transform: translateY(0);
 }
 
+.toast-enter {
+  animation: toast-enter var(--dur) var(--ease-out) both;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes button-pop {
   0% { transform: scale(1); }
   50% { transform: scale(0.97); }
@@ -1208,16 +1199,19 @@ body :is(button, [role='button'], a, summary):active:not(:disabled):not([aria-di
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .reveal[data-armed='true'] {
+    opacity: 1 !important;
     transform: none !important;
   }
 
   .zc-modal,
-  .zc-modal::backdrop {
+  .zc-modal::backdrop,
+  .toast-enter {
     animation: none !important;
   }
 
-  /* The ambient animations are the only things that genuinely have to stop
-     here: they carry no content of their own. */
   .blob,
   .float-slow,
   .float-slower,
