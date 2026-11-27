@@ -379,10 +379,11 @@ export const ChatRoomView: React.FC = () => {
 
   return (
     <div
+      data-chat-pane={expanded ? 'expanded' : 'full'}
       className={
         expanded
-          ? 'fixed inset-0 z-[60] flex flex-col bg-background p-2 sm:p-4'
-          : 'mx-auto flex h-[calc(100dvh-76px)] w-full max-w-4xl flex-col py-1 sm:py-4'
+          ? 'fixed inset-0 z-[60] flex flex-col bg-surface'
+          : '-mx-4 -my-5 flex h-[calc(100dvh-76px)] flex-col bg-surface sm:-mx-6 sm:-my-7 lg:-mx-8 lg:-my-9'
       }
       onDragOver={(e) => {
         e.preventDefault();
@@ -400,8 +401,9 @@ export const ChatRoomView: React.FC = () => {
       }}
     >
       <div
-        className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border bg-surface shadow-[var(--shadow-lift)] ${
-          dragging ? 'border-brass ring-2 ring-brass/30' : 'border-border'
+        data-chat-pane-surface
+        className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-surface ${
+          dragging ? 'ring-2 ring-inset ring-brass/40' : ''
         }`}
       >
         <ChatRoomHeader
