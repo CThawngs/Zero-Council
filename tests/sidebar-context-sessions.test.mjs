@@ -92,6 +92,42 @@ test('Sidebar mounts SidebarSessionsSection and coordinates single-open popup ac
   assert.match(sessionMenu, /data-session-delete-disabled=\{!canDelete \? 'true' : undefined\}/);
 });
 
+test('Regression P3-1 & P3-2: pending prune stays alive until effect reconciles conversations, and inline rename Escape stops propagation to mobile drawer', () => {
+  const sidebar = read('web/src/prototype/components/Sidebar.tsx');
+  const sessionsSection = read('web/src/prototype/components/sidebar/SidebarSessionsSection.tsx');
+
+  // P3-1: deleteConversationAndPruneOrg must NOT remove candidate ID in `finally` right after await;
+  // it transitions 'inflight' -> 'settled' and lets useEffect reconcile against `conversations` (clearing in `catch` on throw).
+  const deleteHelperMatch = sidebar.match(
+    /const deleteConversationAndPruneOrg = useCallback\([\s\S]*?\[deleteConversationById\]\r?\n  \);/
+  );
+  assert.ok(deleteHelperMatch, 'deleteConversationAndPruneOrg exists');
+  assert.doesNotMatch(deleteHelperMatch[0], /finally\s*\{/);
+  assert.match(deleteHelperMatch[0], /pendingPruneIdsRef\.current\.set\(conversationId,\s*'inflight'\)/);
+  assert.match(deleteHelperMatch[0], /pendingPruneIdsRef\.current\.set\(conversationId,\s*'settled'\)/);
+  assert.match(deleteHelperMatch[0], /catch\s*\{\s*pendingPruneIdsRef\.current\.delete\(conversationId\);\s*\}/);
+  assert.match(sidebar, /reconcilePendingConversationPrunes\(pendingPruneIdsRef\.current,\s*liveIds\)/);
+
+  // P3-2: Escape inside inline rename inputs stops propagation so MobileSidebar's window Escape listener keeps #mobile-navigation open.
+  const sessionRenameInputMatch = sessionsSection.match(
+    /data-session-rename-input=\{session\.id\}[\s\S]*?onKeyDown=\{\(event\) => \{[\s\S]*?\}\}/
+  );
+  assert.ok(sessionRenameInputMatch, 'session rename input onKeyDown exists');
+  assert.match(
+    sessionRenameInputMatch[0],
+    /else if \(event\.key === 'Escape'\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*handleCancelRename\(session\.id,\s*true\);\s*\}/
+  );
+
+  const groupRenameInputMatch = sidebar.match(
+    /data-group-rename-input=\{group\.id\}[\s\S]*?onKeyDown=\{\(event\) => \{[\s\S]*?\}\}/
+  );
+  assert.ok(groupRenameInputMatch, 'group rename input onKeyDown exists');
+  assert.match(
+    groupRenameInputMatch[0],
+    /else if \(event\.key === 'Escape'\) \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*handleCancelGroupRename\(group\.id,\s*true\);\s*\}/
+  );
+});
+
 test('Behavioral simulation: single-open menu coordinator + session Open/Rename/Pin/2-step Delete + last-session invariant', () => {
   let openGroup = null;
   let openBot = null;

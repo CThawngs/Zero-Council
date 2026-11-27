@@ -413,6 +413,31 @@ export const pruneRemovedConversations = (
   };
 };
 
+export type PendingPruneStatus = 'inflight' | 'settled';
+
+/**
+ * Reconciles pending conversation prune candidates against the latest rendered `conversations` IDs:
+ * - Confirmed absent (`!liveIds.has(id)`): removes from `pending` and returns `true` so callers prune org storage.
+ * - Still present after `deleteConversationById` settled (`status === 'settled'`): API delete failed; clears pending without pruning.
+ * - Still present while `status === 'inflight'`: keeps pending until the async delete settles and React commits.
+ */
+export const reconcilePendingConversationPrunes = (
+  pending: Map<string, PendingPruneStatus>,
+  liveIds: ReadonlySet<string>
+): boolean => {
+  if (pending.size === 0) return false;
+  let shouldPrune = false;
+  for (const [candidateId, status] of pending.entries()) {
+    if (!liveIds.has(candidateId)) {
+      pending.delete(candidateId);
+      shouldPrune = true;
+    } else if (status === 'settled') {
+      pending.delete(candidateId);
+    }
+  }
+  return shouldPrune;
+};
+
 /**
  * Resolves the owning UserBot ID for a solo conversation, falling back to `bot:<id>` in `roster`.
  */

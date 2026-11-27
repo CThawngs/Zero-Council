@@ -15,6 +15,7 @@ const {
   partitionBoundedSessions,
   pruneRemovedConversations,
   readSidebarOrg,
+  reconcilePendingConversationPrunes,
   renameDepartment,
   resolveSoloSessionBotId,
   sanitizeSidebarOrg,
@@ -74,6 +75,111 @@ test('pin toggle and pruneRemovedConversations keep org state clean across group
   assert.deepEqual(pruned.pinnedIds, ['solo-1']);
   assert.equal(pruned.assignments.g2, undefined);
   assert.equal(pruned.assignments.g1, tech.id);
+});
+
+test('async delete pending-prune lifetime: keeps ID pending across await microtask until passive effect runs, and clears without pruning on API failure', async () => {
+  const map = new Map();
+  const storage = {
+    getItem: (k) => map.get(k) ?? null,
+    setItem: (k, v) => map.set(k, v),
+  };
+  const userId = 'user-async-prune';
+
+  let org = EMPTY_SIDEBAR_ORG;
+  org = togglePinConversation(org, 'solo-surviving');
+  org = togglePinConversation(org, 'solo-delete-target');
+  org = togglePinConversation(org, 'group-surviving');
+  writeSidebarOrg(storage, userId, org);
+  assert.deepEqual(readSidebarOrg(storage, userId).pinnedIds, [
+    'group-surviving',
+    'solo-delete-target',
+    'solo-surviving',
+  ]);
+
+  let conversations = [
+    { id: 'group-surviving' },
+    { id: 'solo-delete-target' },
+    { id: 'solo-surviving' },
+  ];
+  const pending = new Map();
+
+  const runPassiveEffect = () => {
+    if (pending.size === 0) return;
+    const liveIds = new Set(conversations.map((c) => c.id));
+    if (reconcilePendingConversationPrunes(pending, liveIds)) {
+      const current = readSidebarOrg(storage, userId);
+      writeSidebarOrg(storage, userId, pruneRemovedConversations(current, liveIds));
+    }
+  };
+
+  // 1) Soft API failure (HTTP 500): deleteConversationById resolves without removing the item from `conversations`.
+  const runDeleteWithLifecycle = async (conversationId, deleteImpl) => {
+    pending.set(conversationId, 'inflight');
+    try {
+      await deleteImpl(conversationId);
+      if (pending.has(conversationId)) {
+        pending.set(conversationId, 'settled');
+      }
+    } catch {
+      pending.delete(conversationId);
+    }
+  };
+
+  await runDeleteWithLifecycle('solo-delete-target', async () => {
+    // Intermediate render while HTTP DELETE is still in flight (e.g., menu closing).
+    runPassiveEffect();
+    assert.equal(pending.get('solo-delete-target'), 'inflight');
+    await Promise.resolve();
+    // Server returned 500 -> conversations unchanged.
+  });
+  // Effect runs after settle -> sees ID still present in `conversations`, clears pending WITHOUT pruning.
+  runPassiveEffect();
+  assert.equal(pending.size, 0);
+  assert.deepEqual(readSidebarOrg(storage, userId).pinnedIds, [
+    'group-surviving',
+    'solo-delete-target',
+    'solo-surviving',
+  ]);
+
+  // 2) Thrown rejection from delete helper -> clears pending immediately without pruning.
+  await runDeleteWithLifecycle('solo-delete-target', async () => {
+    await Promise.resolve();
+    throw new Error('NETWORK_ABORT');
+  });
+  assert.equal(pending.size, 0);
+  assert.deepEqual(readSidebarOrg(storage, userId).pinnedIds, [
+    'group-surviving',
+    'solo-delete-target',
+    'solo-surviving',
+  ]);
+
+  // 3) Successful async delete: microtask settles BEFORE passive effect macrotask fires.
+  let passiveEffectScheduled = null;
+  await runDeleteWithLifecycle('solo-delete-target', async (id) => {
+    // Menu closes before network completes -> effect runs while still inflight.
+    runPassiveEffect();
+    assert.equal(pending.get(id), 'inflight');
+    await Promise.resolve();
+    // State update removes `id` and schedules passive `useEffect` for macrotask turn.
+    conversations = conversations.filter((c) => c.id !== id);
+    passiveEffectScheduled = new Promise((resolve) => {
+      setTimeout(() => {
+        runPassiveEffect();
+        resolve();
+      }, 0);
+    });
+  });
+
+  // Immediately after `await deleteImpl` microtask (before macrotask effect runs), candidate MUST still be pending!
+  assert.equal(pending.get('solo-delete-target'), 'settled');
+
+  await passiveEffectScheduled;
+  assert.equal(pending.size, 0);
+  assert.deepEqual(
+    readSidebarOrg(storage, userId).pinnedIds,
+    ['group-surviving', 'solo-surviving'],
+    'Deleted pinned ID is pruned from storage once effect confirms removal from conversations'
+  );
 });
 
 test('storage round-trip and corrupt storage resilience', () => {
@@ -248,6 +354,7 @@ test('export and import round-trip + malformed payload rejection', () => {
   );
   assert.equal(batch.ok, true);
   if (batch.ok) {
+    assert.equal(parsed.groups.length, 1);
     assert.equal(batch.groups.length, 2);
     assert.deepEqual(batch.departments.sort(), ['Design', 'Tech']);
   }

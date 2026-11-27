@@ -76,6 +76,7 @@ export const SidebarSessionsSection: React.FC<SidebarSessionsSectionProps> = ({
   const [renameDraft, setRenameDraft] = useState('');
   const [expandedAll, setExpandedAll] = useState(false);
 
+  const sectionRef = useRef<HTMLDivElement>(null);
   const sessionMenuRef = useRef<HTMLDivElement>(null);
   const triggerElRef = useRef<HTMLElement | null>(null);
 
@@ -220,6 +221,24 @@ export const SidebarSessionsSection: React.FC<SidebarSessionsSectionProps> = ({
     await renameConversation(sessionId, clean);
   };
 
+  const handleCancelRename = (sessionId: string, restoreFocus = false) => {
+    setRenamingSessionId(null);
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        const triggers = sectionRef.current?.querySelectorAll<HTMLElement>(
+          '[data-session-menu-trigger]'
+        );
+        if (!triggers) return;
+        for (const el of triggers) {
+          if (el.getAttribute('data-session-menu-trigger') === sessionId) {
+            el.focus({ preventScroll: true });
+            break;
+          }
+        }
+      });
+    }
+  };
+
   const handleDeleteSession = async (sessionId: string) => {
     if (!canDeleteSoloSession(conversations, sessionId)) {
       setConfirmDeleteId(null);
@@ -269,7 +288,7 @@ export const SidebarSessionsSection: React.FC<SidebarSessionsSectionProps> = ({
     ) : null;
 
   return (
-    <div className="min-w-0 w-full" data-sidebar-sessions-section>
+    <div ref={sectionRef} className="min-w-0 w-full" data-sidebar-sessions-section>
       <SectionHeader
         label={sessionCopy.sectionTitle}
         meta={orderedSessions.length > 0 ? String(orderedSessions.length) : undefined}
@@ -325,7 +344,9 @@ export const SidebarSessionsSection: React.FC<SidebarSessionsSectionProps> = ({
                             event.preventDefault();
                             void handleCommitRename(session.id);
                           } else if (event.key === 'Escape') {
-                            setRenamingSessionId(null);
+                            event.preventDefault();
+                            event.stopPropagation();
+                            handleCancelRename(session.id, true);
                           }
                         }}
                         aria-label={t.sidebarActionRename}
@@ -343,7 +364,7 @@ export const SidebarSessionsSection: React.FC<SidebarSessionsSectionProps> = ({
                       <button
                         type="button"
                         data-session-rename-cancel={session.id}
-                        onClick={() => setRenamingSessionId(null)}
+                        onClick={() => handleCancelRename(session.id, false)}
                         aria-label={t.cancel}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
                       >

@@ -35,8 +35,10 @@ import {
   getSidebarOrgSnapshot,
   mutateSidebarOrg,
   pruneRemovedConversations,
+  reconcilePendingConversationPrunes,
   subscribeSidebarOrg,
   togglePinConversation,
+  type PendingPruneStatus,
   type SidebarOrgState,
 } from '../sidebar-organization';
 import { fill } from '../bot-settings-panel-logic';
@@ -94,6 +96,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   const [groupsOpen, setGroupsOpen] = useState(true);
   const [botsOpen, setBotsOpen] = useState(true);
   const [sessionsOpen, setSessionsOpen] = useState(true);
+  const [pruneReconcileTick, setPruneReconcileTick] = useState(0);
 
   const navRef = useRef<HTMLElement | null>(null);
   const navScrollTopAtOpenRef = useRef<number>(0);
@@ -101,7 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   const menuTriggerRef = useRef<HTMLElement | null>(null);
   const closeBotMenuRef = useRef<(() => void) | null>(null);
   const closeSessionMenuRef = useRef<(() => void) | null>(null);
-  const pendingPruneIdsRef = useRef<Set<string>>(new Set());
+  const pendingPruneIdsRef = useRef<Map<string, PendingPruneStatus>>(new Map());
 
   const recordNavScrollAtMenuOpen = useCallback(() => {
     navScrollTopAtOpenRef.current = navRef.current?.scrollTop ?? 0;
@@ -117,24 +120,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
   useEffect(() => {
     if (pendingPruneIdsRef.current.size === 0) return;
     const liveIds = new Set(conversations.map((conv) => conv.id));
-    let removedConfirmed = false;
-    for (const candidateId of pendingPruneIdsRef.current) {
-      if (!liveIds.has(candidateId)) {
-        pendingPruneIdsRef.current.delete(candidateId);
-        removedConfirmed = true;
-      }
-    }
-    if (removedConfirmed) {
+    if (reconcilePendingConversationPrunes(pendingPruneIdsRef.current, liveIds)) {
       updateOrg((cur) => pruneRemovedConversations(cur, liveIds));
     }
-  }, [conversations, updateOrg]);
+  }, [conversations, pruneReconcileTick, updateOrg]);
 
   const deleteConversationAndPruneOrg = useCallback(
     async (conversationId: string) => {
-      pendingPruneIdsRef.current.add(conversationId);
+      pendingPruneIdsRef.current.set(conversationId, 'inflight');
       try {
         await deleteConversationById(conversationId);
-      } finally {
+        if (pendingPruneIdsRef.current.has(conversationId)) {
+          pendingPruneIdsRef.current.set(conversationId, 'settled');
+          setPruneReconcileTick((tick) => tick + 1);
+        }
+      } catch {
         pendingPruneIdsRef.current.delete(conversationId);
       }
     },
@@ -279,6 +279,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
     setRenamingGroupId(null);
     if (!clean) return;
     await renameConversation(groupId, clean);
+  };
+
+  const handleCancelGroupRename = (groupId: string, restoreFocus = false) => {
+    setRenamingGroupId(null);
+    if (restoreFocus) {
+      requestAnimationFrame(() => {
+        const triggers = navRef.current?.querySelectorAll<HTMLElement>('[data-group-menu-trigger]');
+        if (!triggers) return;
+        for (const el of triggers) {
+          if (el.getAttribute('data-group-menu-trigger') === groupId) {
+            el.focus({ preventScroll: true });
+            break;
+          }
+        }
+      });
+    }
   };
 
   const handleExportGroup = (group: SavedConversation) => {
@@ -444,6 +460,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           <input
                             type="text"
                             autoFocus
+                            data-group-rename-input={group.id}
                             value={renameDraft}
                             maxLength={100}
                             onChange={(event) => setRenameDraft(event.target.value)}
@@ -452,7 +469,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                                 event.preventDefault();
                                 void handleCommitRename(group.id);
                               } else if (event.key === 'Escape') {
-                                setRenamingGroupId(null);
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleCancelGroupRename(group.id, true);
                               }
                             }}
                             aria-label={t.sidebarActionRename}
@@ -468,7 +487,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobile = false, onClose }) => 
                           </button>
                           <button
                             type="button"
-                            onClick={() => setRenamingGroupId(null)}
+                            onClick={() => handleCancelGroupRename(group.id, false)}
                             aria-label={t.cancel}
                             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-ink-muted hover:bg-surface-2 hover:text-ink"
                           >
